@@ -34,6 +34,8 @@ if enableWhisper:
   flags &= "-d:enable_whisper "
 if enableCuda:
   flags &= "-d:enable_cuda "
+if fileExists("build/lib/libfacedetection.a"):
+  flags &= "-d:enable_ml "
 
 task test, "Run unit tests":
   exec &"nim c {flags} -r tests/unit"
@@ -335,6 +337,10 @@ proc cmakeBuild(package: Package, buildPath: string, crossWindows: bool = false)
     "-DBUILD_STATIC_LIBS=ON",
   ] & package.buildArguments
 
+  # Add ccache if available
+  addCcacheIfAvailable(cmakeArgs)
+
+  # Add platform-specific arguments for cross-compilation
   if crossWindows:
     cmakeArgs.add("-DCMAKE_SYSTEM_NAME=Windows")
     cmakeArgs.add("-DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc-posix")
@@ -343,6 +349,20 @@ proc cmakeBuild(package: Package, buildPath: string, crossWindows: bool = false)
     cmakeArgs.add("-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER")
     cmakeArgs.add("-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY")
     cmakeArgs.add("-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY")
+
+    # Platform-specific build arguments for ML libraries
+    case package.name
+    of "opencv":
+      # Already disabled in base config, but make explicit for cross-compile
+      if not cmakeArgs.contains("-DWITH_CUDA=OFF"):
+        cmakeArgs.add("-DWITH_CUDA=OFF")
+      if not cmakeArgs.contains("-DWITH_OPENCL=OFF"):
+        cmakeArgs.add("-DWITH_OPENCL=OFF")
+    of "libfacedetection":
+      # Disable demos/tests for cross-build (already in base config)
+      discard
+    else:
+      discard
 
   withDir "build_cmake":
     let cmakeCmd = "cmake " & cmakeArgs.join(" ") & " .."
@@ -686,6 +706,35 @@ proc setupDeps() =
 
 # ML Library Build Infrastructure
 
+proc setupCcacheDir(crossWindows: bool) =
+  # Set separate ccache directory to prevent cache collisions
+  let (ccacheCheck, ccacheCode) = gorgeEx("command -v ccache")
+  if ccacheCode == 0:
+    let homeDir = getEnv("HOME")
+    if homeDir.len > 0:
+      let ccacheDir = if crossWindows:
+        homeDir / ".ccache/x86_64-w64-mingw32"
+      else:
+        homeDir / ".ccache/native"
+      mkDir(ccacheDir)
+      putEnv("CCACHE_DIR", ccacheDir)
+      echo &"Using ccache directory: {ccacheDir}"
+
+proc addCcacheIfAvailable(cmakeArgs: var seq[string]) =
+  # Add ccache to CMake if available
+  let (_, code) = gorgeEx("command -v ccache")
+  if code == 0:
+    cmakeArgs.add("-DCMAKE_C_COMPILER_LAUNCHER=ccache")
+    cmakeArgs.add("-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
+
+proc printCcacheStats() =
+  # Print ccache statistics
+  let (output, code) = gorgeEx("ccache -s")
+  if code == 0:
+    echo ""
+    echo "ccache stats:"
+    echo output
+
 proc checkMLDependencies() =
   # Check for required build dependencies
   var missingDeps: seq[string] = @[]
@@ -780,6 +829,9 @@ task makeml, "Build ML libraries from source":
   # Check dependencies first
   checkMLDependencies()
 
+  # Setup ccache for native builds
+  setupCcacheDir(crossWindows=false)
+
   let buildPath = absolutePath("build")
   let packages = setupMLPackages()
 
@@ -872,6 +924,9 @@ task makeml, "Build ML libraries from source":
             let sizeMB = sizeBytes.float / (1024.0 * 1024.0)
             echo &"  {libFile.extractFilename}: {sizeMB:.1f}MB"
 
+  # Print ccache statistics
+  printCcacheStats()
+
 task makeff, "Build FFmpeg from source":
   setupDeps()
   let buildPath = absolutePath("build")
@@ -925,6 +980,101 @@ task makeffwin, "Build FFmpeg for Windows cross-compilation":
       --cross-prefix=x86_64-w64-mingw32- \
       --enable-cross-compile \""" & "\n" & setupCommonFlags(packages))
     makeInstall()
+
+task makemlwin, "Build ML libraries for Windows cross-compilation":
+  echo "Building ML libraries for Windows (libfacedetection, OpenCV)..."
+  echo ""
+
+  # Check dependencies first
+  setupDeps()
+  checkMLDependencies()
+
+  # Check for MinGW toolchain
+  let (mingwCheck, mingwCode) = gorgeEx("command -v x86_64-w64-mingw32-gcc-posix")
+  if mingwCode != 0:
+    echo "ERROR: MinGW-w64 toolchain not found"
+    echo "Install with:"
+    when defined(macosx):
+      echo "  brew install mingw-w64"
+    elif defined(linux):
+      echo "  Ubuntu/Debian: sudo apt install mingw-w64"
+      echo "  Fedora: sudo dnf install mingw64-gcc mingw64-gcc-c++"
+      echo "  Arch: sudo pacman -S mingw-w64-gcc"
+    quit(1)
+
+  # Setup ccache for cross-compilation builds
+  setupCcacheDir(crossWindows=true)
+
+  let buildPath = absolutePath("build")
+
+  # Set PKG_CONFIG_PATH for cross-compilation
+  putEnv("PKG_CONFIG_PATH", buildPath / "lib/pkgconfig")
+
+  # Note: ONNX Runtime requires Windows SDK headers for DirectML support
+  # For now, only build libfacedetection and OpenCV for cross-compilation
+  let packages = @[libfacedetection, opencv]
+
+  # Create directories
+  mkDir("ml_sources")
+  mkDir(buildPath / ".cache")
+
+  var buildCount = 0
+  var cacheCount = 0
+
+  withDir "ml_sources":
+    for i, package in packages:
+      echo &"[{i+1}/{packages.len}] Building {package.name} for Windows..."
+
+      # Check if rebuild needed
+      if not shouldRebuild(package, buildPath) and fileExists(buildPath / "lib" / ("lib" & package.name & ".a")):
+        echo &"  [{package.name}] Using cached build"
+        cacheCount += 1
+        continue
+
+      # Download source if needed
+      if not fileExists(package.location):
+        echo &"  [{package.name}] Downloading source..."
+        if package.mirrorUrl != "":
+          exec &"curl -O -L {package.mirrorUrl}"
+        else:
+          exec &"curl -O -L {package.sourceUrl}"
+        checkHash(package, "ml_sources" / package.location)
+
+      # Extract tarball if needed
+      var tarArgs = "xf"
+      if package.location.endsWith("bz2"):
+        tarArgs = "xjf"
+
+      if not dirExists(package.name):
+        echo &"  [{package.name}] Extracting..."
+        exec &"tar {tarArgs} {package.location} && mv {package.dirName} {package.name}"
+
+      # Build
+      echo &"  [{package.name}] Configuring for Windows cross-compilation..."
+      withDir package.name:
+        if package.buildSystem == "cmake":
+          echo &"  [{package.name}] Building..."
+          cmakeBuild(package, buildPath, crossWindows=true)
+        else:
+          echo &"ERROR: Unknown build system: {package.buildSystem}"
+          quit(1)
+
+      echo &"  [{package.name}] Installing..."
+      writeCacheMetadata(package, buildPath)
+      buildCount += 1
+
+  echo ""
+  if buildCount > 0:
+    echo &"ML libraries built successfully for Windows ({buildCount} built, {cacheCount} cached)"
+  else:
+    echo "All ML libraries up to date (using cached builds)"
+
+  echo ""
+  echo "NOTE: ONNX Runtime cross-compilation requires Windows SDK headers"
+  echo "      Only libfacedetection and OpenCV are built for Windows cross-compilation"
+
+  # Print ccache statistics
+  printCcacheStats()
 
 task windows, "Cross-compile to Windows (requires mingw-w64)":
   echo "Cross-compiling for Windows (64-bit)..."
