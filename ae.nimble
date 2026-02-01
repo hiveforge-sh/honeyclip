@@ -686,6 +686,46 @@ proc setupDeps() =
 
 # ML Library Build Infrastructure
 
+proc checkMLDependencies() =
+  # Check for required build dependencies
+  var missingDeps: seq[string] = @[]
+
+  let (cmakeOut, cmakeCode) = gorgeEx("command -v cmake")
+  if cmakeCode != 0:
+    missingDeps.add("cmake")
+
+  let (pkgConfigOut, pkgConfigCode) = gorgeEx("command -v pkg-config")
+  if pkgConfigCode != 0:
+    missingDeps.add("pkg-config")
+
+  let (pythonOut, pythonCode) = gorgeEx("command -v python3")
+  if pythonCode != 0:
+    let (python2Out, python2Code) = gorgeEx("command -v python")
+    if python2Code != 0:
+      missingDeps.add("python3")
+
+  if missingDeps.len > 0:
+    echo "ERROR: Required dependencies missing:"
+    for dep in missingDeps:
+      echo &"  - {dep}"
+    echo ""
+    echo "Install with:"
+    when defined(macosx):
+      echo "  brew install " & missingDeps.join(" ")
+    elif defined(linux):
+      # Try to detect Linux distribution
+      if fileExists("/etc/debian_version"):
+        echo "  sudo apt install " & missingDeps.join(" ")
+      elif fileExists("/etc/redhat-release"):
+        echo "  sudo dnf install " & missingDeps.join(" ")
+      elif fileExists("/etc/arch-release"):
+        echo "  sudo pacman -S " & missingDeps.join(" ")
+      else:
+        echo "  Ubuntu/Debian: sudo apt install " & missingDeps.join(" ")
+        echo "  Fedora: sudo dnf install " & missingDeps.join(" ")
+        echo "  Arch: sudo pacman -S " & missingDeps.join(" ")
+    quit(1)
+
 proc shouldRebuild(package: Package, buildPath: string): bool =
   # Check if cache metadata exists and matches source SHA
   let cacheFile = buildPath / ".cache" / (package.name & ".json")
@@ -735,6 +775,10 @@ proc onnxBuild(buildPath: string, crossWindows: bool = false) =
 
 task makeml, "Build ML libraries from source":
   echo "Building ML libraries (libfacedetection, OpenCV, ONNX Runtime)..."
+  echo ""
+
+  # Check dependencies first
+  checkMLDependencies()
 
   let buildPath = absolutePath("build")
   let packages = setupMLPackages()
@@ -748,7 +792,7 @@ task makeml, "Build ML libraries from source":
 
   withDir "ml_sources":
     for i, package in packages:
-      echo &"[{i+1}/{packages.len}] Processing {package.name}..."
+      echo &"[{i+1}/{packages.len}] Building {package.name}..."
 
       # Check if rebuild needed
       if not shouldRebuild(package, buildPath) and fileExists(buildPath / "lib" / ("lib" & package.name & ".a")):
@@ -796,6 +840,37 @@ task makeml, "Build ML libraries from source":
     echo &"ML libraries built successfully ({buildCount} built, {cacheCount} cached)"
   else:
     echo "All ML libraries up to date (using cached builds)"
+
+  # Validate binary size
+  echo ""
+  echo "Checking ML library sizes..."
+
+  if dirExists(buildPath / "lib"):
+    # Use du command to get size summary
+    when defined(macosx):
+      let (sizeOutput, sizeCode) = gorgeEx(&"du -sh {buildPath}/lib")
+      if sizeCode == 0:
+        echo &"Total ML library directory: {sizeOutput.split()[0]}"
+    else:
+      let (sizeOutput, sizeCode) = gorgeEx(&"du -sh {buildPath}/lib")
+      if sizeCode == 0:
+        echo &"Total ML library directory: {sizeOutput.split()[0]}"
+
+    # Check individual library files
+    for libFile in listFiles(buildPath / "lib"):
+      if libFile.endsWith(".a"):
+        when defined(macosx):
+          let (szOut, szCode) = gorgeEx(&"stat -f%z {libFile}")
+          if szCode == 0:
+            let sizeBytes = parseInt(szOut.strip())
+            let sizeMB = sizeBytes.float / (1024.0 * 1024.0)
+            echo &"  {libFile.extractFilename}: {sizeMB:.1f}MB"
+        else:
+          let (szOut, szCode) = gorgeEx(&"stat -c%s {libFile}")
+          if szCode == 0:
+            let sizeBytes = parseInt(szOut.strip())
+            let sizeMB = sizeBytes.float / (1024.0 * 1024.0)
+            echo &"  {libFile.extractFilename}: {sizeMB:.1f}MB"
 
 task makeff, "Build FFmpeg from source":
   setupDeps()
