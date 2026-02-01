@@ -34,10 +34,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Binary size stays under 50MB per platform with static linking optimizations
   3. Nim FFI wrapper patterns with GC_ref/GC_unref established and documented
   4. Cross-platform CI validates builds and binary size limits
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 01-01-PLAN.md: TBD during phase planning
+- [ ] 01-01-PLAN.md: ML library build infrastructure (libfacedetection, OpenCV, ONNX Runtime with caching)
+- [ ] 01-02-PLAN.md: Nim FFI wrappers for ML libraries (facedetect.nim, onnx.nim, opencv.nim)
+- [ ] 01-03-PLAN.md: Windows cross-compilation support (makemlwin task)
+- [ ] 01-04-PLAN.md: CI integration and unit tests (build validation, size checks)
 
 ### Phase 2: Transcript Foundation
 **Goal**: Extract full transcripts with word-level timestamps and speaker identification
@@ -172,7 +175,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Build Infrastructure | 0/TBD | Not started | - |
+| 1. Foundation & Build Infrastructure | 0/4 | Planned | - |
 | 2. Transcript Foundation | 0/TBD | Not started | - |
 | 3. Caption Rendering | 0/TBD | Not started | - |
 | 4. Face Detection Infrastructure | 0/TBD | Not started | - |
