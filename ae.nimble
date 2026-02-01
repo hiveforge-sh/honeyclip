@@ -684,6 +684,119 @@ proc setupDeps() =
   if toInstall.len > 0:
     exec "pip install " & toInstall.join(" ")
 
+# ML Library Build Infrastructure
+
+proc shouldRebuild(package: Package, buildPath: string): bool =
+  # Check if cache metadata exists and matches source SHA
+  let cacheFile = buildPath / ".cache" / (package.name & ".json")
+  if not fileExists(cacheFile):
+    return true
+
+  try:
+    let cacheData = readFile(cacheFile)
+    return not cacheData.contains(package.sha256)
+  except:
+    return true
+
+proc writeCacheMetadata(package: Package, buildPath: string) =
+  # Write cache metadata with SHA256 hash
+  mkDir(buildPath / ".cache")
+  let cacheFile = buildPath / ".cache" / (package.name & ".json")
+  let cacheData = &"""{{
+  "name": "{package.name}",
+  "version": "{package.sourceUrl.split("/")[^1]}",
+  "sha256": "{package.sha256}"
+}}"""
+  writeFile(cacheFile, cacheData)
+
+proc onnxBuild(buildPath: string, crossWindows: bool = false) =
+  # ONNX Runtime requires special handling with build.sh
+  if crossWindows:
+    echo "ERROR: ONNX Runtime cross-compilation not yet supported"
+    quit(1)
+
+  # Determine parallelism
+  var nproc = "4"
+  when defined(macosx):
+    let (output, code) = gorgeEx("sysctl -n hw.ncpu")
+    if code == 0:
+      nproc = output.strip()
+  elif defined(linux):
+    let (output, code) = gorgeEx("nproc")
+    if code == 0:
+      nproc = output.strip()
+
+  # Run build.sh with minimal build configuration
+  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --build_shared_lib --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath}"
+
+  # Install libraries
+  withDir "build/MinSizeRel":
+    exec &"make install DESTDIR=\"{buildPath}\""
+
+task makeml, "Build ML libraries from source":
+  echo "Building ML libraries (libfacedetection, OpenCV, ONNX Runtime)..."
+
+  let buildPath = absolutePath("build")
+  let packages = setupMLPackages()
+
+  # Create directories
+  mkDir("ml_sources")
+  mkDir(buildPath / ".cache")
+
+  var buildCount = 0
+  var cacheCount = 0
+
+  withDir "ml_sources":
+    for i, package in packages:
+      echo &"[{i+1}/{packages.len}] Processing {package.name}..."
+
+      # Check if rebuild needed
+      if not shouldRebuild(package, buildPath) and fileExists(buildPath / "lib" / ("lib" & package.name & ".a")):
+        echo &"  [{package.name}] Using cached build"
+        cacheCount += 1
+        continue
+
+      # Download source if needed
+      if not fileExists(package.location):
+        echo &"  [{package.name}] Downloading source..."
+        if package.mirrorUrl != "":
+          exec &"curl -O -L {package.mirrorUrl}"
+        else:
+          exec &"curl -O -L {package.sourceUrl}"
+        checkHash(package, "ml_sources" / package.location)
+
+      # Extract tarball if needed
+      var tarArgs = "xf"
+      if package.location.endsWith("bz2"):
+        tarArgs = "xjf"
+
+      if not dirExists(package.name):
+        echo &"  [{package.name}] Extracting..."
+        exec &"tar {tarArgs} {package.location} && mv {package.dirName} {package.name}"
+
+      # Build
+      echo &"  [{package.name}] Configuring..."
+      withDir package.name:
+        if package.buildSystem == "cmake":
+          echo &"  [{package.name}] Building..."
+          cmakeBuild(package, buildPath, crossWindows=false)
+        elif package.buildSystem == "onnx":
+          echo &"  [{package.name}] Building..."
+          onnxBuild(buildPath, crossWindows=false)
+        else:
+          echo &"ERROR: Unknown build system: {package.buildSystem}"
+          quit(1)
+
+      echo &"  [{package.name}] Installing..."
+      writeCacheMetadata(package, buildPath)
+      buildCount += 1
+
+  echo ""
+  if buildCount > 0:
+    echo &"ML libraries built successfully ({buildCount} built, {cacheCount} cached)"
+  else:
+    echo "All ML libraries up to date (using cached builds)"
+
 task makeff, "Build FFmpeg from source":
   setupDeps()
   let buildPath = absolutePath("build")
