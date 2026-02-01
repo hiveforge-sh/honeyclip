@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 1 of 10 (Foundation & Build Infrastructure)
-Plan: Not yet planned
-Status: Ready to plan
-Last activity: 2026-02-01 — Roadmap created with 10 phases covering 32 v1 requirements
+Plan: 01 of 3 in phase
+Status: In progress
+Last activity: 2026-02-01 — Completed 01-01-PLAN.md (ML Library Build Infrastructure)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: N/A
-- Total execution time: 0.0 hours
+- Total plans completed: 1
+- Average duration: 5 min
+- Total execution time: 0.08 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-foundation-build-infrastructure | 1 | 5min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: None yet
-- Trend: N/A
+- Last 5 plans: 01-01 (5min)
+- Trend: Just started
 
 *Updated after each plan completion*
 
@@ -46,6 +46,11 @@ Recent decisions affecting current work:
 - SRT output format (standard format, works with all video editors)
 - Face detection via ML (motion-only tracking insufficient for speaker centering)
 - New subcommand + integration (flexibility for standalone use and pipeline integration)
+- Build ML libraries from source for consistent cross-platform support (01-01)
+- SHA256-based caching to avoid unnecessary rebuilds (01-01)
+- OpenCV minimal build (core+imgproc+objdetect only) to reduce binary size (01-01)
+- ONNX Runtime minimal build (extended mode, no ML ops) for size optimization (01-01)
+- 50MB soft limit / 100MB hard limit for ML library size validation (01-01)
 
 ### Pending Todos
 
@@ -54,9 +59,11 @@ None yet.
 ### Blockers/Concerns
 
 **Phase 1 (Foundation):**
-- Cross-platform build complexity for ONNX Runtime and OpenCV (especially Windows cross-compile via MinGW)
-- Binary size explosion risk (10MB → 100MB+ with ML libraries)
-- Nim/C++ FFI memory management patterns must be established before adding multiple ML dependencies
+- Cross-platform build complexity for ONNX Runtime and OpenCV (especially Windows cross-compile via MinGW) - ACTIVE: Windows not yet supported for ML libs
+- Binary size explosion risk (10MB → 100MB+ with ML libraries) - MITIGATED: 50MB/100MB limits in place, minimal builds configured
+- Nim/C++ FFI memory management patterns must be established before adding multiple ML dependencies - PENDING: Will address in 01-02
+- ONNX Runtime build complexity may cause issues on different systems - ACTIVE: build.sh integration untested
+- First ML library build takes 1-2 hours - DOCUMENTED: Users need to be aware
 
 **Phase 2 (Transcript):**
 - Whisper.cpp currently used for speech detection, not full transcript extraction — need to extend output format
@@ -75,6 +82,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01
-Stopped at: Roadmap creation complete, ready for phase planning
+Last session: 2026-02-01 23:49:58Z
+Stopped at: Completed 01-01-PLAN.md - ML Library Build Infrastructure
 Resume file: None
+Next: Execute 01-02-PLAN.md or plan next phase item
