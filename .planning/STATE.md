@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 1 of 10 (Foundation & Build Infrastructure)
-Plan: 02 of 4 in phase
+Plan: 04 of 4 in phase
 Status: In progress
-Last activity: 2026-02-01 — Completed 01-02-PLAN.md (ML Library FFI Wrappers)
+Last activity: 2026-02-01 — Completed 01-04-PLAN.md (CI/Testing Integration)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 5 min
-- Total execution time: 0.17 hours
+- Total plans completed: 3
+- Average duration: 4 min
+- Total execution time: 0.22 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-build-infrastructure | 2 | 10min | 5min |
+| 01-foundation-build-infrastructure | 3 | 13min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5min), 01-02 (5min)
-- Trend: Consistent velocity
+- Last 5 plans: 01-01 (5min), 01-02 (5min), 01-04 (3min)
+- Trend: Improving velocity (getting faster)
 
 *Updated after each plan completion*
 
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - ONNX Runtime function table pattern via OrtGetApiBase (01-02)
 - OpenCV via importcpp for direct C++ cv::Mat access (01-02)
 - result.handle assignment to avoid Nim 2.x implicit destructor conflicts (01-02)
+- Cache ML sources separately from built libraries for faster incremental builds (01-04)
+- 50MB soft limit (warning) / 100MB hard limit (fail) for ML library size in CI (01-04)
+- Auto-enable ML tests when libfacedetection.a exists (no manual flag) (01-04)
 
 ### Pending Todos
 
@@ -86,7 +89,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 17:37:05Z
-Stopped at: Completed 01-02-PLAN.md - ML Library FFI Wrappers
+Last session: 2026-02-01 23:56:48Z
+Stopped at: Completed 01-04-PLAN.md - CI/Testing Integration
 Resume file: None
-Next: Execute 01-03-PLAN.md or plan next phase item
+Next: Execute 01-03-PLAN.md or continue to next phase
