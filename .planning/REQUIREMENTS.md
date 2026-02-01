@@ -97,44 +97,44 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRNS-01 | TBD | Pending |
-| TRNS-02 | TBD | Pending |
-| TRNS-03 | TBD | Pending |
-| TRNS-04 | TBD | Pending |
-| CAPT-01 | TBD | Pending |
-| CAPT-02 | TBD | Pending |
-| CAPT-03 | TBD | Pending |
-| ENGR-01 | TBD | Pending |
-| ENGR-02 | TBD | Pending |
-| ENGR-03 | TBD | Pending |
-| ENGR-04 | TBD | Pending |
-| ENGR-05 | TBD | Pending |
-| ENGR-06 | TBD | Pending |
-| SPKR-01 | TBD | Pending |
-| SPKR-02 | TBD | Pending |
-| SPKR-03 | TBD | Pending |
-| SPKR-04 | TBD | Pending |
-| EXPRT-01 | TBD | Pending |
-| EXPRT-02 | TBD | Pending |
-| EXPRT-03 | TBD | Pending |
-| EXPRT-04 | TBD | Pending |
-| EXPRT-05 | TBD | Pending |
-| NLE-01 | TBD | Pending |
-| NLE-02 | TBD | Pending |
-| NLE-03 | TBD | Pending |
-| NLE-04 | TBD | Pending |
-| NLE-05 | TBD | Pending |
-| NLE-06 | TBD | Pending |
-| NLE-07 | TBD | Pending |
-| CLI-01 | TBD | Pending |
-| CLI-02 | TBD | Pending |
-| CLI-03 | TBD | Pending |
+| TRNS-01 | Phase 2 | Pending |
+| TRNS-02 | Phase 2 | Pending |
+| TRNS-03 | Phase 2 | Pending |
+| TRNS-04 | Phase 2 | Pending |
+| CAPT-01 | Phase 3 | Pending |
+| CAPT-02 | Phase 3 | Pending |
+| CAPT-03 | Phase 3 | Pending |
+| ENGR-01 | Phase 5 | Pending |
+| ENGR-02 | Phase 5 | Pending |
+| ENGR-03 | Phase 5 | Pending |
+| ENGR-04 | Phase 5 | Pending |
+| ENGR-05 | Phase 6 | Pending |
+| ENGR-06 | Phase 6 | Pending |
+| SPKR-01 | Phase 4 | Pending |
+| SPKR-02 | Phase 7 | Pending |
+| SPKR-03 | Phase 7 | Pending |
+| SPKR-04 | Phase 7 | Pending |
+| EXPRT-01 | Phase 8 | Pending |
+| EXPRT-02 | Phase 6 | Pending |
+| EXPRT-03 | Phase 8 | Pending |
+| EXPRT-04 | Phase 8 | Pending |
+| EXPRT-05 | Phase 8 | Pending |
+| NLE-01 | Phase 9 | Pending |
+| NLE-02 | Phase 9 | Pending |
+| NLE-03 | Phase 9 | Pending |
+| NLE-04 | Phase 9 | Pending |
+| NLE-05 | Phase 9 | Pending |
+| NLE-06 | Phase 9 | Pending |
+| NLE-07 | Phase 9 | Pending |
+| CLI-01 | Phase 10 | Pending |
+| CLI-02 | Phase 10 | Pending |
+| CLI-03 | Phase 10 | Pending |
 
 **Coverage:**
 - v1 requirements: 32 total
-- Mapped to phases: 0
-- Unmapped: 32 (pending roadmap creation)
+- Mapped to phases: 32
+- Unmapped: 0 (100% coverage)
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after initial definition*
+*Last updated: 2026-02-01 after roadmap creation*
