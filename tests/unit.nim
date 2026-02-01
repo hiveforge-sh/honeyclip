@@ -177,3 +177,34 @@ test "uuid":
     for j, c in uuid:
       if j notin [8, 13, 18, 23]: # Skip dashes
         check(c in "0123456789abcdef")
+
+# ML FFI Wrapper Tests
+# These tests verify FFI wrappers compile correctly
+# Runtime tests require actual ML libraries
+
+when defined(enable_ml):
+  import ../src/ml/facedetect
+  import ../src/ml/onnx
+  import ../src/ml/opencv
+
+  suite "ML FFI Wrappers":
+    test "facedetect types exist":
+      var rect: FaceRect
+      check rect.x == 0
+      check rect.y == 0
+      check rect.width == 0
+      check rect.height == 0
+      check rect.confidence == 0.0
+
+    test "onnx types exist":
+      # Type existence check (not runtime test)
+      type TestOrtEnv = OrtEnv
+      type TestOrtSession = OrtSession
+      type TestOrtValue = OrtValue
+      check true
+
+    test "opencv types exist":
+      type TestMat = Mat
+      type TestSize = Size
+      check COLOR_BGR2RGB.int == 4
+      check COLOR_RGB2GRAY.int == 7
