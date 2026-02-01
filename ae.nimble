@@ -190,6 +190,62 @@ let ffmpeg = Package(
   sha256: "05ee0b03119b45c0bdb4df654b96802e909e0a752f72e4fe3794f487229e5a41",
 )
 
+# ML Libraries
+let libfacedetection = Package(
+  name: "libfacedetection",
+  sourceUrl: "https://github.com/ShiqiYu/libfacedetection/archive/refs/tags/v3.0.tar.gz",
+  sha256: "5c6a93d2d7cf08ca73aa18b3e07560c31e8e9f55a0ac7f4e2a72b86c625e1ef7",
+  buildSystem: "cmake",
+  buildArguments: @["-DBUILD_SHARED_LIBS=OFF", "-DDEMO=OFF"],
+)
+
+let opencv = Package(
+  name: "opencv",
+  sourceUrl: "https://github.com/opencv/opencv/archive/refs/tags/4.10.0.tar.gz",
+  sha256: "b2171af5be6b26f7a06b1229948bbb2bdaa74fcf5cd097e0af6378fce50a6eb9",
+  buildSystem: "cmake",
+  buildArguments: @[
+    "-DBUILD_SHARED_LIBS=OFF",
+    "-DBUILD_LIST=core,imgproc,objdetect",
+    "-DBUILD_opencv_apps=OFF",
+    "-DBUILD_EXAMPLES=OFF",
+    "-DBUILD_DOCS=OFF",
+    "-DBUILD_TESTS=OFF",
+    "-DBUILD_PERF_TESTS=OFF",
+    "-DWITH_CUDA=OFF",
+    "-DWITH_OPENCL=OFF",
+    "-DWITH_IPP=OFF",
+    "-DWITH_TBB=OFF",
+    "-DWITH_GTK=OFF",
+    "-DWITH_QT=OFF",
+    "-DWITH_FFMPEG=OFF",
+    "-DWITH_V4L=OFF",
+    "-DWITH_1394=OFF",
+    "-DWITH_OPENEXR=OFF",
+    "-DWITH_JASPER=OFF",
+    "-DWITH_TIFF=OFF",
+    "-DWITH_WEBP=OFF",
+    "-DWITH_PNG=OFF",
+    "-DWITH_JPEG=OFF",
+    "-DENABLE_LTO=ON",
+  ],
+)
+
+let onnxruntime = Package(
+  name: "onnxruntime",
+  sourceUrl: "https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.20.1.tar.gz",
+  sha256: "2ab3c01caf05e46b6e4cc5a0e7e3f6f1e5df73cf48934ad3c4ca8e94babc0f0e",
+  buildSystem: "onnx",
+  buildArguments: @[
+    "--config", "MinSizeRel",
+    "--minimal_build", "extended",
+    "--disable_ml_ops",
+    "--build_shared_lib",
+    "--skip_tests",
+    "--disable_exceptions",
+  ],
+)
+
 proc setupPackages(enableWhisper: bool): seq[Package] =
   result = @[]
   if not defined(macosx):
@@ -204,6 +260,9 @@ proc setupPackages(enableWhisper: bool): seq[Package] =
   if not disableHevc:
     result.add x265
   return result
+
+proc setupMLPackages(): seq[Package] =
+  return @[libfacedetection, opencv, onnxruntime]
 
 func location(package: Package): string = # tar location
   if package.name == "libvpx":
@@ -222,6 +281,12 @@ func dirName(package: Package): string =
     return "nv-codec-headers-n13.0.19.0"
   if package.name == "whisper":
     return "whisper.cpp-1.8.2"
+  if package.name == "libfacedetection":
+    return "libfacedetection-3.0"
+  if package.name == "opencv":
+    return "opencv-4.10.0"
+  if package.name == "onnxruntime":
+    return "onnxruntime-1.20.1"
 
   var name = package.location
   for ext in [".tar.gz", ".tar.xz", ".tar.bz2", ".orig"]:
