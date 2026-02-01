@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 1 of 10 (Foundation & Build Infrastructure)
-Plan: 01 of 3 in phase
+Plan: 02 of 4 in phase
 Status: In progress
-Last activity: 2026-02-01 — Completed 01-01-PLAN.md (ML Library Build Infrastructure)
+Last activity: 2026-02-01 — Completed 01-02-PLAN.md (ML Library FFI Wrappers)
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
+- Total plans completed: 2
 - Average duration: 5 min
-- Total execution time: 0.08 hours
+- Total execution time: 0.17 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-build-infrastructure | 1 | 5min | 5min |
+| 01-foundation-build-infrastructure | 2 | 10min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5min)
-- Trend: Just started
+- Last 5 plans: 01-01 (5min), 01-02 (5min)
+- Trend: Consistent velocity
 
 *Updated after each plan completion*
 
@@ -51,6 +51,10 @@ Recent decisions affecting current work:
 - OpenCV minimal build (core+imgproc+objdetect only) to reduce binary size (01-01)
 - ONNX Runtime minimal build (extended mode, no ML ops) for size optimization (01-01)
 - 50MB soft limit / 100MB hard limit for ML library size validation (01-01)
+- Buffer-based API for libfacedetection (CNN weights static, no object state) (01-02)
+- ONNX Runtime function table pattern via OrtGetApiBase (01-02)
+- OpenCV via importcpp for direct C++ cv::Mat access (01-02)
+- result.handle assignment to avoid Nim 2.x implicit destructor conflicts (01-02)
 
 ### Pending Todos
 
@@ -61,7 +65,7 @@ None yet.
 **Phase 1 (Foundation):**
 - Cross-platform build complexity for ONNX Runtime and OpenCV (especially Windows cross-compile via MinGW) - ACTIVE: Windows not yet supported for ML libs
 - Binary size explosion risk (10MB → 100MB+ with ML libraries) - MITIGATED: 50MB/100MB limits in place, minimal builds configured
-- Nim/C++ FFI memory management patterns must be established before adding multiple ML dependencies - PENDING: Will address in 01-02
+- Nim/C++ FFI memory management patterns must be established before adding multiple ML dependencies - RESOLVED: Patterns established in 01-02 (=destroy hooks, defer cleanup)
 - ONNX Runtime build complexity may cause issues on different systems - ACTIVE: build.sh integration untested
 - First ML library build takes 1-2 hours - DOCUMENTED: Users need to be aware
 
@@ -82,7 +86,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-01 23:49:58Z
-Stopped at: Completed 01-01-PLAN.md - ML Library Build Infrastructure
+Last session: 2026-02-01 17:37:05Z
+Stopped at: Completed 01-02-PLAN.md - ML Library FFI Wrappers
 Resume file: None
-Next: Execute 01-02-PLAN.md or plan next phase item
+Next: Execute 01-03-PLAN.md or plan next phase item
