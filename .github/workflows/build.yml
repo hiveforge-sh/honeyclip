@@ -30,6 +30,22 @@ jobs:
       - name: Install packages
         run: |
           brew update && brew install nim cmake
+      - name: Cache ML sources
+        uses: actions/cache@v4
+        with:
+          path: ml_sources
+          key: ml-sources-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-sources-
+      - name: Cache ML libraries
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ml-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-build-${{ runner.os }}-${{ runner.arch }}-
+      - name: Build ML libraries
+        run: nimble makeml
       - name: Setup
         run: |
           if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
@@ -92,6 +108,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mingw-w64 mingw-w64-tools mingw-w64-x86-64-dev
           sudo apt-get install -y build-essential pkg-config nasm git
+      - name: Cache ML sources (Windows)
+        uses: actions/cache@v4
+        with:
+          path: ml_sources
+          key: ml-sources-windows-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-sources-windows-
+      - name: Cache ML libraries (Windows)
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ml-build-windows-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-build-windows-
+      - name: Build ML libraries (Windows)
+        run: nimble makemlwin
       - name: Build FFmpeg
         run: nimble makeffwin
       - name: Compile
