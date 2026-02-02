@@ -13,6 +13,8 @@ import ../log
 import ../media
 import ../timeline
 import ../ffmpeg
+import ../transcript/grouping
+import ../render/captions
 
 #[
 Premiere Pro uses the Final Cut Pro 7 XML Interchange Format
@@ -240,6 +242,103 @@ proc handlePath(src: string): string =
     absPath.replace('\\', '/')
   else:
     absPath
+
+proc hexToFCP7Color(hex: string): string =
+  ## Convert hex color (#RRGGBB) to FCP7 color format (normalized 0.0-1.0 RGB)
+  var color = hex
+  if color.startsWith("#"):
+    color = color[1..^1]
+
+  # Parse RGB
+  let r = parseHexInt(color[0..1])
+  let g = parseHexInt(color[2..3])
+  let b = parseHexInt(color[4..5])
+
+  # Normalize to 0.0-1.0
+  let rNorm = r.float / 255.0
+  let gNorm = g.float / 255.0
+  let bNorm = b.float / 255.0
+
+  result = &"{rNorm:.1f} {gNorm:.1f} {bNorm:.1f}"
+
+proc addCaptionTrackFCP7*(video: XmlNode, captions: seq[Caption], style: CaptionStyle, tb: int64, ntsc: string) =
+  ## Add caption track as text generator clips to FCP7 XML
+  if captions.len == 0:
+    return
+
+  let captionTrack = newElement("track")
+
+  for index, caption in captions:
+    let clipId = &"caption-{index + 1}"
+
+    # Convert timing from milliseconds to frames
+    let startFrame = (caption.startMs * tb) div 1000
+    let endFrame = (caption.endMs * tb) div 1000
+    let duration = endFrame - startFrame
+
+    let clipitem = <>clipitem(id = clipId)
+    clipitem.add elem("name", "Text")
+    clipitem.add elem("enabled", "TRUE")
+    clipitem.add elem("start", $startFrame)
+    clipitem.add elem("end", $endFrame)
+    clipitem.add elem("in", "0")
+    clipitem.add elem("out", $duration)
+
+    # Add rate (required for clips)
+    let rate = newElement("rate")
+    rate.add elem("timebase", $tb)
+    rate.add elem("ntsc", ntsc)
+    clipitem.add rate
+
+    # Create text generator effect
+    let effect = newElement("effect")
+    effect.add elem("name", "Text")
+    effect.add elem("effectid", "Text")
+    effect.add elem("effectcategory", "Text")
+    effect.add elem("effecttype", "generator")
+
+    # Add text parameter
+    effect.add param("str", "Text", caption.text)
+    effect.add param("fontname", "Font", style.fontName)
+    effect.add param("fontsize", "Size", $style.fontSize)
+
+    # Determine color based on speaker
+    var textColor = style.color
+    if caption.speaker >= 0:
+      textColor = getSpeakerColor(caption.speaker)
+
+    let colorValue = hexToFCP7Color(textColor)
+    effect.add param("textcolor", "Fill Color", colorValue)
+
+    # Position - FCP7 uses canvas coordinates
+    # Center position for now (can be enhanced based on style.position)
+    effect.add param("center", "Center", "0 0")
+
+    # Add word-level timing keyframes if highlighting enabled
+    if style.highlightEnabled and caption.words.len > 0:
+      # Add keyframe track for text color transitions
+      # Each word gets a keyframe at its start time
+      let filter = newElement("filter")
+      let keyframeEffect = newElement("effect")
+      keyframeEffect.add elem("name", "Color")
+      keyframeEffect.add elem("effectid", "textcolor")
+
+      # Build keyframe parameters for word highlighting
+      var keyframeStr = ""
+      for i, word in caption.words:
+        let wordOffsetMs = word.startMs - caption.startMs
+        let wordFrame = (wordOffsetMs * tb) div 1000
+        keyframeStr.add(&"{wordFrame}:{colorValue};")
+
+      if keyframeStr.len > 0:
+        keyframeEffect.add param("keyframes", "Keyframes", keyframeStr)
+        filter.add keyframeEffect
+        clipitem.add filter
+
+    clipitem.add effect
+    captionTrack.add clipitem
+
+  video.add captionTrack
 
 proc fcp7_write_xml*(name: string, output: string, resolve: bool, tl: v3) =
   let (width, height) = tl.res
