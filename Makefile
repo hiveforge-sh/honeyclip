@@ -1,15 +1,28 @@
 # Makefile for honeyclip dependency installation
 # Supports: WSL, Linux, macOS, Windows (Git Bash/MSYS2)
 
-.PHONY: help prerequisites install-deps install-python-deps install-nim-deps install-pyannote check-deps clean-python
+.PHONY: help prerequisites install-deps install-python-deps install-nim-deps install-pyannote check-deps clean-python venv
 
 # Detect platform
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
 IS_WSL := $(shell grep -qi microsoft /proc/version 2>/dev/null && echo 1 || echo 0)
 
-# Python command detection
-PYTHON := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
-PIP := $(shell command -v pip3 2>/dev/null || command -v pip 2>/dev/null)
+# Virtual environment settings
+VENV_DIR := .venv
+VENV_PYTHON := $(VENV_DIR)/bin/python
+VENV_PIP := $(VENV_DIR)/bin/pip
+
+# System Python (for creating venv)
+SYS_PYTHON := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
+
+# Use venv if it exists, otherwise system python
+ifeq ($(wildcard $(VENV_DIR)/bin/python),)
+    PYTHON := $(SYS_PYTHON)
+    PIP := $(shell command -v pip3 2>/dev/null || command -v pip 2>/dev/null)
+else
+    PYTHON := $(VENV_PYTHON)
+    PIP := $(VENV_PIP)
+endif
 
 # Colors for output
 CYAN := \033[36m
@@ -38,8 +51,18 @@ ifeq ($(IS_WSL),1)
 	@echo "$(YELLOW)Running in WSL$(RESET)"
 endif
 
+# Create virtual environment
+venv:
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "$(CYAN)Creating Python virtual environment...$(RESET)"; \
+		$(SYS_PYTHON) -m venv $(VENV_DIR); \
+		echo "$(GREEN)Virtual environment created at $(VENV_DIR)$(RESET)"; \
+	else \
+		echo "$(GREEN)Virtual environment already exists$(RESET)"; \
+	fi
+
 # One-command setup for all prerequisites
-prerequisites: check-python
+prerequisites: check-python venv
 	@echo "$(CYAN)======================================$(RESET)"
 	@echo "$(CYAN)  honeyclip Prerequisites Setup$(RESET)"
 	@echo "$(CYAN)======================================$(RESET)"
@@ -48,6 +71,7 @@ prerequisites: check-python
 ifeq ($(IS_WSL),1)
 	@echo "$(YELLOW)Environment: WSL$(RESET)"
 endif
+	@echo "$(YELLOW)Using venv: $(VENV_DIR)$(RESET)"
 	@echo ""
 	@# Step 1: System dependencies
 	@echo "$(CYAN)[1/4] Installing system dependencies...$(RESET)"
@@ -55,8 +79,8 @@ endif
 	@echo ""
 	@# Step 2: Python dependencies
 	@echo "$(CYAN)[2/4] Installing Python dependencies...$(RESET)"
-	$(PIP) install --upgrade pip
-	$(PIP) install av pytest
+	$(VENV_PIP) install --upgrade pip
+	$(VENV_PIP) install av pytest
 	@echo ""
 	@# Step 3: Nim dependencies
 	@echo "$(CYAN)[3/4] Installing Nim dependencies...$(RESET)"
@@ -74,6 +98,9 @@ endif
 	@echo "$(GREEN)======================================$(RESET)"
 	@echo "$(GREEN)  Prerequisites installed!$(RESET)"
 	@echo "$(GREEN)======================================$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)To use the virtual environment:$(RESET)"
+	@echo "  $(CYAN)source $(VENV_DIR)/bin/activate$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)Remaining manual steps:$(RESET)"
 	@echo "  1. Get HuggingFace token:"
@@ -103,29 +130,29 @@ else ifeq ($(UNAME_S),Linux)
 	fi
 endif
 
-# Silent pyannote install
+# Silent pyannote install (always uses venv)
 install-pyannote-silent:
 ifeq ($(UNAME_S),Darwin)
-	@$(PIP) install -q torch torchvision torchaudio 2>/dev/null || $(PIP) install torch torchvision torchaudio
-	@$(PIP) install -q pyannote.audio 2>/dev/null || $(PIP) install pyannote.audio
+	@$(VENV_PIP) install -q torch torchvision torchaudio 2>/dev/null || $(VENV_PIP) install torch torchvision torchaudio
+	@$(VENV_PIP) install -q pyannote.audio 2>/dev/null || $(VENV_PIP) install pyannote.audio
 else ifeq ($(UNAME_S),Linux)
 	@if command -v nvidia-smi >/dev/null 2>&1; then \
-		$(PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 2>/dev/null || \
-		$(PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121; \
+		$(VENV_PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 2>/dev/null || \
+		$(VENV_PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121; \
 	else \
-		$(PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu 2>/dev/null || \
-		$(PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu; \
+		$(VENV_PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu 2>/dev/null || \
+		$(VENV_PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu; \
 	fi
-	@$(PIP) install -q pyannote.audio 2>/dev/null || $(PIP) install pyannote.audio
+	@$(VENV_PIP) install -q pyannote.audio 2>/dev/null || $(VENV_PIP) install pyannote.audio
 else
 	@if command -v nvidia-smi >/dev/null 2>&1; then \
-		$(PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 2>/dev/null || \
-		$(PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121; \
+		$(VENV_PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 2>/dev/null || \
+		$(VENV_PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121; \
 	else \
-		$(PIP) install -q torch torchvision torchaudio 2>/dev/null || \
-		$(PIP) install torch torchvision torchaudio; \
+		$(VENV_PIP) install -q torch torchvision torchaudio 2>/dev/null || \
+		$(VENV_PIP) install torch torchvision torchaudio; \
 	fi
-	@$(PIP) install -q pyannote.audio 2>/dev/null || $(PIP) install pyannote.audio
+	@$(VENV_PIP) install -q pyannote.audio 2>/dev/null || $(VENV_PIP) install pyannote.audio
 endif
 
 # Install all dependencies
@@ -207,11 +234,27 @@ install-nim-deps:
 check-deps: check-python
 	@echo "$(CYAN)Checking dependencies...$(RESET)"
 	@echo ""
+	@echo "$(GREEN)Virtual environment:$(RESET)"
+	@if [ -d "$(VENV_DIR)" ]; then \
+		echo "  $(GREEN)$(VENV_DIR) exists$(RESET)"; \
+	else \
+		echo "  $(YELLOW)Not created (run: make venv)$(RESET)"; \
+	fi
+	@echo ""
 	@echo "$(GREEN)Python:$(RESET)"
-	@$(PYTHON) --version
+	@if [ -f "$(VENV_PYTHON)" ]; then \
+		$(VENV_PYTHON) --version; \
+	else \
+		$(SYS_PYTHON) --version; \
+		echo "  $(YELLOW)(system python - run 'make venv' to create virtualenv)$(RESET)"; \
+	fi
 	@echo ""
 	@echo "$(GREEN)pip packages:$(RESET)"
-	@$(PIP) list 2>/dev/null | grep -E "^(av|pytest|torch|pyannote)" || echo "  (core packages not installed)"
+	@if [ -f "$(VENV_PIP)" ]; then \
+		$(VENV_PIP) list 2>/dev/null | grep -E "^(av|pytest|torch|pyannote)" || echo "  (core packages not installed)"; \
+	else \
+		echo "  $(YELLOW)(no venv - packages not checked)$(RESET)"; \
+	fi
 	@echo ""
 	@echo "$(GREEN)Nim:$(RESET)"
 	@if command -v nim >/dev/null 2>&1; then \
@@ -228,11 +271,15 @@ check-deps: check-python
 	fi
 	@echo ""
 	@echo "$(GREEN)pyannote.audio:$(RESET)"
-	@$(PYTHON) -c "from pyannote.audio import Pipeline; print('  Installed')" 2>/dev/null || echo "  $(YELLOW)Not installed (optional - run: make install-pyannote)$(RESET)"
+	@if [ -f "$(VENV_PYTHON)" ]; then \
+		$(VENV_PYTHON) -c "from pyannote.audio import Pipeline; print('  Installed')" 2>/dev/null || echo "  $(YELLOW)Not installed (run: make install-pyannote)$(RESET)"; \
+	else \
+		echo "  $(YELLOW)(no venv - run 'make prerequisites')$(RESET)"; \
+	fi
 	@echo ""
 	@echo "$(GREEN)HF_TOKEN:$(RESET)"
 	@if [ -n "$$HF_TOKEN" ]; then \
-		echo "  Set ($(shell echo $$HF_TOKEN | head -c 8)...)"; \
+		echo "  Set ($${HF_TOKEN:0:8}...)"; \
 	else \
 		echo "  $(YELLOW)Not set$(RESET)"; \
 	fi
@@ -252,7 +299,8 @@ check-python:
 
 # Clean Python virtual environment
 clean-python:
-	@echo "$(CYAN)Cleaning Python cache...$(RESET)"
+	@echo "$(CYAN)Cleaning Python environment...$(RESET)"
+	rm -rf $(VENV_DIR)
 	rm -rf __pycache__ .pytest_cache
 	find . -name "*.pyc" -delete 2>/dev/null || true
 	@echo "$(GREEN)Cleaned!$(RESET)"

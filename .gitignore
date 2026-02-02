@@ -33,6 +33,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
+.venv/
 
 # Test outputs (keep test source files)
 tests/*
