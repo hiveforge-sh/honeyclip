@@ -11,9 +11,9 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 7 of 10 (Speaker Tracking & Reframing) — In progress
-Plan: 4 of 6 in phase
+Plan: 1 of 6 in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 07-04-PLAN.md
+Last activity: 2026-02-02 — Completed 07-01-PLAN.md
 
 Progress: [█████████████████████████████░░░░░░░░░░] 67.5%
 
@@ -34,11 +34,11 @@ Progress: [███████████████████████
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
-| 07-speaker-tracking-reframing | 1 | 2min | 2.0min |
+| 07-speaker-tracking-reframing | 1 | 3min | 3.0min |
 
 **Recent Trend:**
-- Last 5 plans: 06-01 (3min), 06-03 (2.25min), 06-04 (4min), 07-04 (2min)
-- Trend: Phase 7 in progress with excellent efficiency (2.0min avg so far)
+- Last 5 plans: 06-02 (1.5min), 06-03 (2.25min), 06-04 (4min), 07-01 (3min)
+- Trend: Phase 7 in progress with excellent efficiency (3.0min avg so far)
 
 *Updated after each plan completion*
 
@@ -150,6 +150,10 @@ Recent decisions affecting current work:
 - Default to --list mode if neither --list nor --export specified (safety-first preview) (06-04)
 - No clips detected shows helpful message instead of error (better UX) (06-04)
 - Qualified type names (clips.Clip vs timeline.Clip) to avoid collisions (06-04)
+- Simplified Kalman filter with diagonal covariance for efficiency (full matrix operations not required) (07-01)
+- Constant velocity model for face tracking (adequate for typical video frame rates) (07-01)
+- Track age and hit streak determine stability (maxAge 90 frames = 3s @ 30fps, minHits 3) (07-01)
+- Predicted bboxes have confidence 0.5 to distinguish from actual detections (07-01)
 - Easing presets: Slow=1.5s, Medium=0.75s, Fast=0.35s matching speed requirements (07-04)
 - Medium shot padding formula: face height * 2.5 for head and shoulders visible (07-04)
 - Debouncing spatial threshold: 20 pixels minimum distance to trigger crop switch (07-04)
@@ -195,7 +199,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T23:03:16Z
-Stopped at: Completed 07-04-PLAN.md
+Last session: 2026-02-02T20:23:12Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
 Next: Continue Phase 7 - Speaker Reframing (plans 07-05, 07-06)
