@@ -31,7 +31,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Speaker Tracking
 
-- [ ] **SPKR-01**: Detect faces in video frames
+- [x] **SPKR-01**: Detect faces in video frames
 - [ ] **SPKR-02**: Track speaker across frames (persistent identity)
 - [ ] **SPKR-03**: Auto-reframe video to center active speaker
 - [ ] **SPKR-04**: Output vertical (9:16) video with speaker centered
@@ -110,7 +110,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENGR-04 | Phase 5 | Pending |
 | ENGR-05 | Phase 6 | Pending |
 | ENGR-06 | Phase 6 | Pending |
-| SPKR-01 | Phase 4 | Pending |
+| SPKR-01 | Phase 4 | Complete |
 | SPKR-02 | Phase 7 | Pending |
 | SPKR-03 | Phase 7 | Pending |
 | SPKR-04 | Phase 7 | Pending |
@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after roadmap creation*
+*Last updated: 2026-02-02 after Phase 4 completion*
