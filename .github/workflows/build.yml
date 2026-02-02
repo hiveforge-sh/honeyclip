@@ -1,0 +1,176 @@
+name: build
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  main:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            binary_name: honeyclip-linux-x86_64
+          - os: ubuntu-24.04-arm
+            binary_name: honeyclip-linux-aarch64
+          - os: macos-15-intel
+            binary_name: honeyclip-macos-x86_64
+          - os: macos-latest
+            binary_name: honeyclip-macos-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install Homebrew
+        if: runner.os != 'macOS'
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
+      - name: Install packages
+        run: |
+          brew update && brew install nim cmake
+      - name: Cache ML sources
+        uses: actions/cache@v4
+        with:
+          path: ml_sources
+          key: ml-sources-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-sources-
+      - name: Cache ML libraries
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ml-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-build-${{ runner.os }}-${{ runner.arch }}-
+      - name: Build ML libraries
+        run: nimble makeml
+      - name: Validate ML library sizes
+        run: |
+          echo "=== ML Library Sizes ==="
+          du -sh build/lib/libfacedetection.a 2>/dev/null || true
+          du -sh build/lib/libopencv_*.a 2>/dev/null || true
+          du -sh build/lib/libonnxruntime.* 2>/dev/null || true
+
+          echo "=== Total Size ==="
+          TOTAL=$(du -s build/lib/*.a 2>/dev/null | awk '{sum += $1} END {print sum}')
+          TOTAL_MB=$((TOTAL / 1024))
+          echo "Total ML library size: ${TOTAL_MB}MB"
+
+          # Soft limit: 50MB
+          if [ "$TOTAL_MB" -gt 50 ]; then
+            echo "::warning::ML libraries exceed 50MB soft limit (${TOTAL_MB}MB)"
+          fi
+
+          # Hard limit: 100MB
+          if [ "$TOTAL_MB" -gt 100 ]; then
+            echo "::error::ML libraries exceed 100MB hard limit (${TOTAL_MB}MB)"
+            exit 1
+          fi
+      - name: Setup
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
+            wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+            sudo dpkg -i cuda-keyring_1.1-1_all.deb
+            sudo apt update
+            sudo apt-get install -y build-essential pkg-config nasm git cuda-cudart-12-8 cuda-cudart-dev-12-8 libcublas-dev-12-8 cuda-nvcc-12-8
+            echo "ENABLE_CUDA=1" >> $GITHUB_ENV
+            echo "CUDA_PATH=/usr/local/cuda-12.8" >> $GITHUB_ENV
+            echo "/usr/local/cuda-12.8/bin" >> $GITHUB_PATH
+            echo "LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64/stubs:/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+            echo "LDFLAGS=-L/usr/local/cuda-12.8/lib64/stubs -L/usr/local/cuda-12.8/lib64" >> $GITHUB_ENV
+            sudo ln -sf /usr/local/cuda-12.8/lib64/stubs/libcuda.so /usr/local/cuda-12.8/lib64/stubs/libcuda.so.1
+          elif [ "${{ matrix.os }}" = "ubuntu-24.04-arm" ]; then
+            wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/cuda-keyring_1.1-1_all.deb
+            sudo dpkg -i cuda-keyring_1.1-1_all.deb
+            sudo apt update
+            sudo apt-get install -y build-essential pkg-config git cuda-cudart-12-8 cuda-cudart-dev-12-8 libcublas-dev-12-8 cuda-nvcc-12-8
+            echo "ENABLE_CUDA=1" >> $GITHUB_ENV
+            echo "CUDA_PATH=/usr/local/cuda-12.8" >> $GITHUB_ENV
+            echo "/usr/local/cuda-12.8/bin" >> $GITHUB_PATH
+            echo "LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64/stubs:/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+            echo "LDFLAGS=-L/usr/local/cuda-12.8/lib64/stubs -L/usr/local/cuda-12.8/lib64" >> $GITHUB_ENV
+            sudo ln -sf /usr/local/cuda-12.8/lib64/stubs/libcuda.so /usr/local/cuda-12.8/lib64/stubs/libcuda.so.1
+          elif [ "${{ matrix.os }}" = "macos-15-intel" ]; then
+            brew install nasm
+            echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+          fi
+      - name: Build FFmpeg
+        run: nimble makeff
+      - name: Compile
+        run: nimble make
+      - name: Check final binary size
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            SIZE=$(stat -f%z honeyclip 2>/dev/null)
+          else
+            SIZE=$(stat -c%s honeyclip 2>/dev/null)
+          fi
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "Final binary size: ${SIZE_MB}MB"
+
+          if [ "$SIZE_MB" -gt 100 ]; then
+            echo "::error::Final binary exceeds 100MB limit"
+            exit 1
+          fi
+      - name: Test
+        run: nimble test
+      - name: Rename binary
+        run: |
+          mv honeyclip ${{ matrix.binary_name }}
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ matrix.binary_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: "stable"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install mingw-w64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 mingw-w64-tools mingw-w64-x86-64-dev
+          sudo apt-get install -y build-essential pkg-config nasm git
+      - name: Cache ML sources (Windows)
+        uses: actions/cache@v4
+        with:
+          path: ml_sources
+          key: ml-sources-windows-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-sources-windows-
+      - name: Cache ML libraries (Windows)
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ml-build-windows-${{ hashFiles('ae.nimble') }}
+          restore-keys: |
+            ml-build-windows-
+      - name: Build ML libraries (Windows)
+        run: nimble makemlwin
+      - name: Build FFmpeg
+        run: nimble makeffwin
+      - name: Compile
+        run: nimble windows
+      - name: Rename binary
+        run: |
+          mv honeyclip.exe honeyclip-windows-amd64.exe
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: honeyclip-windows-amd64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

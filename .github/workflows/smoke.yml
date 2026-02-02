@@ -1,0 +1,96 @@
+name: smoke
+permissions:
+  contents: read
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - '**.html'
+      - '**.css'
+      - '**.toml'
+      - '**about.nim'
+      - 'auto_editor/'
+      - '.github/workflows/build.yml'
+    branches:
+      - master
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - '**.html'
+      - '**.css'
+      - '**.toml'
+      - '**about.nim'
+      - 'auto_editor/'
+      - '.github/workflows/build.yml'
+    branches:
+      - master
+jobs:
+  main:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+          - os: macos-latest
+          - os: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Install Homebrew
+        if: runner.os != 'macOS'
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
+      - name: Install packages
+        run: |
+          brew update && brew install nim
+      - name: Setup
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then
+            sudo apt-get install -y build-essential pkg-config nasm git
+          elif [ "${{ matrix.os }}" = "ubuntu-24.04-arm" ]; then
+            sudo apt-get install -y build-essential pkg-config git
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+          fi
+          echo "DISABLE_VPX=1" >> $GITHUB_ENV
+          echo "DISABLE_SVTAV1=1" >> $GITHUB_ENV
+          echo "DISABLE_HEVC=1" >> $GITHUB_ENV
+      - name: Build FFmpeg
+        run: nimble makeff
+      - name: Compile
+        run: nimble make
+      - name: Test
+        run: nimble test
+      - name: e2e Test
+        run: python3 -m pip install av && python3 tests/test.py
+
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: "stable"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install mingw-w64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 mingw-w64-tools mingw-w64-x86-64-dev
+          sudo apt-get install -y build-essential pkg-config nasm git meson
+          echo "DISABLE_VPX=1" >> $GITHUB_ENV
+          echo "DISABLE_SVTAV1=1" >> $GITHUB_ENV
+          echo "DISABLE_HEVC=1" >> $GITHUB_ENV
+      - name: Build FFmpeg
+        run: nimble makeffwin
+      - name: Compile
+        run: nimble windows

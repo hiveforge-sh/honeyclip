@@ -1,0 +1,167 @@
+import std/[strformat, strutils]
+import ../ffmpeg
+import ../av
+import ../log
+import ../util/fun
+
+
+proc main*(cArgs: seq[string]) =
+  var inputPath: string = ""
+  var model: string = ""
+  var isDebug = false
+  var splitWords = false
+  var format = "text"
+  var output = "-"
+  var queue: int = 10
+  var vadModel: string = ""
+
+  var expecting: string = ""
+  for rawKey in cArgs:
+    let key = handleKey(rawKey)
+    case key:
+    of "--help":
+      echo """usage: file model [options]
+
+Options:
+  --debug
+  --split-words, -sw
+  --format FORMAT        Output in a specific format (default text)
+                         Choices: text, srt, json
+  --output FILE          Choose where to output (defaults to stdout)
+  --queue SECS           The maximum size in seconds that will be queued into
+                         before processing. (default 10)
+  --vad-model VAD-MODEL  Set Voice activity detection (VAD) model.
+"""
+      quit(0)
+    of "--debug":
+      isDebug = true
+    of "--split-words", "-sw":
+      splitWords = true
+    of "--format":
+      expecting = "format"
+    of "--output":
+      expecting = "output"
+    of "--queue":
+      expecting = "queue"
+    of "--vad-model":
+      expecting = "vad-model"
+    else:
+      if key.startsWith("--"):
+        error &"Unknown option: {key}"
+
+      case expecting:
+      of "":
+        if inputPath == "":
+          inputPath = key
+        elif model == "":
+          model = key.replace("\\", "\\\\").replace(":", "\\:")
+      of "format":
+        format = key
+      of "output":
+        output = key.replace("\\", "\\\\").replace(":", "\\:")
+      of "queue":
+        queue = parseInt(key)
+      of "vad-model":
+        vadModel = key.replace("\\", "\\\\").replace(":", "\\:")
+      expecting = ""
+
+  if inputPath == "":
+    error "A media file is needed"
+  if model == "":
+    error "A model is needed, you came find them here: https://huggingface.co/ggerganov/whisper.cpp"
+  if queue < 1 or queue > 1000:
+    error &"Invalid queue value: {queue}"
+  if format notin ["text", "srt", "json"]:
+    error &"Invalid format: {format}. Choices: text, srt, json"
+
+  if not isDebug:
+    av_log_set_level(AV_LOG_QUIET)
+
+  let input = (try: av.open(inputPath) except: error "Invalid media file")
+  defer: input.close()
+
+  if input.audio.len == 0:
+    error "No audio stream found"
+  let audioStreamIndex = input.audio[0].index
+  
+  let filterGraph = avfilter_graph_alloc()
+  defer: avfilter_graph_free(addr filterGraph)
+  
+  # Create buffer source for audio input
+  let abuffer = avfilter_get_by_name("abuffer")
+  var bufferCtx: ptr AVFilterContext
+  
+  let audioStream = input.streams[audioStreamIndex]
+  let sampleRate = audioStream.codecpar.sample_rate
+  let channelLayout = audioStream.codecpar.ch_layout.u.mask
+  let sampleFormat = cast[AVSampleFormat](audioStream.codecpar.format)
+
+  # Get sample format name
+  let sampleFmtName = av_get_sample_fmt_name(cint(sampleFormat))
+  let bufferArgs = "sample_rate=" & $sampleRate & ":sample_fmt=" & $sampleFmtName & ":channel_layout=" & $channelLayout
+
+  var ret = avfilter_graph_create_filter(addr bufferCtx, abuffer, "in", bufferArgs.cstring, nil, filterGraph)
+  if ret < 0:
+    echo &"Failed to create buffer source: {ret}"
+    quit(1)
+
+  let whisperFilter = avfilter_get_by_name("whisper")
+  var whisperCtx: ptr AVFilterContext
+
+  var whisperArgs = &"model={model}:queue={queue}:format={format}"
+  if splitWords:
+    whisperArgs &= ":max_len=1"
+  if output == "-":
+    when defined(windows):
+      whisperArgs &= ":destination=CON"
+    else:
+      whisperArgs &= ":destination=/dev/stdout"
+  else:
+    whisperArgs &= ":destination=" & output
+
+  if vadModel != "":
+    whisperArgs &= ":vad_model=" & vadModel
+
+  ret = avfilter_graph_create_filter(addr whisperCtx, whisperFilter, "whisper", whisperArgs.cstring, nil, filterGraph)
+  if ret < 0:
+    error &"Failed to create whisper filter with result: {ret}, model: {model}"
+
+  # Create buffer sink
+  let abuffersink = avfilter_get_by_name("abuffersink")
+  var sinkCtx: ptr AVFilterContext
+
+  if avfilter_graph_create_filter(addr sinkCtx, abuffersink, "out", nil, nil, filterGraph) < 0:
+    error "Failed to create buffer sink"
+
+  # Link filters: buffer -> whisper -> sink
+  if avfilter_link(bufferCtx, 0, whisperCtx, 0) < 0:
+    error "Failed to link buffer to whisper"
+  if avfilter_link(whisperCtx, 0, sinkCtx, 0) < 0:
+    error "Failed to link whisper to sink"
+
+  if avfilter_graph_config(filterGraph, nil) < 0:
+    error "Failed to configure filter graph"
+
+  # Set up decoder for the audio stream
+  let decoderCtx = initDecoder(audioStream.codecpar)
+  defer: avcodec_free_context(addr decoderCtx)
+
+  let frame = av_frame_alloc()
+  defer: av_frame_free(addr frame)
+  
+  let outputFrame = av_frame_alloc()
+  defer: av_frame_free(addr outputFrame)
+  
+  for decodedFrame in input.decode(cint(audioStreamIndex), decoderCtx, frame):
+    if av_buffersrc_write_frame(bufferCtx, decodedFrame) < 0:
+      echo "Error feeding frame to filter"
+      continue
+
+    # Try to get output from whisper filter
+    while av_buffersink_get_frame_flags(sinkCtx, outputFrame, 0) >= 0:
+      av_frame_unref(outputFrame)
+
+  # Flush the filter
+  if av_buffersrc_write_frame(bufferCtx, nil) >= 0:
+    while av_buffersink_get_frame_flags(sinkCtx, outputFrame, 0) >= 0:
+      av_frame_unref(outputFrame)

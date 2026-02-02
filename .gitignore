@@ -1,0 +1,47 @@
+# Build outputs
+honeyclip
+honeyclip.exe
+auto-editor
+auto-editor.exe
+build/
+nimcache/
+
+# Source downloads
+ffmpeg_sources/
+ml_sources/
+
+# Editor/IDE
+.vscode/
+.idea/
+.claude/
+
+# Compiled objects
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.bin
+
+# ML models
+*.onnx
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Test outputs (keep test source files)
+tests/*
+!tests/*.nim
+!tests/*.py
+!tests/resources/
+
+# Misc generated
+*_ALTERED*
+*.srt
