@@ -6,33 +6,33 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 1 - Foundation & Build Infrastructure
+**Current focus:** Phase 2 - Transcript Foundation (Complete)
 
 ## Current Position
 
 Phase: 2 of 10 (Transcript Foundation)
-Plan: 2 of 4 in phase
-Status: In progress
-Last activity: 2026-02-02 — Completed 02-02-PLAN.md
+Plan: 4 of 4 in phase
+Status: Phase complete
+Last activity: 2026-02-02 — Completed 02-04-PLAN.md
 
-Progress: [███████████░] 92%
+Progress: [████████████] 100% (Phase 2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 8
 - Average duration: 3.8 min
-- Total execution time: 0.38 hours
+- Total execution time: 0.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
-| 02-transcript-foundation | 2 | 7min | 3.5min |
+| 02-transcript-foundation | 4 | 15min | 3.8min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (4min), 01-04 (3min), 02-01 (3min), 02-02 (4min)
+- Last 5 plans: 02-01 (3min), 02-02 (4min), 02-03 (4min), 02-04 (4min)
 - Trend: Stable 3-4 min velocity
 
 *Updated after each plan completion*
@@ -73,6 +73,9 @@ Recent decisions affecting current work:
 - Never break before small words (a, the, to, of, etc.) (02-02)
 - Speaker labels only on speaker change to reduce visual clutter (02-02)
 - UTF-8 output without BOM for maximum player compatibility (02-02)
+- Prompt for model download if missing (user-friendly) (02-04)
+- Output all three formats by default (SRT, VTT, JSON) (02-04)
+- Backup files use .bak extension (overwrite existing backup) (02-04)
 
 ### Pending Todos
 
@@ -89,6 +92,7 @@ None yet.
 
 **Phase 2 (Transcript):**
 - Unit tests require FFmpeg build (nimble makeff) to execute - currently only syntax-checked
+- RESOLVED: All transcript components implemented and integrated
 
 **Phase 4 (Face Detection):**
 - Face detection false positive rate can reach 85% in production (Metropolitan Police finding)
@@ -105,6 +109,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 02-02-PLAN.md
+Stopped at: Completed 02-04-PLAN.md (Phase 2 complete)
 Resume file: None
-Next: Continue Phase 2 with plan 02-03 (speaker diarization)
+Next: Begin Phase 3 (Engagement Scoring)
