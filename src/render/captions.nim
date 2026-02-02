@@ -6,7 +6,7 @@
 ## - Speaker color palette for visual differentiation
 ## - ASS subtitle file generation with word-level timing (karaoke tags)
 
-import std/[strformat, strutils]
+import std/[strformat, strutils, os, random, osproc]
 import ../transcript/grouping
 
 type
@@ -375,3 +375,75 @@ proc buildDrawtextFilter*(text: string, style: CaptionStyle, startMs, endMs: int
   parts.add(&"enable='between(t,{startSec},{endSec})'")
 
   result = "drawtext=" & parts.join(":")
+
+# Caption Burning Integration
+
+type
+  CaptionBurnConfig* = object
+    ## Configuration for burning captions into video
+    style*: CaptionStyle
+    width*: int            # Video width in pixels
+    height*: int           # Video height in pixels
+    useHighlight*: bool    # Enable word-by-word reveal (default false)
+    tempDir*: string       # Where to write ASS file (default system temp)
+
+proc prepareCaptionFilter*(captions: seq[Caption], config: CaptionBurnConfig): tuple[filter: string, tempFile: string] =
+  ## Generate ASS file and filter string for caption burning
+  ## Returns (filter string, temp file path)
+  ## Caller is responsible for cleanup of temp file
+
+  # Generate unique temp filename
+  randomize()
+  let randomSuffix = rand(100000..999999)
+  let tempDir = if config.tempDir.len > 0: config.tempDir else: getTempDir()
+  let tempFile = joinPath(tempDir, &"honeyclip_captions_{randomSuffix}.ass")
+
+  # Generate and write ASS content
+  var style = config.style
+  style.highlightEnabled = config.useHighlight
+  let assContent = generateASS(captions, style, config.width, config.height)
+  writeFile(tempFile, assContent)
+
+  # Build filter string
+  let filterString = buildASSFilter(tempFile)
+
+  result = (filterString, tempFile)
+
+proc cleanupCaptionTemp*(tempFile: string) =
+  ## Remove temp ASS file
+  ## Ignores errors if file doesn't exist
+  try:
+    if fileExists(tempFile):
+      removeFile(tempFile)
+  except:
+    discard
+
+proc burnCaptions*(inputPath, outputPath: string, captions: seq[Caption], config: CaptionBurnConfig, ffmpegPath: string = "ffmpeg"): int =
+  ## Burn captions into video using FFmpeg
+  ## Returns FFmpeg exit code (0 = success)
+
+  # Generate ASS file and filter string
+  let (filterString, tempFile) = prepareCaptionFilter(captions, config)
+
+  try:
+    # Build FFmpeg command
+    let args = @[
+      "-i", inputPath,
+      "-vf", filterString,
+      "-c:a", "copy",  # Copy audio unchanged
+      "-y",            # Overwrite output
+      outputPath
+    ]
+
+    # Execute FFmpeg
+    let process = startProcess(
+      ffmpegPath,
+      args = args,
+      options = {poUsePath, poParentStreams}
+    )
+
+    result = process.waitForExit()
+    process.close()
+  finally:
+    # Clean up temp file
+    cleanupCaptionTemp(tempFile)
