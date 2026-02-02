@@ -6,23 +6,23 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 4 - Face Detection Infrastructure
+**Current focus:** Phase 5 - Engagement Scoring Foundation
 
 ## Current Position
 
-Phase: 4 of 10 (Face Detection Infrastructure) — Phase Complete
-Plan: 4 of 4 in phase
-Status: Phase Complete
-Last activity: 2026-02-02 — Completed 04-04-PLAN.md
+Phase: 5 of 10 (Engagement Scoring Foundation) — In Progress
+Plan: 2 of 3 in phase
+Status: In Progress
+Last activity: 2026-02-02 — Completed 05-02-PLAN.md
 
-Progress: [██████████████████░░░░░░░░░░░░░░░░░░░░░░] 47%
+Progress: [███████████████████░░░░░░░░░░░░░░░░░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17
+- Total plans completed: 19
 - Average duration: 3.4 min
-- Total execution time: 0.98 hours
+- Total execution time: 1.08 hours
 
 **By Phase:**
 
@@ -32,10 +32,11 @@ Progress: [██████████████████░░░░░
 | 02-transcript-foundation | 4 | 15min | 3.8min |
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
+| 05-engagement-scoring-foundation | 2 | 12min | 6.0min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (2.5min), 04-02 (3min), 04-03 (3.7min), 04-04 (2min)
-- Trend: Fast completion for testing and infrastructure tasks, Phase 4 complete
+- Last 5 plans: 04-02 (3min), 04-03 (3.7min), 04-04 (2min), 05-01 (6min), 05-02 (6min)
+- Trend: Phase 5 showing slightly longer durations for new analysis features
 
 *Updated after each plan completion*
 
@@ -111,6 +112,10 @@ Recent decisions affecting current work:
 - --clear-faces flag operates on .honeyclip/ in current directory (04-04)
 - --info flag shows both system and face caches (04-04)
 - Face detection tests conditional on enable_ml to support incremental ML builds (04-04)
+- Hook requires BOTH text pattern match AND prosody indicator (no false positives from text alone) (05-02)
+- Max 3 hooks per minute to avoid over-flagging (05-02)
+- Prosody detection via simplified heuristics (volume spike >1.5x, pause >200ms) not full pitch extraction (05-02)
+- Rate limiting keeps highest confidence hooks within each minute window (05-02)
 
 ### Pending Todos
 
@@ -145,7 +150,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T17:36:28Z
-Stopped at: Completed 04-04-PLAN.md (Phase 4 fully complete)
+Last session: 2026-02-02T19:00:30Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
-Next: Begin Phase 5 (Engagement Scoring) - faces() API ready for integration
+Next: Continue Phase 5 (05-03) - Integrate hook detection with engagement scoring
