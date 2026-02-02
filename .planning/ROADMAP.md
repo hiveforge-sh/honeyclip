@@ -86,10 +86,13 @@ Plans:
   2. Face detection uses adaptive frame sampling (1-5fps) based on scene changes to optimize CPU usage
   3. Face detection results are cached and reused across runs when input hasn't changed
   4. Multi-frame consensus reduces false positive rate below 15% on real-world video
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01-PLAN.md: TBD during phase planning
+- [ ] 04-01-PLAN.md: Core face detection types, consensus algorithm, and binary cache module
+- [ ] 04-02-PLAN.md: Adaptive frame sampling with scene change detection
+- [ ] 04-03-PLAN.md: Main faces() analysis function with caching integration
+- [ ] 04-04-PLAN.md: CLI cache management and unit tests
 
 ### Phase 5: Engagement Scoring Foundation
 **Goal**: Analyze and score video segments using multi-modal signals (audio, motion, speech)
