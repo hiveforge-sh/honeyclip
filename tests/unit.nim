@@ -18,6 +18,9 @@ import ../src/analyze/engagement_types
 import ../src/analyze/hooks
 import ../src/analyze/clips
 import ../src/exports/edl
+import ../src/reframe/compositor
+import ../src/reframe/crop
+import ../src/tracking/types as trackingTypes
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -1388,3 +1391,158 @@ suite "clips module":
     # Third clip (no overlap) should rank higher than second (overlapping)
     # due to overlap penalty
     check ranked[1].engagementScore == 80.0f or ranked[2].engagementScore == 80.0f
+
+# Reframe Compositor Tests
+
+suite "Reframe Compositor":
+  test "newCompositor defaults":
+    let comp = newCompositor()
+    check comp.easing == Slow
+    check comp.targetAspect == Portrait
+    check comp.keyframes.len == 0
+    check comp.fallbackFrameCount == 0
+    check comp.totalFrameCount == 0
+
+  test "addKeyframe tracks fallback":
+    var comp = newCompositor()
+    let crop1 = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 0.0)
+    let crop2 = CropRegion(x: 200, y: 100, width: 607, height: 1080, timestamp: 1.0)
+
+    comp.addKeyframe(0.0, crop1, trackId = 0)  # Tracked frame
+    comp.addKeyframe(1.0, crop2, trackId = -1)  # Fallback frame
+
+    check comp.totalFrameCount == 2
+    check comp.fallbackFrameCount == 1
+    check comp.keyframes.len == 2
+
+  test "getFallbackPercentage calculation":
+    var comp = newCompositor()
+    let crop = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 0.0)
+
+    # Add 7 tracked frames and 3 fallback frames
+    for i in 0..<7:
+      comp.addKeyframe(i.float, crop, trackId = 0)
+    for i in 7..<10:
+      comp.addKeyframe(i.float, crop, trackId = -1)
+
+    let percentage = comp.getFallbackPercentage()
+    # 3/10 = 30%
+    check abs(percentage - 30.0) < 0.1
+
+  test "getFallbackPercentage empty":
+    let comp = newCompositor()
+    check comp.getFallbackPercentage() == 0.0
+
+  test "getCropAtTime single keyframe":
+    var comp = newCompositor()
+    let crop = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 0.0)
+    comp.addKeyframe(0.0, crop, trackId = 0)
+
+    # Query at any time should return same crop
+    let result1 = comp.getCropAtTime(0.5)
+    let result2 = comp.getCropAtTime(2.0)
+    check result1.x == 100
+    check result2.x == 100
+
+  test "getCropAtTime interpolation":
+    var comp = newCompositor()
+    let crop1 = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 0.0)
+    let crop2 = CropRegion(x: 200, y: 200, width: 607, height: 1080, timestamp: 2.0)
+
+    comp.addKeyframe(0.0, crop1, trackId = 0)
+    comp.addKeyframe(2.0, crop2, trackId = 0)
+
+    # Query at midpoint (t=1.0)
+    let result = comp.getCropAtTime(1.0)
+
+    # With easing, interpolation is not linear
+    # But should be between start and end values
+    check result.x >= 100 and result.x <= 200
+    check result.y >= 100 and result.y <= 200
+    # Should NOT be exact midpoint due to easing
+    check result.x != 150
+
+  test "getCropAtTime before first keyframe":
+    var comp = newCompositor()
+    let crop = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 1.0)
+    comp.addKeyframe(1.0, crop, trackId = 0)
+
+    # Query before first keyframe returns first keyframe
+    let result = comp.getCropAtTime(0.0)
+    check result.x == 100
+
+  test "getCropAtTime after last keyframe":
+    var comp = newCompositor()
+    let crop = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 1.0)
+    comp.addKeyframe(1.0, crop, trackId = 0)
+
+    # Query after last keyframe returns last keyframe
+    let result = comp.getCropAtTime(5.0)
+    check result.x == 100
+
+  test "generateCropFilter single keyframe":
+    var comp = newCompositor()
+    let crop = CropRegion(x: 100, y: 50, width: 607, height: 1080, timestamp: 0.0)
+    comp.addKeyframe(0.0, crop, trackId = 0)
+
+    let filter = comp.generateCropFilter()
+    # Should be static crop without enable expression
+    check filter.contains("crop=w=607")
+    check filter.contains("h=1080")
+    check filter.contains("x=100")
+    check filter.contains("y=50")
+    check not filter.contains("enable=")
+
+  test "generateCropFilter multiple keyframes":
+    var comp = newCompositor()
+    let crop1 = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 0.0)
+    let crop2 = CropRegion(x: 200, y: 200, width: 607, height: 1080, timestamp: 1.0)
+
+    comp.addKeyframe(0.0, crop1, trackId = 0)
+    comp.addKeyframe(1.0, crop2, trackId = 0)
+
+    let filter = comp.generateCropFilter()
+
+    # Should contain multiple crop expressions with enable
+    check filter.contains("crop=")
+    check filter.contains("enable='between(t,")
+    # Should have multiple segments (comma-separated)
+    check filter.count("crop=") > 1
+
+  test "generateCropFilter time ranges":
+    var comp = newCompositor()
+    let crop1 = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 0.0)
+    let crop2 = CropRegion(x: 200, y: 200, width: 607, height: 1080, timestamp: 2.0)
+
+    comp.addKeyframe(0.0, crop1, trackId = 0)
+    comp.addKeyframe(2.0, crop2, trackId = 0)
+
+    let filter = comp.generateCropFilter()
+
+    # Should contain time range starting at 0.0
+    check filter.contains("between(t,0.000,")
+    # Filter string should reference the duration
+    check filter.len > 0
+
+  test "generateCropFilter empty":
+    let comp = newCompositor()
+    let filter = comp.generateCropFilter()
+    # No keyframes should produce empty filter
+    check filter.len == 0
+
+  test "renderReframe generates valid filter":
+    var comp = newCompositor()
+    let crop1 = CropRegion(x: 100, y: 100, width: 607, height: 1080, timestamp: 0.0)
+    let crop2 = CropRegion(x: 200, y: 200, width: 607, height: 1080, timestamp: 1.0)
+
+    comp.addKeyframe(0.0, crop1, trackId = 0)
+    comp.addKeyframe(1.0, crop2, trackId = 0)
+
+    # Test that renderReframe succeeds with valid compositor
+    let success = renderReframe("input.mp4", "output.mp4", comp, 607, 1080)
+    check success == true
+
+  test "renderReframe fails with no keyframes":
+    let comp = newCompositor()
+    let success = renderReframe("input.mp4", "output.mp4", comp, 607, 1080)
+    check success == false
