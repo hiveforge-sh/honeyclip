@@ -10,29 +10,30 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 1 of 10 (Foundation & Build Infrastructure)
-Plan: 05 of 5 in phase (gap closure)
-Status: VERIFIED (partial pass) — 3/4 criteria met, size limit exceeded
-Last activity: 2026-02-02 — Phase 1 verification complete, CI running
+Phase: 2 of 10 (Transcript Foundation)
+Plan: 1 of 4 in phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 02-01-PLAN.md
 
-Progress: [██████████] 100% (with caveat: 114MB > 100MB size limit)
+Progress: [██████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 4.3 min
-- Total execution time: 0.22 hours
+- Total plans completed: 5
+- Average duration: 4.0 min
+- Total execution time: 0.33 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
+| 02-transcript-foundation | 1 | 3min | 3.0min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5min), 01-02 (5min), 01-03 (4min), 01-04 (3min)
-- Trend: Maintaining consistent velocity
+- Last 5 plans: 01-02 (5min), 01-03 (4min), 01-04 (3min), 02-01 (3min)
+- Trend: Consistent 3-5 min velocity
 
 *Updated after each plan completion*
 
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - 50MB soft limit (warning) / 100MB hard limit (fail) for ML library size in CI (01-04)
 - Auto-enable ML tests when libfacedetection.a exists (no manual flag) (01-04)
 - Rebrand to honeyclip under hiveforge-sh organization (01-05)
+- SRT uses comma separator, VTT uses period for timestamp milliseconds (02-01)
+- Word-level timestamps via whisper filter format=json with max_len=1 (02-01)
+- Speaker -1 = unassigned until diarization, 0+ = identified speakers (02-01)
 
 ### Pending Todos
 
@@ -78,7 +82,7 @@ None yet.
 - First ML library build takes 1-2 hours - DOCUMENTED: Users need to be aware
 
 **Phase 2 (Transcript):**
-- Whisper.cpp currently used for speech detection, not full transcript extraction — need to extend output format
+- Unit tests require FFmpeg build (nimble makeff) to execute - currently only syntax-checked
 
 **Phase 4 (Face Detection):**
 - Face detection false positive rate can reach 85% in production (Metropolitan Police finding)
@@ -95,6 +99,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Phase 1 verification complete
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None
-Next: Begin Phase 2 (Transcript Foundation) or address size optimization tech debt
+Next: Continue Phase 2 with plan 02-02 (caption grouping)
