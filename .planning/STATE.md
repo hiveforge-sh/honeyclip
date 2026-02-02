@@ -10,19 +10,19 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 3 of 10 (Caption Rendering) — Complete
-Plan: 5 of 5 in phase
-Status: Complete
-Last activity: 2026-02-02 — Phase 3 verified and complete
+Phase: 4 of 10 (Face Detection Infrastructure) — In Progress
+Plan: 1 of 3 in phase
+Status: In Progress
+Last activity: 2026-02-02 — Completed 04-01-PLAN.md
 
-Progress: [████████████████░░░░░░░░░░░░░░░░░░░░░░░░] 40%
+Progress: [████████████████░░░░░░░░░░░░░░░░░░░░░░░░] 41%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: 3.7 min
-- Total execution time: 0.8 hours
+- Total plans completed: 14
+- Average duration: 3.6 min
+- Total execution time: 0.85 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [████████████████░░░░░░░
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
 | 02-transcript-foundation | 4 | 15min | 3.8min |
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
+| 04-face-detection-infrastructure | 1 | 2.5min | 2.5min |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (2.5min), 03-03 (4min), 03-04 (5min), 03-05 (4min)
-- Trend: Stable around 4 min
+- Last 5 plans: 03-03 (4min), 03-04 (5min), 03-05 (4min), 04-01 (2.5min)
+- Trend: Fast completion for infrastructure tasks
 
 *Updated after each plan completion*
 
@@ -95,6 +96,11 @@ Recent decisions affecting current work:
 - Minimal XML structure for caption-only NLE exports (no audio tracks) (03-05)
 - Video clip reference included in caption exports for NLE timeline context (03-05)
 - Support stdout output with "-" path for piping (03-05)
+- Multi-frame consensus with 3-frame window and 0.6 threshold for stability (04-01)
+- IoU > 0.5 threshold for matching faces across frames (04-01)
+- Default confidence filter 0.3 (higher than libfacedetection 0.02 default) (04-01)
+- Cache location .honeyclip/ alongside video (not getTempDir) for persistence (04-01)
+- 20 face cache file limit per directory (vs 10 for motion cache) (04-01)
 
 ### Pending Todos
 
@@ -114,8 +120,8 @@ None yet.
 - RESOLVED: All transcript components implemented and integrated
 
 **Phase 4 (Face Detection):**
-- Face detection false positive rate can reach 85% in production (Metropolitan Police finding)
-- Multi-frame consensus and adaptive frame sampling critical to avoid CPU waste and accuracy issues
+- Face detection false positive rate can reach 85% in production (Metropolitan Police finding) - ADDRESSED: Multi-frame consensus algorithm implemented (04-01)
+- Adaptive frame sampling needed to avoid CPU waste - PENDING: Will be addressed in 04-02
 
 **Phase 5 (Engagement Scoring):**
 - No ground truth data for validating engagement scores without cloud platform metrics
@@ -128,6 +134,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Phase 3 (Caption Rendering) complete
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None
-Next: Plan or discuss Phase 4 (Face Detection Infrastructure)
+Next: Execute 04-02-PLAN.md (Face Analyzer Implementation)
