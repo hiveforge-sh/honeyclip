@@ -242,7 +242,7 @@ let onnxruntime = Package(
     "--config", "MinSizeRel",
     "--minimal_build", "extended",
     "--disable_ml_ops",
-    "--build_shared_lib",
+    "--build_shared_lib", "OFF",
     "--skip_tests",
     "--disable_exceptions",
   ],
@@ -326,6 +326,9 @@ proc makeInstall() =
   else:
     exec "make -j4"
   exec "make install"
+
+# Forward declarations for ML library build infrastructure
+proc addCcacheIfAvailable(cmakeArgs: var seq[string])
 
 proc cmakeBuild(package: Package, buildPath: string, crossWindows: bool = false) =
   mkDir("build_cmake")
@@ -815,8 +818,8 @@ proc onnxBuild(buildPath: string, crossWindows: bool = false) =
     if code == 0:
       nproc = output.strip()
 
-  # Run build.sh with minimal build configuration
-  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --build_shared_lib --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath}"
+  # Run build.sh with minimal build configuration (static library)
+  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --build_shared_lib OFF --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath}"
 
   # Install libraries
   withDir "build/MinSizeRel":
