@@ -49,6 +49,7 @@ type
                inputNames: ptr cstring, inputs: ptr pointer, inputCount: csize_t,
                outputNames: ptr cstring, outputCount: csize_t,
                outputs: ptr pointer): ptr OrtStatus {.cdecl.}
+    GetTensorMutableData*: proc(value: pointer, data: ptr pointer): ptr OrtStatus {.cdecl.}
     GetErrorMessage*: proc(status: ptr OrtStatus): cstring {.cdecl.}
     ReleaseStatus*: proc(status: ptr OrtStatus) {.cdecl.}
 
@@ -226,3 +227,23 @@ proc run*(session: OrtSession, inputs: openArray[OrtValue],
   result = newSeq[OrtValue](outputNames.len)
   for i in 0 ..< outputNames.len:
     result[i] = OrtValue(handle: outputHandles[i])
+
+proc getTensorData*[T](value: OrtValue): ptr UncheckedArray[T] =
+  ## Get pointer to tensor data from OrtValue
+  ##
+  ## Args:
+  ##   value: Output tensor from inference
+  ##
+  ## Returns:
+  ##   Pointer to tensor data as UncheckedArray
+  ##
+  ## Example:
+  ##   let data = getTensorData[float32](outputs[0])
+  ##   echo data[0]  # First element
+
+  let api = getApi()
+  var dataPtr: pointer
+  let status = api.GetTensorMutableData(value.handle, addr dataPtr)
+  checkOrt(status)
+
+  result = cast[ptr UncheckedArray[T]](dataPtr)
