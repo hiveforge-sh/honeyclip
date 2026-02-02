@@ -77,7 +77,7 @@ test "exports":
       "Hello \\ World", "11"))
 
 test "info":
-  main(@["example.mp4"])
+  main(@["resources/testsrc.mp4"])
 
 test "margin":
   var levels: seq[bool]
@@ -121,7 +121,7 @@ test "mp4towav":
   let tempDir = createTempDir("tmp", "")
   defer: removeDir(tempDir)
   let outFile = tempDir / "out.wav"
-  transcodeAudio("example.mp4", outFile, 0)
+  transcodeAudio("resources/testsrc.mp4", outFile, 0)
 
   let container = av.open(outFile)
   defer: container.close()
