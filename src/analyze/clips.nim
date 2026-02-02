@@ -9,7 +9,7 @@
 ## The multi-signal approach produces clips that feel like natural "moments"
 ## suitable for social media (TikTok, Reels, Shorts).
 
-import std/[algorithm, strformat, strutils, osproc]
+import std/[algorithm, strformat, strutils, osproc, os]
 import engagement_types
 
 type
@@ -48,6 +48,30 @@ type
     introSkipMs*: int64                # Skip first N ms (default 0)
     outroSkipMs*: int64                # Skip last N ms (default 0)
 
+  ClipRankingParams* = object
+    ## Parameters for clip ranking with overlap penalty
+    topN*: int                    # Number of top clips to return (default 5)
+    overlapThreshold*: float32    # IoU above this triggers penalty (default 0.3)
+    overlapPenalty*: float32      # Points to subtract per overlap (default 30.0)
+    hookBoost*: float32           # Extra points for hook clips (default 5.0)
+    preferLongerClips*: bool      # When overlapping, prefer longer clip (default true)
+
+  ClipExportParams* = object
+    ## Parameters for clip export
+    outputDir*: string           # Output directory for clips
+    codec*: string               # Video codec (default "libx264")
+    preset*: string              # Encoding preset (default "fast")
+    crf*: int                    # Quality (default 23)
+    maxConcurrent*: int          # Max parallel renders (default 4)
+    includeAudio*: bool          # Include audio track (default true)
+
+  ExportResult* = object
+    ## Result of clip export operation
+    clip*: Clip
+    outputPath*: string
+    success*: bool
+    error*: string
+
 # ===== Default parameters =====
 
 proc defaultClipDetectionParams*(): ClipDetectionParams =
@@ -64,6 +88,34 @@ proc defaultClipDetectionParams*(): ClipDetectionParams =
   result.mergeWindowMs = 2000         # 2 seconds
   result.introSkipMs = 0
   result.outroSkipMs = 0
+
+proc defaultClipRankingParams*(): ClipRankingParams =
+  ## Create default clip ranking parameters
+  ##
+  ## Optimized for variety in top clips:
+  ##   - Top 5 clips by engagement score
+  ##   - 0.3 IoU overlap threshold
+  ##   - 30.0 point penalty per overlap
+  ##   - 5.0 point hook boost
+  result.topN = 5
+  result.overlapThreshold = 0.3f
+  result.overlapPenalty = 30.0f
+  result.hookBoost = 5.0f
+  result.preferLongerClips = true
+
+proc defaultClipExportParams*(): ClipExportParams =
+  ## Create default clip export parameters
+  ##
+  ## Optimized for fast rendering with good quality:
+  ##   - libx264 codec with fast preset
+  ##   - CRF 23 (good quality/size tradeoff)
+  ##   - 4 concurrent renders
+  result.outputDir = ""          # Set by caller
+  result.codec = "libx264"
+  result.preset = "fast"
+  result.crf = 23
+  result.maxConcurrent = 4
+  result.includeAudio = true
 
 # ===== Helper functions =====
 
@@ -236,6 +288,85 @@ proc detectBoundaries*(timeline: EngagementTimeline,
 
   return unique
 
+# ===== IoU and ranking =====
+
+proc calculateIoU*(clipA, clipB: Clip): float32 =
+  ## Calculate Intersection over Union for two clip time ranges
+  ## Returns 0.0 (no overlap) to 1.0 (identical range)
+  let intersectionStart = max(clipA.startMs, clipB.startMs)
+  let intersectionEnd = min(clipA.endMs, clipB.endMs)
+  let intersection = max(0'i64, intersectionEnd - intersectionStart)
+
+  let unionStart = min(clipA.startMs, clipB.startMs)
+  let unionEnd = max(clipA.endMs, clipB.endMs)
+  let union = unionEnd - unionStart
+
+  if union == 0:
+    return 0.0f
+
+  return intersection.float32 / union.float32
+
+proc rankClips*(clips: seq[Clip], params: ClipRankingParams): seq[Clip] =
+  ## Rank clips with overlap penalty to promote variety
+  ##
+  ## Algorithm:
+  ## 1. Sort candidates by engagement score (descending)
+  ## 2. For each candidate, calculate overlap with already-selected clips
+  ## 3. Apply penalty for overlapping clips (IoU * penalty)
+  ## 4. Add hook boost if clip has hook
+  ## 5. Select top N clips with positive adjusted scores
+  ##
+  ## CONTEXT.md decisions:
+  ## - "Default to top 5 clips by engagement score"
+  ## - "Promote variety: reduce score of clips that overlap significantly"
+  ## - "When clips overlap in time, prefer the longer clip"
+  ## - "Slight boost for hook segments"
+
+  if clips.len == 0:
+    return @[]
+
+  var ranked: seq[Clip] = @[]
+  var candidates = clips
+
+  # Sort by engagement score descending
+  candidates.sort(proc(a, b: Clip): int = cmp(b.engagementScore, a.engagementScore))
+
+  for candidate in candidates:
+    if ranked.len >= params.topN:
+      break
+
+    # Start with base engagement score
+    var adjustedScore = candidate.engagementScore
+
+    # Add hook boost
+    if candidate.hasHook:
+      adjustedScore += params.hookBoost
+
+    # Calculate overlap penalty with already-selected clips
+    for selected in ranked:
+      let iou = calculateIoU(candidate, selected)
+      if iou > params.overlapThreshold:
+        # Apply penalty proportional to overlap
+        adjustedScore -= params.overlapPenalty * iou
+
+        # If preferLongerClips and this clip is shorter, add extra penalty
+        if params.preferLongerClips and candidate.durationMs < selected.durationMs:
+          adjustedScore -= 5.0f
+
+    # Only add if adjusted score still positive (or if first clip)
+    if adjustedScore > 0.0f or ranked.len == 0:
+      var rankedClip = candidate
+      rankedClip.adjustedScore = adjustedScore
+      rankedClip.rank = ranked.len + 1
+      ranked.add(rankedClip)
+
+  # Re-sort by adjusted score and reassign ranks
+  ranked.sort(proc(a, b: Clip): int = cmp(b.adjustedScore, a.adjustedScore))
+  for i in 0 ..< ranked.len:
+    ranked[i].rank = i + 1
+
+  return ranked
+
 # ===== Clip extraction =====
 
 proc detectClips*(timeline: EngagementTimeline,
@@ -329,3 +460,153 @@ proc detectClips*(timeline: EngagementTimeline,
       faceCount: maxFaceCount,
       rank: 0  # Will be set during ranking
     ))
+
+# ===== Clip export =====
+
+proc generateClipFilename*(inputPath: string, clip: Clip): string =
+  ## Generate output filename with timestamp
+  ## Format: video_00m30s-01m15s.mp4 (per CONTEXT.md)
+  let (_, name, _) = splitFile(inputPath)
+
+  let startMin = clip.startMs div 60000
+  let startSec = (clip.startMs mod 60000) div 1000
+  let endMin = clip.endMs div 60000
+  let endSec = (clip.endMs mod 60000) div 1000
+
+  result = &"{name}_{startMin:02}m{startSec:02}s-{endMin:02}m{endSec:02}s.mp4"
+
+proc buildFFmpegArgs*(inputPath: string, clip: Clip, outputPath: string,
+                      params: ClipExportParams): seq[string] =
+  ## Build FFmpeg arguments for clip extraction
+  let startSec = clip.startMs.float64 / 1000.0
+  let duration = (clip.endMs - clip.startMs).float64 / 1000.0
+
+  result = @[
+    "-ss", $startSec,
+    "-t", $duration,
+    "-i", inputPath,
+    "-c:v", params.codec,
+    "-preset", params.preset,
+    "-crf", $params.crf
+  ]
+
+  if params.includeAudio:
+    result.add(@["-c:a", "aac", "-b:a", "128k"])
+  else:
+    result.add("-an")
+
+  # Add faststart for streaming compatibility
+  result.add(@["-movflags", "+faststart"])
+
+  # Output file (overwrite without asking)
+  result.add(@["-y", outputPath])
+
+proc batchExportClips*(inputPath: string, clips: seq[Clip],
+                       params: ClipExportParams,
+                       onProgress: proc(completed, total: int) = nil): seq[ExportResult] =
+  ## Export clips in parallel with limited concurrency
+  ##
+  ## RESEARCH.md: "Limit concurrent FFmpeg processes"
+  ## RESEARCH.md: "Use defer for cleanup"
+  ## CONTEXT.md: "Render clips in parallel for speed"
+  ##
+  ## Args:
+  ##   inputPath: Source video path
+  ##   clips: Clips to export
+  ##   params: Export parameters (codec, quality, concurrency)
+  ##   onProgress: Optional callback for progress updates
+  ##
+  ## Returns:
+  ##   Export results with success/error status per clip
+
+  result = @[]
+
+  if clips.len == 0:
+    return result
+
+  # Create output directory if needed
+  let outputDir = if params.outputDir != "":
+    params.outputDir
+  else:
+    # Default: subfolder next to source video (per CONTEXT.md)
+    let (dir, name, _) = splitFile(inputPath)
+    dir / name & "_clips"
+
+  if not dirExists(outputDir):
+    createDir(outputDir)
+
+  # Track active processes
+  type ProcessInfo = tuple[process: Process, clipIndex: int, outputPath: string]
+  var activeProcesses: seq[ProcessInfo] = @[]
+  var completed = 0
+
+  # Find ffmpeg executable
+  let ffmpegPath = findExe("ffmpeg")
+  if ffmpegPath == "":
+    # Return error for all clips
+    for clip in clips:
+      result.add(ExportResult(
+        clip: clip,
+        outputPath: "",
+        success: false,
+        error: "ffmpeg not found in PATH"
+      ))
+    return result
+
+  for i, clip in clips:
+    let outputPath = outputDir / generateClipFilename(inputPath, clip)
+    let args = buildFFmpegArgs(inputPath, clip, outputPath, params)
+
+    # Wait for available slot
+    while activeProcesses.len >= params.maxConcurrent:
+      # Check for completed processes
+      var stillRunning: seq[ProcessInfo] = @[]
+      for info in activeProcesses:
+        if info.process.running():
+          stillRunning.add(info)
+        else:
+          let exitCode = info.process.waitForExit()
+          completed += 1
+          result.add(ExportResult(
+            clip: clips[info.clipIndex],
+            outputPath: info.outputPath,
+            success: exitCode == 0,
+            error: if exitCode != 0: &"FFmpeg exited with code {exitCode}" else: ""
+          ))
+          info.process.close()
+          if onProgress != nil:
+            onProgress(completed, clips.len)
+      activeProcesses = stillRunning
+
+      if activeProcesses.len >= params.maxConcurrent:
+        sleep(100)  # Poll every 100ms
+
+    # Start new export process
+    try:
+      let process = startProcess(ffmpegPath, args = args,
+                                  options = {poUsePath, poStdErrToStdOut})
+      activeProcesses.add((process, i, outputPath))
+    except OSError as e:
+      result.add(ExportResult(
+        clip: clip,
+        outputPath: outputPath,
+        success: false,
+        error: e.msg
+      ))
+
+  # Wait for remaining processes
+  for info in activeProcesses:
+    let exitCode = info.process.waitForExit()
+    completed += 1
+    result.add(ExportResult(
+      clip: clips[info.clipIndex],
+      outputPath: info.outputPath,
+      success: exitCode == 0,
+      error: if exitCode != 0: &"FFmpeg exited with code {exitCode}" else: ""
+    ))
+    info.process.close()
+    if onProgress != nil:
+      onProgress(completed, clips.len)
+
+  # Sort results by clip rank
+  result.sort(proc(a, b: ExportResult): int = cmp(a.clip.rank, b.clip.rank))
