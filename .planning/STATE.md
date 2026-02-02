@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 7 of 10 (Speaker Tracking & Reframing) — In progress
-Plan: 2 of 6 in phase
+Plan: 5 of 6 in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 07-02-PLAN.md
+Last activity: 2026-02-02 — Completed 07-05-PLAN.md
 
-Progress: [██████████████████████████████░░░░░░░░░░] 70.0%
+Progress: [███████████████████████████████░░░░░░░░░] 72.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 3.2 min
-- Total execution time: 1.6 hours
+- Total execution time: 1.65 hours
 
 **By Phase:**
 
@@ -34,11 +34,11 @@ Progress: [███████████████████████
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
-| 07-speaker-tracking-reframing | 2 | 8.3min | 4.15min |
+| 07-speaker-tracking-reframing | 3 | 13.3min | 4.43min |
 
 **Recent Trend:**
-- Last 5 plans: 06-03 (2.25min), 06-04 (4min), 07-01 (3min), 07-02 (5.3min)
-- Trend: Phase 7 in progress with strong efficiency (4.15min avg)
+- Last 5 plans: 06-04 (4min), 07-01 (3min), 07-02 (5.3min), 07-05 (5min)
+- Trend: Phase 7 in progress with consistent velocity (4.43min avg)
 
 *Updated after each plan completion*
 
@@ -162,6 +162,10 @@ Recent decisions affecting current work:
 - Medium shot padding formula: face height * 2.5 for head and shoulders visible (07-04)
 - Debouncing spatial threshold: 20 pixels minimum distance to trigger crop switch (07-04)
 - Cubic-bezier control points: Slow(0.25,0.25), Medium(0.42,0.58), Fast(0.55,1.0) for distinct feels (07-04)
+- 60fps internal keyframe rate for smooth motion regardless of source framerate (07-05)
+- FFmpeg enable= expressions for time-based crop segments (07-05)
+- Fallback percentage tracking to warn if >50% of frames lack face detection (07-05)
+- libx264 fast preset + CRF 23 for reframed output encoding (07-05)
 
 ### Pending Todos
 
@@ -203,7 +207,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T23:06:04Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-02-02T23:13:28Z
+Stopped at: Completed 07-05-PLAN.md
 Resume file: None
-Next: Continue Phase 7 - Speaker Reframing (plans 07-03 through 07-06)
+Next: Complete Phase 7 - Plan 07-06 (CLI integration for reframe command)
