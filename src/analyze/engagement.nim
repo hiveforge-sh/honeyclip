@@ -96,6 +96,102 @@ proc scoreSpeechFeatures*(words: seq[Word]): float32 =
   # Combine (60% rate, 40% confidence)
   (rateScore * 0.6 + confidenceScore * 0.4)
 
+# ===== Absolute scoring helper =====
+
+proc scoreAbsolute*(audioRaw, motionRaw, speechScore: float32,
+                    faceCount: int, hasHook: bool,
+                    params: EngagementParams): float32 =
+  ## Score using fixed thresholds for cross-video comparison
+  ## Audio: 0-0.5 raw maps to 0-100
+  ## Motion: 0-0.3 raw maps to 0-100
+
+  # Fixed thresholds based on typical video ranges
+  let audioThreshold = 0.5f
+  let motionThreshold = 0.3f
+
+  # Normalize to 0-100
+  let audioNorm = min(audioRaw / audioThreshold, 1.0f) * 100.0f
+  let motionNorm = min(motionRaw / motionThreshold, 1.0f) * 100.0f
+
+  # Base score with signal weights
+  var score = (audioNorm * params.audioWeight +
+               motionNorm * params.motionWeight +
+               speechScore * params.speechWeight)
+
+  # Apply boosts
+  if faceCount > 0:
+    let faceBoost = min(faceCount.float32 * params.faceBoostPerFace, 10.0f)
+    score += faceBoost
+
+  if hasHook:
+    score += params.hookBoost
+
+  # Clamp to 0-100
+  result = min(max(score, 0.0f), 100.0f)
+
+# ===== Segment scoring =====
+
+proc scoreSegment*(startMs, endMs: int64, text: string, words: seq[Word],
+                   audioSignal, motionSignal: seq[float32],
+                   audioNormBounds, motionNormBounds: tuple[low, high: float32],
+                   faceFrames: seq[FrameFaces],
+                   hookPatterns: seq[HookPattern],
+                   avgAudioEnergy: float32,
+                   tb: AVRational,
+                   params: EngagementParams): EngagementSegment =
+  ## Score a single segment combining all signals
+
+  # Initialize result
+  result = newEngagementSegment(startMs, endMs)
+  result.text = text
+
+  # Convert timestamps to indices
+  let startIdx = msToIndex(startMs, tb)
+  let endIdx = msToIndex(endMs, tb)
+
+  # Get raw audio and motion averages for segment
+  let audioRaw = averageSignal(audioSignal, startIdx, endIdx)
+  let motionRaw = averageSignal(motionSignal, startIdx, endIdx)
+
+  # Normalize to 0-100 using pre-computed bounds (relative scoring)
+  result.audioScore = normalizeValue(audioRaw, audioNormBounds.low, audioNormBounds.high)
+  result.motionScore = normalizeValue(motionRaw, motionNormBounds.low, motionNormBounds.high)
+
+  # Score speech features from words
+  result.speechScore = scoreSpeechFeatures(words)
+
+  # Count faces in this segment
+  result.faceCount = countFacesInRange(faceFrames, startMs, endMs)
+
+  # Detect hooks (text + prosody)
+  let audioSegment = getSignalRange(audioSignal, startIdx, endIdx)
+  let hookResult = detectHook(text, audioSegment, avgAudioEnergy, hookPatterns)
+  result.hasHook = hookResult.isHook
+
+  # Calculate combined relative score
+  var relativeScore = (result.audioScore * params.audioWeight +
+                       result.motionScore * params.motionWeight +
+                       result.speechScore * params.speechWeight)
+
+  # Apply face boost
+  if result.faceCount > 0:
+    let faceBoost = min(result.faceCount.float32 * params.faceBoostPerFace, 10.0f)
+    relativeScore += faceBoost
+
+  # Apply hook boost
+  if result.hasHook:
+    relativeScore += params.hookBoost
+
+  # Clamp to 0-100
+  result.scoreRelative = min(max(relativeScore, 0.0f), 100.0f)
+
+  # Calculate absolute score using fixed thresholds
+  result.scoreAbsolute = scoreAbsolute(audioRaw, motionRaw, result.speechScore,
+                                       result.faceCount, result.hasHook, params)
+
+  # Use relative as primary score
+  result.score = result.scoreRelative
+
 # ===== Test block =====
 
 when isMainModule:
@@ -127,3 +223,23 @@ when isMainModule:
   let speechScore = scoreSpeechFeatures(words)
   echo "  Score: ", speechScore
   echo "  In range [0-100]: ", speechScore >= 0.0 and speechScore <= 100.0
+
+  # Test segment scoring
+  echo "\nTest 4: scoreSegment"
+  let audioSig = @[0.2f, 0.3f, 0.4f, 0.3f]
+  let motionSig = @[0.1f, 0.2f, 0.15f, 0.1f]
+  let normBounds = (low: 0.0f, high: 1.0f)
+  let faceFrames: seq[FrameFaces] = @[]
+  let patterns = loadBuiltinPatterns()
+  let params = defaultEngagementParams()
+
+  let segment = scoreSegment(
+    0, 1000, "test", words,
+    audioSig, motionSig,
+    normBounds, normBounds,
+    faceFrames, patterns, 0.3f, tb, params
+  )
+  echo "  Segment score: ", segment.score
+  echo "  Score in range [0-100]: ", segment.score >= 0.0 and segment.score <= 100.0
+  echo "  Has audio/motion/speech scores: ",
+    segment.audioScore > 0 or segment.motionScore > 0 or segment.speechScore > 0
