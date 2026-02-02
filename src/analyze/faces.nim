@@ -3,8 +3,22 @@
 ## Provides face detection types extending libfacedetection FaceRect with
 ## temporal consensus filtering to reduce false positives.
 
-import std/algorithm
+import std/[algorithm, strformat, strutils, tables, options, math]
 import ../ml/facedetect
+import ../av
+import ../ffmpeg
+import ../log
+import ../util/dict
+import ../util/bar
+import ../facecache
+
+# Import VideoProcessor type from motion module
+type
+  VideoProcessor* = object
+    formatCtx*: ptr AVFormatContext
+    codecCtx*: ptr AVCodecContext
+    tb*: AVRational
+    videoIndex*: cint
 
 type
   FaceDetection* = object
@@ -21,6 +35,24 @@ type
     frameIndex*: int64
     timestamp*: float64     # seconds
     faces*: seq[FaceDetection]
+
+  SceneInfo* = object
+    ## Scene change detection information from FFmpeg scdet filter
+    score*: float           # 0.0-1.0 scene change score
+    isSceneChange*: bool    # score > threshold
+    timestamp*: float64     # seconds
+
+  AdaptiveSampler* = object
+    ## Adaptive frame sampling to optimize CPU usage
+    baseFps*: float         # Baseline sampling rate (default 1.0)
+    maxFps*: float          # Maximum during spikes (default 5.0)
+    currentFps: float       # Current sampling rate
+    sceneThreshold*: float  # Scene change threshold (default 0.4)
+    cooldownDuration: float # Seconds before returning to baseline (default 1.0)
+    lastSpikeTime: float64  # Timestamp of last sampling spike
+    lastFaceCount: int      # Track face state changes
+    frameInterval: float    # Current frame interval (1.0 / currentFps)
+    nextSampleTime: float64 # Next time to sample a frame
 
   FaceConsensus* = object
     ## Temporal filtering to reduce false positives
@@ -154,3 +186,265 @@ proc detectFaces*(imageData: ptr uint8, width, height, stride: int,
         frameIndex: frameIndex,
         stable: false  # Will be determined by consensus
       ))
+
+proc newAdaptiveSampler*(baseFps: float = 1.0, maxFps: float = 5.0,
+                         sceneThreshold: float = 0.4,
+                         cooldown: float = 1.0): AdaptiveSampler =
+  ## Create new adaptive sampler with configurable parameters
+  ##
+  ## Args:
+  ##   baseFps: Baseline sampling rate during stable scenes (default 1.0)
+  ##   maxFps: Maximum sampling rate during spikes (default 5.0)
+  ##   sceneThreshold: Scene change detection threshold (default 0.4)
+  ##   cooldown: Seconds to maintain high sampling after spike (default 1.0)
+  ##
+  ## Returns:
+  ##   Initialized AdaptiveSampler starting at baseline rate
+  result = AdaptiveSampler(
+    baseFps: baseFps,
+    maxFps: maxFps,
+    currentFps: baseFps,
+    sceneThreshold: sceneThreshold,
+    cooldownDuration: cooldown,
+    lastSpikeTime: -999.0,  # Start at baseline (no recent spike)
+    lastFaceCount: 0,
+    frameInterval: 1.0 / baseFps,
+    nextSampleTime: 0.0
+  )
+
+proc updateSamplingRate*(sampler: var AdaptiveSampler, sceneScore: float,
+                         faceCount: int, currentTime: float64): float =
+  ## Update sampling rate based on scene changes and face state
+  ##
+  ## Args:
+  ##   sampler: Adaptive sampler to update
+  ##   sceneScore: Scene change score from scdet filter (0.0-1.0)
+  ##   faceCount: Number of faces detected in current frame
+  ##   currentTime: Current timestamp in seconds
+  ##
+  ## Returns:
+  ##   Updated sampling rate (fps)
+
+  # Check for spike triggers
+  let isSceneChange = sceneScore >= sampler.sceneThreshold
+  let faceStateChanged = faceCount != sampler.lastFaceCount
+
+  if isSceneChange or faceStateChanged:
+    # Trigger spike: switch to high sampling rate
+    sampler.currentFps = sampler.maxFps
+    sampler.lastSpikeTime = currentTime
+    sampler.frameInterval = 1.0 / sampler.maxFps
+  else:
+    # Check if cooldown period has elapsed
+    let timeSinceSpike = currentTime - sampler.lastSpikeTime
+    if timeSinceSpike >= sampler.cooldownDuration:
+      # Return to baseline
+      sampler.currentFps = sampler.baseFps
+      sampler.frameInterval = 1.0 / sampler.baseFps
+    # else: maintain current high rate during cooldown
+
+  sampler.lastFaceCount = faceCount
+  return sampler.currentFps
+
+proc shouldSampleFrame*(sampler: var AdaptiveSampler, timestamp: float64): bool =
+  ## Determine if frame at given timestamp should be sampled
+  ##
+  ## Args:
+  ##   sampler: Adaptive sampler tracking next sample time
+  ##   timestamp: Current frame timestamp in seconds
+  ##
+  ## Returns:
+  ##   True if this frame should be processed
+
+  if timestamp >= sampler.nextSampleTime:
+    sampler.nextSampleTime = timestamp + sampler.frameInterval
+    return true
+  return false
+
+proc createFilterGraph(timeBase: AVRational, pixFmtName: cstring,
+    codecCtx: ptr AVCodecContext, filter: string): (ptr AVFilterGraph,
+    ptr AVFilterContext, ptr AVFilterContext) =
+  ## Create FFmpeg filter graph for frame processing
+  ## (Copied from motion.nim pattern)
+  var filterGraph: ptr AVFilterGraph = avfilter_graph_alloc()
+  var bufferSrc: ptr AVFilterContext = nil
+  var bufferSink: ptr AVFilterContext = nil
+
+  if filterGraph == nil:
+    error "Could not allocate filter graph"
+
+  let width = codecCtx.width
+  let height = codecCtx.height
+
+  # Create buffer source with proper arguments
+  let bufferArgs = cstring(
+    &"video_size={width}x{height}:pix_fmt={pixFmtName}:time_base={timeBase.num}/{timeBase.den}:pixel_aspect=1/1"
+  )
+
+  var ret = avfilter_graph_create_filter(addr bufferSrc, avfilter_get_by_name("buffer"),
+                                        "in", bufferArgs, nil, filterGraph)
+  if ret < 0:
+    error &"Cannot create buffer source with args: {bufferArgs}, error code: {ret}"
+
+  # Create buffer sink
+  ret = avfilter_graph_create_filter(addr bufferSink, avfilter_get_by_name("buffersink"),
+                                    "out", nil, nil, filterGraph)
+  if ret < 0:
+    error "Cannot create buffer sink"
+
+  # Parse and configure the filter chain
+  var inputs = avfilter_inout_alloc()
+  var outputs = avfilter_inout_alloc()
+
+  if inputs == nil or outputs == nil:
+    error "Could not allocate filter inputs/outputs"
+
+  outputs.name = av_strdup("in")
+  outputs.filter_ctx = bufferSrc
+  outputs.pad_idx = 0
+  outputs.next = nil
+
+  inputs.name = av_strdup("out")
+  inputs.filter_ctx = bufferSink
+  inputs.pad_idx = 0
+  inputs.next = nil
+
+  let filterC = filter.cstring
+  ret = avfilter_graph_parse_ptr(filterGraph, filterC, addr inputs, addr outputs, nil)
+  if ret < 0:
+    error "Could not parse filter graph"
+
+  ret = avfilter_graph_config(filterGraph, nil)
+  if ret < 0:
+    error "Could not configure filter graph"
+
+  avfilter_inout_free(addr inputs)
+  avfilter_inout_free(addr outputs)
+
+  return (filterGraph, bufferSrc, bufferSink)
+
+iterator facesPipeline*(processor: VideoProcessor,
+                        sampler: var AdaptiveSampler,
+                        targetHeight: int = 480): tuple[frame: ptr AVFrame,
+                                                        sceneScore: float,
+                                                        timestamp: float64] =
+  ## Iterator yielding frames at adaptive sampling rate with scene change detection
+  ##
+  ## Args:
+  ##   processor: Video processor with open stream
+  ##   sampler: Adaptive sampler controlling frame selection
+  ##   targetHeight: Target height for face detection (default 480)
+  ##
+  ## Yields:
+  ##   Tuple of (frame, sceneScore, timestamp) for adaptive-rate frames
+  ##
+  ## Filter chain: fps={maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={threshold}:s=12
+  ## - maxFps: Run at max rate, use sampler to skip frames
+  ## - scale: Resize for faster face detection
+  ## - format: BGR24 required by libfacedetection
+  ## - scdet: Scene change detection with threshold and 12-frame scene duration
+
+  var packet = av_packet_alloc()
+  var frame = av_frame_alloc()
+  var filteredFrame = av_frame_alloc()
+  var ret: cint
+
+  if packet == nil or frame == nil or filteredFrame == nil:
+    error "Could not allocate packet/frame"
+
+  defer:
+    av_packet_free(addr packet)
+    av_frame_free(addr frame)
+    av_frame_free(addr filteredFrame)
+    if processor.codecCtx != nil:
+      avcodec_free_context(addr processor.codecCtx)
+
+  let timeBase = processor.tb
+
+  let pixelFormat = processor.codecCtx.pix_fmt
+  let pixFmtName = av_get_pix_fmt_name(pixelFormat)
+  if pixFmtName == nil:
+    error &"Could not get pixel format name for format: {ord(pixelFormat)}"
+
+  # Build filter: run at maxFps, scale, format for face detection, scene detection
+  let filter = &"fps={sampler.maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={sampler.sceneThreshold}:s=12"
+
+  let (filterGraph, bufferSrc, bufferSink) = createFilterGraph(
+    timeBase, pixFmtName, processor.codecCtx, filter
+  )
+
+  defer:
+    if filterGraph != nil:
+      avfilter_graph_free(addr filterGraph)
+
+  while av_read_frame(processor.formatCtx, packet) >= 0:
+    defer: av_packet_unref(packet)
+
+    if packet.stream_index == processor.videoIndex:
+      ret = avcodec_send_packet(processor.codecCtx, packet)
+      if ret < 0 and ret != AVERROR_EAGAIN:
+        error &"Error sending packet to decoder: {av_err2str(ret)}"
+
+      while ret >= 0:
+        ret = avcodec_receive_frame(processor.codecCtx, frame)
+        if ret == AVERROR_EAGAIN or ret == AVERROR_EOF:
+          break
+        elif ret < 0:
+          error &"Error receiving frame from decoder: {av_err2str(ret)}"
+
+        if frame.pts == AV_NOPTS_VALUE:
+          continue
+
+        if av_buffersrc_write_frame(bufferSrc, frame) < 0:
+          error "Error adding frame to filter"
+
+        ret = av_buffersink_get_frame(bufferSink, filteredFrame)
+        if ret < 0:
+          continue
+
+        # Extract timestamp
+        let timestamp = (filteredFrame.pts * processor.formatCtx.streams[
+            processor.videoIndex].time_base).float64
+
+        # Extract scene score from metadata
+        var sceneScore = 0.0
+        if filteredFrame.metadata != nil:
+          let metaDict = avdict_to_dict(filteredFrame.metadata)
+          if metaDict.hasKey("lavfi.scd.score"):
+            try:
+              sceneScore = parseFloat(metaDict["lavfi.scd.score"])
+            except ValueError:
+              sceneScore = 0.0
+
+        # Check if this frame should be sampled (adaptive rate control)
+        if sampler.shouldSampleFrame(timestamp):
+          yield (filteredFrame, sceneScore, timestamp)
+
+        av_frame_unref(filteredFrame)
+
+  # Flush decoder
+  discard avcodec_send_packet(processor.codecCtx, nil)
+  while avcodec_receive_frame(processor.codecCtx, frame) >= 0:
+    if frame.pts == AV_NOPTS_VALUE:
+      continue
+
+    ret = av_buffersrc_write_frame(bufferSrc, frame)
+    if ret >= 0:
+      ret = av_buffersink_get_frame(bufferSink, filteredFrame)
+      if ret >= 0:
+        let timestamp = (filteredFrame.pts * processor.formatCtx.streams[
+            processor.videoIndex].time_base).float64
+
+        var sceneScore = 0.0
+        if filteredFrame.metadata != nil:
+          let metaDict = avdict_to_dict(filteredFrame.metadata)
+          if metaDict.hasKey("lavfi.scd.score"):
+            try:
+              sceneScore = parseFloat(metaDict["lavfi.scd.score"])
+            except ValueError:
+              sceneScore = 0.0
+
+        if sampler.shouldSampleFrame(timestamp):
+          yield (filteredFrame, sceneScore, timestamp)
+
+        av_frame_unref(filteredFrame)
