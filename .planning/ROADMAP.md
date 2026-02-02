@@ -52,10 +52,13 @@ Plans:
   2. User can export transcript in SRT format with timestamps
   3. User can export transcript in VTT format with timestamps
   4. User can identify and label speakers in multi-speaker videos (speaker diarization)
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md: TBD during phase planning
+- [ ] 02-01-PLAN.md: Transcript types and word-level extraction from whisper.cpp
+- [ ] 02-02-PLAN.md: SRT/VTT/JSON format exporters with caption grouping
+- [ ] 02-03-PLAN.md: Speaker diarization via pyannote.audio and nimpy
+- [ ] 02-04-PLAN.md: CLI `transcript` command integration
 
 ### Phase 3: Caption Rendering
 **Goal**: Generate and render captions from transcripts with styling and NLE export
@@ -177,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Build Infrastructure | 0/5 | Planned | - |
-| 2. Transcript Foundation | 0/TBD | Not started | - |
+| 2. Transcript Foundation | 0/4 | Planned | - |
 | 3. Caption Rendering | 0/TBD | Not started | - |
 | 4. Face Detection Infrastructure | 0/TBD | Not started | - |
 | 5. Engagement Scoring Foundation | 0/TBD | Not started | - |
