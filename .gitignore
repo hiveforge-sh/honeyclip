@@ -1,25 +1,44 @@
+# Build outputs
 auto-editor
-build
-ffmpeg_sources
-.vscode
-*.bin
-*.onnx
-tests/*
-!tests/*.nim
-!tests/*.py
-*_ALTERED*
-*https*
-*.v3
-*.srt
+auto-editor.exe
+build/
+nimcache/
 
-# OS Files
-.DS_Store
-*.dylib
+# Source downloads
+ffmpeg_sources/
+ml_sources/
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Compiled objects
 *.o
+*.a
+*.so
+*.dylib
+*.dll
+*.bin
 
-# Python Generated Files
+# ML models
+*.onnx
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
-*.spec
 *.egg-info/
+
+# Test outputs (keep test source files)
+tests/*
+!tests/*.nim
+!tests/*.py
+!tests/resources/
+
+# Misc generated
+*_ALTERED*
+*.srt

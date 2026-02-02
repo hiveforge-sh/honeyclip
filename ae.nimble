@@ -196,7 +196,7 @@ let ffmpeg = Package(
 let libfacedetection = Package(
   name: "libfacedetection",
   sourceUrl: "https://github.com/ShiqiYu/libfacedetection/archive/refs/tags/v3.0.tar.gz",
-  sha256: "5c6a93d2d7cf08ca73aa18b3e07560c31e8e9f55a0ac7f4e2a72b86c625e1ef7",
+  sha256: "66dc6b47b11db4bf4ef73e8b133327aa964dbd8b2ce9e0ef4d1e94ca08d40b6a",
   buildSystem: "cmake",
   buildArguments: @["-DBUILD_SHARED_LIBS=OFF", "-DDEMO=OFF"],
 )
@@ -236,13 +236,12 @@ let opencv = Package(
 let onnxruntime = Package(
   name: "onnxruntime",
   sourceUrl: "https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.20.1.tar.gz",
-  sha256: "2ab3c01caf05e46b6e4cc5a0e7e3f6f1e5df73cf48934ad3c4ca8e94babc0f0e",
+  sha256: "d4c005506a2bbf88a838b14f8d1578406b8be2fb64abb50beeff908fb272529e",
   buildSystem: "onnx",
   buildArguments: @[
     "--config", "MinSizeRel",
     "--minimal_build", "extended",
     "--disable_ml_ops",
-    "--build_shared_lib", "OFF",
     "--skip_tests",
     "--disable_exceptions",
   ],
@@ -819,11 +818,11 @@ proc onnxBuild(buildPath: string, crossWindows: bool = false) =
       nproc = output.strip()
 
   # Run build.sh with minimal build configuration (static library)
-  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --build_shared_lib OFF --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath}"
+  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath}"
 
-  # Install libraries
-  withDir "build/MinSizeRel":
-    exec &"make install DESTDIR=\"{buildPath}\""
+  # Install libraries (build.sh creates build/Linux/MinSizeRel/)
+  withDir "build/Linux/MinSizeRel":
+    exec &"make install"
 
 task makeml, "Build ML libraries from source":
   echo "Building ML libraries (libfacedetection, OpenCV, ONNX Runtime)..."
