@@ -41,13 +41,13 @@ task test, "Run unit tests":
   exec &"nim c {flags} -r tests/unit"
 
 task make, "Export the project":
-  exec &"nim c -d:danger --panics:on {flags} --passC:-flto --passL:-flto --out:auto-editor src/main.nim"
+  exec &"nim c -d:danger --panics:on {flags} --passC:-flto --passL:-flto --out:honeyclip src/main.nim"
   when defined(macosx):
-    exec "strip -ur auto-editor"
-    exec "stat -f \"%z bytes\" ./auto-editor"
+    exec "strip -ur honeyclip"
+    exec "stat -f \"%z bytes\" ./honeyclip"
     echo ""
   when defined(linux):
-    exec "strip -s auto-editor"
+    exec "strip -s honeyclip"
 
 task cleanff, "Remove":
   rmDir("ffmpeg_sources")
@@ -1090,15 +1090,15 @@ task windows, "Cross-compile to Windows (requires mingw-w64)":
          "--passL:-lbcrypt " & # Add Windows Bcrypt library
          "--passL:-lstdc++ " & # Add C++ standard library
          "--passL:-static " &
-         "--out:auto-editor.exe src/main.nim"
+         "--out:honeyclip.exe src/main.nim"
 
     # Strip the Windows binary
-    exec "x86_64-w64-mingw32-strip -s auto-editor.exe"
+    exec "x86_64-w64-mingw32-strip -s honeyclip.exe"
 
 task zshcomplete, "Generate zsh completions":
-  echo "#compdef auto-editor"
+  echo "#compdef honeyclip"
   echo ""
-  echo "_auto-editor() {"
+  echo "_honeyclip() {"
   echo "  local -a subcommands"
   echo "  subcommands=("
   for (command, help) in commands:
@@ -1111,4 +1111,4 @@ task zshcomplete, "Generate zsh completions":
   echo "  _describe 'command' subcommands"
   echo "}"
   echo ""
-  echo "_auto-editor \"$@\""
+  echo "_honeyclip \"$@\""

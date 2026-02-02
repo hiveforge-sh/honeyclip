@@ -141,7 +141,7 @@ Engagement algorithms prioritize vanity metrics (view count, total watch time) o
 Developers port platform-specific algorithms (YouTube, TikTok) without understanding domain differences. TikTok requires 75% completion for algorithmic boost, but that threshold doesn't translate to educational or documentary content. Teams measure what's easy to measure (duration) rather than what matters (satisfaction, attention quality).
 
 **How to avoid:**
-- Define engagement metrics specific to auto-editor's use case (likely tutorial/screencast/presentation videos)
+- Define engagement metrics specific to honeyclip's use case (likely tutorial/screencast/presentation videos)
 - Use completion rate relative to video length category, not absolute percentages
 - Weight multi-sentence comments higher than passive metrics (if social features exist)
 - Implement segmented analysis: beginning/middle/end retention curves, not just total duration
@@ -273,7 +273,7 @@ Each ML library evolved independently with different build system assumptions. O
 **How to avoid:**
 - Document minimum toolchain versions in CLAUDE.md before starting (GCC 9+, MSVC 2022+)
 - Uninstall conflicting protobuf versions before building ONNX Runtime
-- Test cross-compilation early: Windows cross-compile from Linux is critical for auto-editor workflow
+- Test cross-compilation early: Windows cross-compile from Linux is critical for honeyclip workflow
 - Consider ONNX Runtime pre-built binaries instead of building from source for Windows
 - Use OpenCV-lite (opencv_lite project) which bundles compatible ONNX Runtime versions (v1.14-v1.22)
 - Set up Docker/container builds to ensure reproducible toolchain environments

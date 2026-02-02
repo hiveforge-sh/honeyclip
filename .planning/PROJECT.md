@@ -45,7 +45,7 @@ Surface the most engaging moments from any video with a single command — trans
 
 ## Context
 
-honeyclip is a Nim CLI tool (forked from auto-editor) that builds FFmpeg from source and processes video to remove silent sections. The codebase already has:
+honeyclip is a Nim CLI tool (forked from honeyclip) that builds FFmpeg from source and processes video to remove silent sections. The codebase already has:
 
 - Whisper.cpp integration (currently used for speech detection, not transcript extraction)
 - Audio analysis infrastructure (`src/analyze/audio.nim`)

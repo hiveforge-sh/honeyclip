@@ -1,14 +1,13 @@
 <p align="center">
-  <h1 align="center">honeyclip</h1>
-  <p align="center"><em>Extract the sweetest moments from your video</em></p>
+  <img src="gh-social-header.jpg" alt="honeyclip - the best moments, extracted" width="600">
 </p>
 
----
+<p align="center">
+  <a href="https://github.com/hiveforge-sh/honeyclip/actions"><img src="https://img.shields.io/github/actions/workflow/status/hiveforge-sh/honeyclip/build.yml?style=flat" alt="Build Status"></a>
+  <a href="https://nim-lang.org"><img src="https://img.shields.io/badge/nim-%23FFE953.svg?style=flat&logo=nim&logoColor=black" alt="Nim"></a>
+</p>
 
-[![Actions Status](https://img.shields.io/github/actions/workflow/status/hiveforge-sh/honeyclip/build.yml?style=flat)](https://github.com/hiveforge-sh/honeyclip/actions)
-[![Nim](https://img.shields.io/badge/nim-%23FFE953.svg?style=flat&logo=nim&logoColor=black)](https://nim-lang.org)
-
-**honeyclip** is a command-line video editing tool that automatically removes silent sections and analyzes engagement. Built on the foundation of [auto-editor](https://github.com/WyattBlue/auto-editor), it adds ML-powered engagement analysis, speaker tracking, and smart clip extraction.
+**honeyclip** is a command-line video editing tool that automatically removes silent sections and analyzes engagement. It features ML-powered engagement analysis, speaker tracking, and smart clip extraction.
 
 ## Features
 
@@ -78,14 +77,6 @@ honeyclip example.mp4 --cut-out 0,30sec
 # Keep only a specific section
 honeyclip example.mp4 --edit none --add-in 30sec,60sec
 ```
-
-## Documentation
-
-For detailed documentation on editing methods and options, see the [auto-editor docs](https://auto-editor.com/docs) (honeyclip is API-compatible with auto-editor).
-
-## Credits
-
-honeyclip is built on the excellent [auto-editor](https://github.com/WyattBlue/auto-editor) by WyattBlue, licensed under the [Public Domain](LICENSE).
 
 ## License
 

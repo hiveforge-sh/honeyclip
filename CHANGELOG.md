@@ -4,7 +4,7 @@
 
 Initial release of honeyclip.
 
-- Forked from auto-editor (Public Domain)
-- Added ML library build infrastructure (libfacedetection, OpenCV, ONNX Runtime)
-- Added Nim FFI wrappers for ML libraries
-- Rebranded to honeyclip under hiveforge-sh
+- ML library build infrastructure (libfacedetection, OpenCV, ONNX Runtime)
+- Nim FFI wrappers for ML libraries
+- Automatic silence removal
+- Multi-format NLE export (Premiere, Resolve, FCP, etc.)

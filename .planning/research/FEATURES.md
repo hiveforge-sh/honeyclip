@@ -16,7 +16,7 @@ Features users assume exist. Missing these = product feels incomplete or non-com
 | **Auto-caption generation** | Captions are table stakes for social media (accessibility, silent viewing). Tools generate stylized captions automatically. | LOW-MEDIUM | Extends transcription. Main work: text rendering over video with timing sync. Could use FFmpeg's subtitle filters. |
 | **Scene/moment detection** | All clipping tools automatically identify "key moments" or "scene changes". Users expect AI to find clip boundaries automatically. | MEDIUM-HIGH | Computer vision (scene detection) + audio analysis. OpenCV for visual, audio energy for transitions. Algorithm complexity moderate. |
 | **Multi-platform export (aspect ratios)** | Tools must support 16:9 (YouTube), 9:16 (TikTok/Reels), 1:1 (Instagram). Missing any = "why can't I post to X?" | LOW | Rendering at different aspect ratios. Auto-editor already handles this via FFmpeg. Just needs UI/config exposure. |
-| **Batch processing** | Users expect to upload one long video and get multiple clips out. Single-clip output feels incomplete. | LOW-MEDIUM | Already conceptually supported by auto-editor's clip detection. Need to formalize batch export workflow. |
+| **Batch processing** | Users expect to upload one long video and get multiple clips out. Single-clip output feels incomplete. | LOW-MEDIUM | Already conceptually supported by honeyclip's clip detection. Need to formalize batch export workflow. |
 | **Preview before export** | Users want to see clips before spending time rendering. No preview = blind export, frustration. | MEDIUM | Requires generating preview timeline/thumbnails. Could use FFmpeg for quick low-res previews. |
 
 ### Differentiators (Competitive Advantage)
@@ -82,7 +82,7 @@ Features that seem good but create problems. Document to prevent scope creep.
 
 ### Launch With (v1) — Core Auto-Clipping
 
-Minimum viable product for "OpusClip-like features in auto-editor". Validates local-first engagement analysis.
+Minimum viable product for "OpusClip-like features in honeyclip". Validates local-first engagement analysis.
 
 - [ ] **Transcript extraction with word-level timestamps** — Foundation for all text features. Export SRT/VTT.
 - [ ] **Auto-captions (basic styling)** — Render transcripts as stylized text over video. Critical for social media.
@@ -91,7 +91,7 @@ Minimum viable product for "OpusClip-like features in auto-editor". Validates lo
 - [ ] **Multi-aspect ratio export** — Render 16:9, 9:16, 1:1. Use FFmpeg scale/crop filters.
 - [ ] **Batch export workflow** — Process one video → output multiple ranked clips automatically.
 
-**Rationale**: These features provide immediate value (auto-clipping with engagement ranking) while leveraging auto-editor's existing strengths (FFmpeg integration, local processing, silence detection). Differentiates via privacy/local-first. Avoids complex computer vision.
+**Rationale**: These features provide immediate value (auto-clipping with engagement ranking) while leveraging honeyclip's existing strengths (FFmpeg integration, local processing, silence detection). Differentiates via privacy/local-first. Avoids complex computer vision.
 
 ### Add After Validation (v1.x) — Enhanced Analysis
 
@@ -164,24 +164,24 @@ Features to defer until product-market fit is established and core features are 
 
 ### Key Takeaways from Competitor Analysis
 
-**What auto-editor must match (table stakes):**
+**What honeyclip must match (table stakes):**
 - Transcription with timestamps
 - Auto-captions
 - Scene-based auto-clipping
 - Multi-aspect ratio support
 - Batch/multi-clip export
 
-**Where auto-editor differentiates:**
+**Where honeyclip differentiates:**
 - **Local/offline processing** — No cloud upload, complete privacy. Corporate/sensitive use cases.
 - **Open-source & transparent** — Users can audit scoring algorithms, customize, contribute. Trust + flexibility.
 - **No subscription model** — One-time install vs $30-100/month recurring. Accessible to students/hobbyists.
 - **Hardware acceleration options** — CUDA support for faster processing. Cloud tools hide this; local tools can optimize.
 
-**Where auto-editor can compete (not required but valuable):**
+**Where honeyclip can compete (not required but valuable):**
 - **Engagement scoring** — Match OpusClip's Virality Score with local signals. Transparency advantage (explain score components).
 - **Speaker reframing** — Match ReframeAnything with face tracking. Technically feasible with OpenCV.
 
-**Where auto-editor should NOT compete:**
+**Where honeyclip should NOT compete:**
 - **B-roll generation** — Requires stock library licensing or generative AI APIs. Complex, expensive, not core value.
 - **Social media posting** — Platform integrations are fragile. Export optimized files; users upload via preferred tools.
 - **Real-time features** — Cloud tools have infrastructure advantage. Focus on high-quality post-production.
@@ -300,4 +300,4 @@ Features to defer until product-market fit is established and core features are 
 ---
 *Feature research for: Video engagement analysis and auto-clipping tools*
 *Researched: 2026-02-01*
-*Primary focus: Local-first OpusClip alternative for auto-editor*
+*Primary focus: Local-first OpusClip alternative for honeyclip*

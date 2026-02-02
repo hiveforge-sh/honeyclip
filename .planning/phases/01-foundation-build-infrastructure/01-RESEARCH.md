@@ -862,7 +862,7 @@ Enable ccache opportunistically (CMAKE_C/CXX_COMPILER_LAUNCHER), but primary spe
 **What we know:**
 - LTO reduces binary size 5-20% on average, up to 40% in some cases
 - Adds significant compilation time (2-5x slower link phase)
-- Existing auto-editor uses LTO (ae.nimble line 42: --passC:-flto --passL:-flto)
+- Existing honeyclip uses LTO (ae.nimble line 42: --passC:-flto --passL:-flto)
 
 **What's unclear:**
 - Whether LTO breaks MinGW cross-compilation (known issue in some GCC versions)
@@ -882,7 +882,7 @@ Enable LTO for native builds (proven in existing build). Test incrementally for 
 - [OpenCV Windows Installation](https://docs.opencv.org/4.x/d3/d52/tutorial_windows_install.html) - Official OpenCV build documentation
 - [Nim Manual FFI Section](https://nim-lang.org/docs/manual.html) - Official FFI documentation
 - [pkg-config man page](https://linux.die.net/man/1/pkg-config) - Official pkg-config --static documentation
-- ae.nimble (C:\Users\Preston\git\auto-editor\ae.nimble) - Existing FFmpeg build system, proven patterns
+- ae.nimble (C:\Users\Preston\git\honeyclip\ae.nimble) - Existing FFmpeg build system, proven patterns
 - src/av.nim, src/ffmpeg.nim - Existing FFI and memory management patterns
 
 ### Secondary (MEDIUM confidence)

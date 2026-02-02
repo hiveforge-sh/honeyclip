@@ -5,7 +5,7 @@
 ## Directory Layout
 
 ```
-auto-editor/
+honeyclip/
 ├── src/                      # All Nim source code
 │   ├── main.nim             # Entry point, CLI routing
 │   ├── edit.nim             # Main editing orchestration

@@ -147,7 +147,7 @@
 
 **Main Binary (`src/main.nim`):**
 - Location: `src/main.nim` (proc `main()`)
-- Triggers: Direct invocation of auto-editor binary
+- Triggers: Direct invocation of honeyclip binary
 - Responsibilities:
   1. Parse CLI arguments into `mainArgs`
   2. Dispatch to subcommands or main edit path
@@ -167,7 +167,7 @@
 
 **Subcommands (`src/cmds/`):**
 - Location: `src/cmds/` (info.nim, cache.nim, levels.nim, whisper.nim, desc.nim, subdump.nim)
-- Triggers: `auto-editor {command} [args]`
+- Triggers: `honeyclip {command} [args]`
 - Responsibilities: Utility operations (metadata display, caching, speech-to-text)
 
 ## Error Handling

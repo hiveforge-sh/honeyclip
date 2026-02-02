@@ -117,7 +117,7 @@ src/
 
 **Example:**
 ```nim
-# Existing pattern in auto-editor
+# Existing pattern in honeyclip
 type AudioProcessor = object
   iterator: AudioIterator
   codecCtx: ptr AVCodecContext
@@ -154,13 +154,13 @@ proc analyzeFaces(processor: FaceProcessor, minConfidence: float32): seq[FaceReg
 
 **Trade-offs:**
 - ✅ Simple, composable (supports `or`, `and`, `not` operators)
-- ✅ Already implemented in auto-editor
+- ✅ Already implemented in honeyclip
 - ❌ Loses granular scores (must threshold engagement to boolean)
 - ❌ Fixed time resolution (chunk duration)
 
 **Example:**
 ```nim
-# Existing flow in auto-editor
+# Existing flow in honeyclip
 proc interpretEdit(args: mainArgs, container: InputContainer,
                    tb: AVRational, bar: Bar): seq[bool] =
   # Audio analysis produces seq[bool]

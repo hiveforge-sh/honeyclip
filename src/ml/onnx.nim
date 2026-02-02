@@ -72,7 +72,7 @@ proc checkOrt(status: ptr OrtStatus) =
     api.ReleaseStatus(status)
     raise newException(OrtError, "ONNX Runtime error: " & msg)
 
-proc initOrtEnv*(name: string = "auto-editor", logLevel: int = 3): OrtEnv =
+proc initOrtEnv*(name: string = "honeyclip", logLevel: int = 3): OrtEnv =
   ## Initialize ONNX Runtime environment (do this once at startup)
   ##
   ## Args:

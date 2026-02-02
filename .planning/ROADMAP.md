@@ -161,8 +161,8 @@ Plans:
 **Depends on**: Phase 9
 **Requirements**: CLI-01, CLI-02, CLI-03
 **Success Criteria** (what must be TRUE):
-  1. User can invoke engagement analysis workflow via new subcommand (e.g., `auto-editor engage`)
-  2. User can integrate engagement analysis with existing auto-editor edit workflow via flags
+  1. User can invoke engagement analysis workflow via new subcommand (e.g., `honeyclip engage`)
+  2. User can integrate engagement analysis with existing honeyclip edit workflow via flags
   3. User sees real-time progress reporting during analysis (transcript extraction, face detection, scoring)
 **Plans**: TBD
 

@@ -57,7 +57,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### CLI & Interface
 
 - [ ] **CLI-01**: New subcommand for engagement analysis workflow
-- [ ] **CLI-02**: Integration with existing auto-editor edit workflow
+- [ ] **CLI-02**: Integration with existing honeyclip edit workflow
 - [ ] **CLI-03**: Progress reporting during analysis
 
 ## v2 Requirements

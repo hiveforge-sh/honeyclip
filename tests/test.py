@@ -59,7 +59,7 @@ class SkipTest(Exception):
 
 class Runner:
     def __init__(self) -> None:
-        self.program = ["./auto-editor"]
+        self.program = ["./honeyclip"]
         self.temp_dir = mkdtemp()
 
     def main(self, inputs: list[str], cmd: list[str], output: str | None = None) -> str:
@@ -265,7 +265,7 @@ class Runner:
 
     def test_gif(self):
         """
-        Feed auto-editor a gif file and make sure it can spit out a correctly formatted
+        Feed honeyclip a gif file and make sure it can spit out a correctly formatted
         gif. No editing is requested.
         """
         input = ["resources/only-video/man-on-green-screen.gif"]

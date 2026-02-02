@@ -1,8 +1,6 @@
 # Build outputs
 honeyclip
 honeyclip.exe
-auto-editor
-auto-editor.exe
 build/
 nimcache/
 

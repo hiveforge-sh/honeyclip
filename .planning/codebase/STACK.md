@@ -27,7 +27,7 @@
 **Core:**
 - FFmpeg 8.0.1 - Audio/video decoding, encoding, format handling, filtering
   - Built from source with custom codec configuration to minimize binary size
-  - Statically linked into auto-editor binary
+  - Statically linked into honeyclip binary
 
 **Testing:**
 - Nim unittest - Unit test framework (built-in)

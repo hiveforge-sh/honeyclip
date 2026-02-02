@@ -220,7 +220,7 @@ proc editMedia*(args: var mainArgs) =
     applyArgs(tlV3, args)
   else:
     if args.input == "":
-      error "You need to give auto-editor an input file."
+      error "You need to give honeyclip an input file."
     let inputExt = splitFile(args.input).ext
 
     if inputExt in [".v1", ".v2", ".v3", ".json"]:

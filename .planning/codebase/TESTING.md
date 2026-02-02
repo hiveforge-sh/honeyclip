@@ -65,7 +65,7 @@ E2E tests use class-based runner (`tests/test.py` lines 60-105):
 ```python
 class Runner:
     def __init__(self) -> None:
-        self.program = ["./auto-editor"]
+        self.program = ["./honeyclip"]
         self.temp_dir = mkdtemp()
 
     def main(self, inputs: list[str], cmd: list[str], output: str | None = None) -> str:
@@ -168,7 +168,7 @@ def fileinfo(path: str) -> FileInfo:
 **E2E Tests:**
 - Scope: Full CLI workflows and media processing
 - Framework: Python subprocess runner (`tests/test.py`)
-- Approach: Execute auto-editor binary with various arguments, verify outputs
+- Approach: Execute honeyclip binary with various arguments, verify outputs
 - Examples:
   - `test_example()`: Process example.mp4, verify output duration and codec
   - `test_video_to_mp3()`: Convert video to audio-only MP3

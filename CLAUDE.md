@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-honeyclip is a command-line video editing tool written in Nim that automatically removes silent sections from videos and analyzes engagement. Built on auto-editor, it adds ML-powered engagement analysis, speaker tracking, and smart clip extraction. It builds FFmpeg from source with a curated set of codecs.
+honeyclip is a command-line video editing tool written in Nim that automatically removes silent sections from videos and analyzes engagement. It features ML-powered engagement analysis, speaker tracking, and smart clip extraction. It builds FFmpeg from source with a curated set of codecs.
 
 ## Build Commands
 

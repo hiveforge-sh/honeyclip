@@ -10,7 +10,6 @@ on:
       - '**.css'
       - '**.toml'
       - '**about.nim'
-      - 'auto_editor/'
       - '.github/workflows/build.yml'
     branches:
       - master
@@ -22,7 +21,6 @@ on:
       - '**.css'
       - '**.toml'
       - '**about.nim'
-      - 'auto_editor/'
       - '.github/workflows/build.yml'
     branches:
       - master

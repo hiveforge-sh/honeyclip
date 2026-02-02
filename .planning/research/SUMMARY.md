@@ -9,7 +9,7 @@
 
 Auto-editor is adding video engagement analysis features to compete with cloud-based auto-clipping tools like OpusClip and Kapwing, while maintaining its local-first, privacy-focused architecture. The recommended approach leverages existing FFmpeg/whisper.cpp integration and adds face detection (libfacedetection or ONNX models), speaker diarization (Falcon SDK), and multi-modal engagement scoring. This enables automatic clip detection, virality scoring, auto-captions, and smart vertical reframing without cloud dependencies.
 
-The core differentiator is local processing with open-source transparency. Cloud competitors require $29-99/month subscriptions and upload video to their servers. Auto-editor can provide comparable features (transcription, engagement scoring, auto-clipping, multi-aspect-ratio export) while running entirely offline. The recommended stack uses CPU-friendly libraries (libfacedetection, ONNX Runtime) with optional GPU acceleration, following auto-editor's existing build patterns (static linking, cross-platform compilation via nimble).
+The core differentiator is local processing with open-source transparency. Cloud competitors require $29-99/month subscriptions and upload video to their servers. Auto-editor can provide comparable features (transcription, engagement scoring, auto-clipping, multi-aspect-ratio export) while running entirely offline. The recommended stack uses CPU-friendly libraries (libfacedetection, ONNX Runtime) with optional GPU acceleration, following honeyclip's existing build patterns (static linking, cross-platform compilation via nimble).
 
 Key risks center on build complexity and performance. Adding ML libraries (OpenCV, ONNX Runtime) to the existing FFmpeg build system creates cross-platform compilation challenges, particularly for Windows cross-compile via MinGW. Binary size can balloon from 10MB to 100MB+ without careful dependency management. Face detection at 30fps consumes significant CPU, requiring adaptive frame sampling (1-5fps analysis rate) and aggressive caching. Memory management at the Nim/C++ FFI boundary must follow strict patterns (GC_ref/GC_unref, shared allocation) to prevent leaks and crashes. Mitigation: establish build architecture and FFI patterns in Phase 1 before adding multiple ML libraries.
 
@@ -17,7 +17,7 @@ Key risks center on build complexity and performance. Adding ML libraries (OpenC
 
 ### Recommended Stack
 
-The research identifies a pragmatic stack that builds on auto-editor's existing strengths (FFmpeg, whisper.cpp, Nim) while adding minimal new dependencies. All recommended libraries are open-source with permissive licenses (BSD, MIT, Apache 2.0) and provide C/C++ APIs compatible with Nim's FFI.
+The research identifies a pragmatic stack that builds on honeyclip's existing strengths (FFmpeg, whisper.cpp, Nim) while adding minimal new dependencies. All recommended libraries are open-source with permissive licenses (BSD, MIT, Apache 2.0) and provide C/C++ APIs compatible with Nim's FFI.
 
 **Core technologies:**
 - **libfacedetection v3.0**: Face detection — BSD-3 license, no dependencies, 1000 FPS on CPU, cross-platform including ARM
@@ -37,7 +37,7 @@ The research identifies a pragmatic stack that builds on auto-editor's existing 
 
 ### Expected Features
 
-Research shows auto-clipping tools have standardized on a core feature set. Missing any table stakes makes the product feel incomplete. Differentiators justify choosing auto-editor over cloud competitors.
+Research shows auto-clipping tools have standardized on a core feature set. Missing any table stakes makes the product feel incomplete. Differentiators justify choosing honeyclip over cloud competitors.
 
 **Must have (table stakes):**
 - Automatic transcription with word-level timestamps (SRT/VTT export) — users expect this
@@ -68,7 +68,7 @@ Research shows auto-clipping tools have standardized on a core feature set. Miss
 
 ### Architecture Approach
 
-The research validates extending auto-editor's existing pipeline architecture rather than building parallel systems. Face detection, speaker diarization, and engagement scoring integrate as new analyzers following the existing audio.nim/motion.nim pattern. All analyzers produce seq[bool] arrays that feed into the existing timeline builder, maintaining backward compatibility with exports and edit expressions.
+The research validates extending honeyclip's existing pipeline architecture rather than building parallel systems. Face detection, speaker diarization, and engagement scoring integrate as new analyzers following the existing audio.nim/motion.nim pattern. All analyzers produce seq[bool] arrays that feed into the existing timeline builder, maintaining backward compatibility with exports and edit expressions.
 
 **Major components:**
 1. **Analysis Layer Extension** (analyze/face.nim, analyze/speaker.nim, analyze/engagement.nim) — New analyzers follow existing pattern, produce boolean arrays or scored regions, integrate with palet edit expression language
@@ -239,7 +239,7 @@ Phases with standard patterns (skip research-phase):
 |------|------------|-------|
 | Stack | HIGH | libfacedetection, ONNX Runtime, OpenCV are proven cross-platform. Licenses verified (BSD, MIT, Apache). Only uncertainty: Falcon SDK integration (C API exists but no Nim examples). |
 | Features | HIGH | Competitor analysis comprehensive (OpusClip, Kapwing, Reap). Table stakes vs differentiators clearly identified. Anti-features well-documented to prevent scope creep. |
-| Architecture | HIGH | Extends existing auto-editor patterns (analyzer modules, boolean arrays, v3 timeline). Integration points well-defined. Two-stage pipeline (rich data → boolean) preserves backward compatibility. |
+| Architecture | HIGH | Extends existing honeyclip patterns (analyzer modules, boolean arrays, v3 timeline). Integration points well-defined. Two-stage pipeline (rich data → boolean) preserves backward compatibility. |
 | Pitfalls | MEDIUM-HIGH | Critical pitfalls identified from ML deployment literature (face detection false positives, FFI memory leaks, binary size, build complexity). Some mitigations untested (multi-frame consensus accuracy, adaptive frame sampling rate). |
 
 **Overall confidence:** MEDIUM-HIGH
@@ -304,7 +304,7 @@ Areas where research was inconclusive or needs validation during implementation:
 
 - [Learner Engagement Analysis](https://arxiv.org/html/2412.00429v1) — Recent (Dec 2024) research on engagement detection, but focused on educational videos (may not generalize)
 - [opencv_lite GitHub](https://github.com/zihaomu/opencv_lite) — Bundles compatible ONNX Runtime (v1.14-1.22) but unclear if maintained or production-ready
-- [Delving Deep into Engagement Prediction](https://arxiv.org/html/2410.00289v1) — Short-form video engagement, cold start problem validation needed for auto-editor domain
+- [Delving Deep into Engagement Prediction](https://arxiv.org/html/2410.00289v1) — Short-form video engagement, cold start problem validation needed for honeyclip domain
 
 ---
 *Research completed: 2026-02-01*
