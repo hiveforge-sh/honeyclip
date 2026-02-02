@@ -36,7 +36,7 @@ Export options:
   --absolute-paths        Use absolute media paths (default: relative)
 """
 
-proc parseCaptionStyle(args: seq[string]): CaptionStyle =
+proc parseCaptionStyle*(args: seq[string]): CaptionStyle =
   ## Parse caption style from CLI args
   var styleName = "traditional"
   var fontSize = 60
@@ -120,7 +120,7 @@ proc parseCaptionStyle(args: seq[string]): CaptionStyle =
     result.fontPath = fontPath
   result.highlightEnabled = highlight
 
-proc loadTranscriptFromJSON(path: string): Transcript =
+proc loadTranscriptFromJSON*(path: string): Transcript =
   ## Load transcript from JSON file
   let jsonContent = readFile(path)
   let root = parseJson(jsonContent)

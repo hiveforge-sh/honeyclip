@@ -11,6 +11,7 @@ import ../src/transcript/types
 import ../src/transcript/grouping
 import ../src/transcript/formats
 import ../src/cmds/transcript as transcriptCmd
+import ../src/cmds/caption as captionCmd
 import ../src/render/captions
 
 func `$`*(layout: AVChannelLayout): string =
@@ -751,6 +752,93 @@ test "nle-speaker-color-in-exports":
   check color1.len > 0
   check color2.len > 0
   check color1 != color2
+
+# Caption Command Tests
+
+test "caption-cmd-parseCaptionStyle-defaults":
+  # Test default style (traditional preset)
+  let style = captionCmd.parseCaptionStyle(@[])
+  check style.fontSize == 60
+  check style.color == "#ffffff"
+  check style.position == cpBottomCenter
+  check style.outline == true
+  check style.highlightEnabled == false
+
+test "caption-cmd-parseCaptionStyle-modern":
+  # Test modern preset
+  let style = captionCmd.parseCaptionStyle(@["--style", "modern"])
+  check style.fontSize == 72
+  check style.backgroundBox == true
+  check style.position == cpCenter
+
+test "caption-cmd-parseCaptionStyle-overrides":
+  # Test CLI overrides
+  let style = captionCmd.parseCaptionStyle(@[
+    "--style", "traditional",
+    "--fontsize", "80",
+    "--color", "#ff0000",
+    "--position", "center",
+    "--highlight"
+  ])
+  check style.fontSize == 80
+  check style.color == "#ff0000"
+  check style.position == cpCenter
+  check style.highlightEnabled == true
+
+test "caption-cmd-parseCaptionStyle-outline":
+  # Test outline flags
+  let styleWithOutline = captionCmd.parseCaptionStyle(@["--outline"])
+  check styleWithOutline.outline == true
+
+  let styleNoOutline = captionCmd.parseCaptionStyle(@["--no-outline"])
+  check styleNoOutline.outline == false
+
+test "caption-cmd-parseCaptionStyle-position":
+  # Test position variants
+  let bottom = captionCmd.parseCaptionStyle(@["--position", "bottom"])
+  check bottom.position == cpBottomCenter
+
+  let center = captionCmd.parseCaptionStyle(@["--position", "center"])
+  check center.position == cpCenter
+
+  let top = captionCmd.parseCaptionStyle(@["--position", "top"])
+  check top.position == cpTopCenter
+
+test "caption-cmd-loadTranscriptFromJSON":
+  # Create temp JSON transcript
+  let tempFile = getTempDir() / "test_transcript.json"
+  let jsonContent = """{
+    "language": "en",
+    "duration_ms": 5000,
+    "words": [
+      {
+        "text": "Hello",
+        "start_ms": 0,
+        "end_ms": 500,
+        "confidence": 0.9,
+        "speaker": 0
+      },
+      {
+        "text": "world",
+        "start_ms": 500,
+        "end_ms": 1000,
+        "confidence": 0.95,
+        "speaker": 0
+      }
+    ]
+  }"""
+  writeFile(tempFile, jsonContent)
+
+  try:
+    let transcript = captionCmd.loadTranscriptFromJSON(tempFile)
+    check transcript.language == "en"
+    check transcript.duration == 5000
+    check transcript.words.len == 2
+    check transcript.words[0].text == "Hello"
+    check transcript.words[1].text == "world"
+  finally:
+    if fileExists(tempFile):
+      removeFile(tempFile)
 
 # ML FFI Wrapper Tests
 # These tests verify FFI wrappers compile correctly
