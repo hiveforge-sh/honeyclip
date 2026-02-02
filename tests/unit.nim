@@ -518,6 +518,95 @@ test "caption-generateASSDialogue-karaoke":
   check dialogue.contains("Hello")
   check dialogue.contains("world")
 
+# Caption Filter Builder Tests
+
+test "caption-escapeFilterPath":
+  # Windows path with colon
+  when defined(windows):
+    check escapeFilterPath("C:/path/file.ass").contains("C\\:")
+  # Unix path unchanged for slashes
+  check escapeFilterPath("/usr/local/file.ass") == "/usr/local/file.ass"
+  # Quotes escaped
+  check escapeFilterPath("path with 'quotes'").contains("\\'")
+  # Backslashes escaped
+  check escapeFilterPath("path\\file").contains("\\\\")
+
+test "caption-buildASSFilter":
+  let filter = buildASSFilter("C:/temp/captions.ass")
+  # Should start with ass=filename=
+  check filter.startsWith("ass=filename='")
+  # Should contain escaped path
+  check filter.contains("\\:")
+
+test "caption-escapeDrawtextText":
+  check escapeDrawtextText("hello") == "hello"
+  check escapeDrawtextText("it's") == "it\\'s"
+  check escapeDrawtextText("a:b") == "a\\:b"
+  check escapeDrawtextText("back\\slash") == "back\\\\slash"
+  check escapeDrawtextText("multi\nline") == "multi\\nline"
+
+test "caption-buildDrawtextFilter":
+  var style = getPreset("traditional")
+  style.fontPath = "/path/to/font.ttf"
+  let filter = buildDrawtextFilter("Hello world", style, 0, 1000)
+
+  # Should start with drawtext=
+  check filter.startsWith("drawtext=")
+  # Should contain font settings
+  check filter.contains("fontfile=")
+  check filter.contains("fontsize=60")
+  check filter.contains("fontcolor=#ffffff")
+  # Should contain timing
+  check filter.contains("enable=")
+  check filter.contains("between(t,")
+  # Position varies by enum
+  check filter.contains("y=h-150")  # cpBottomCenter with marginBottom=150
+
+test "caption-buildDrawtextFilter-center":
+  var style = getPreset("modern")
+  style.fontPath = "/path/to/font.ttf"
+  let filter = buildDrawtextFilter("Test", style, 500, 1500)
+
+  # Center position
+  check filter.contains("y=(h-text_h)/2")
+  # Should have box settings
+  check filter.contains("box=1")
+  check filter.contains("boxcolor=")
+
+test "caption-prepareCaptionFilter":
+  var transcript = newTranscript()
+  transcript.addWord(newWord("Hello", 0, 500, 0.9))
+  transcript.addWord(newWord("world", 500, 1000, 0.9))
+  let captions = groupIntoCaptions(transcript)
+
+  var config = CaptionBurnConfig(
+    style: getPreset("traditional"),
+    width: 1920,
+    height: 1080,
+    useHighlight: false,
+    tempDir: ""
+  )
+
+  let (filter, tempFile) = prepareCaptionFilter(captions, config)
+
+  # Filter should be non-empty
+  check filter.len > 0
+  check filter.startsWith("ass=filename=")
+
+  # Temp file should exist and end with .ass
+  check tempFile.endsWith(".ass")
+  check fileExists(tempFile)
+
+  # Read and verify ASS content
+  let content = readFile(tempFile)
+  check content.contains("[Script Info]")
+  check content.contains("[Events]")
+  check content.contains("Hello world")
+
+  # Cleanup
+  cleanupCaptionTemp(tempFile)
+  check not fileExists(tempFile)
+
 # ML FFI Wrapper Tests
 # These tests verify FFI wrappers compile correctly
 # Runtime tests require actual ML libraries

@@ -305,7 +305,7 @@ proc writeASSFile*(captions: seq[Caption], style: CaptionStyle, outputPath: stri
 
 # FFmpeg Filter Integration
 
-proc escapeFilterPath(path: string): string =
+proc escapeFilterPath*(path: string): string =
   ## Escape path for FFmpeg filter syntax
   ## Windows: C:/path -> C\\:/path
   ## Backslashes: \\ -> \\\\
@@ -321,7 +321,7 @@ proc buildASSFilter*(assPath: string): string =
   let escapedPath = escapeFilterPath(assPath)
   result = &"ass=filename='{escapedPath}'"
 
-proc escapeDrawtextText(text: string): string =
+proc escapeDrawtextText*(text: string): string =
   ## Escape text for drawtext filter
   result = text
   result = result.replace("\\", "\\\\")
