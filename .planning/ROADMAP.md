@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Transcript Foundation** - Word-level timestamps, SRT/VTT export, speaker diarization
 - [x] **Phase 3: Caption Rendering** - Burn captions into video, styling, NLE caption tracks
 - [x] **Phase 4: Face Detection Infrastructure** - Face detection, adaptive sampling, caching layer
-- [ ] **Phase 5: Engagement Scoring Foundation** - Audio/motion/speech analysis, scoring algorithm
+- [x] **Phase 5: Engagement Scoring Foundation** - Audio/motion/speech analysis, scoring algorithm
 - [ ] **Phase 6: Engagement Clip Detection** - Scene boundaries, ranking, batch export
 - [ ] **Phase 7: Speaker Tracking & Reframing** - Face tracking, ROI smoothing, vertical output
 - [ ] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
@@ -106,10 +106,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 05-01-PLAN.md: Engagement types and percentile-based normalization
-- [ ] 05-02-PLAN.md: Hook detection (text patterns + audio prosody)
-- [ ] 05-03-PLAN.md: Main engagement scoring with signal combination
-- [ ] 05-04-PLAN.md: CLI `engage` command with JSON output
+- [x] 05-01-PLAN.md: Engagement types and percentile-based normalization
+- [x] 05-02-PLAN.md: Hook detection (text patterns + audio prosody)
+- [x] 05-03-PLAN.md: Main engagement scoring with signal combination
+- [x] 05-04-PLAN.md: CLI `engage` command with JSON output
 
 ### Phase 6: Engagement Clip Detection
 **Goal**: Automatically detect optimal clip boundaries and rank clips by engagement score
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Transcript Foundation | 4/4 | Complete | 2026-02-02 |
 | 3. Caption Rendering | 5/5 | Complete | 2026-02-02 |
 | 4. Face Detection Infrastructure | 4/4 | Complete | 2026-02-02 |
-| 5. Engagement Scoring Foundation | 0/4 | In Progress | - |
+| 5. Engagement Scoring Foundation | 4/4 | Complete | 2026-02-02 |
 | 6. Engagement Clip Detection | 0/TBD | Not started | - |
 | 7. Speaker Tracking & Reframing | 0/TBD | Not started | - |
 | 8. Multi-Aspect Export & Workflow | 0/TBD | Not started | - |

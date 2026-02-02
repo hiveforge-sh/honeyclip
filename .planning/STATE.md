@@ -10,33 +10,33 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 5 of 10 (Engagement Scoring Foundation) — In Progress
-Plan: 3 of 4 in phase
-Status: In Progress
-Last activity: 2026-02-02 — Completed 05-03-PLAN.md
+Phase: 5 of 10 (Engagement Scoring Foundation) — Complete
+Plan: 4 of 4 in phase
+Status: Phase complete
+Last activity: 2026-02-02 — Completed 05-04-PLAN.md
 
-Progress: [█████████████████████░░░░░░░░░░░░░░░░░░░] 52.5%
+Progress: [██████████████████████░░░░░░░░░░░░░░░░░] 55.0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: 3.3 min
-- Total execution time: 1.15 hours
+- Total plans completed: 22
+- Average duration: 3.4 min
+- Total execution time: 1.25 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
+| 01-foundation-build-infrastructure | 5 | 17min | 3.4min |
 | 02-transcript-foundation | 4 | 15min | 3.8min |
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
-| 05-engagement-scoring-foundation | 4 | 15min | 3.75min |
+| 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 
 **Recent Trend:**
-- Last 5 plans: 04-03 (3.7min), 04-04 (2min), 05-01 (6min), 05-02 (6min), 05-03 (3min)
-- Trend: Phase 5 averaging 3.75min/plan, consistent with prior phases
+- Last 5 plans: 04-04 (2min), 05-01 (6min), 05-02 (6min), 05-03 (3min), 05-04 (6min)
+- Trend: Phase 5 averaged 5.25min/plan, slightly longer than prior phases (more integration work)
 
 *Updated after each plan completion*
 
@@ -122,6 +122,9 @@ Recent decisions affecting current work:
 - Face boost capped at +10 points (2 faces max contribution) (05-03)
 - Adjacent segment merging via weighted average by duration (05-03)
 - Non-speech segments (gaps > 2s) scored with audio+motion only (05-03)
+- JSON engagement output includes both relative and absolute scores for flexibility (05-04)
+- Summary mode shows top 5 segments and score distribution histogram (05-04)
+- Timebase extracted from video stream (or audio if no video) for analyzeEngagement (05-04)
 
 ### Pending Todos
 
@@ -147,8 +150,9 @@ None yet.
 - faces() API ready with caching, CLI tools, and comprehensive unit tests (04-01 through 04-04)
 
 **Phase 5 (Engagement Scoring):**
-- No ground truth data for validating engagement scores without cloud platform metrics
-- Must define scoring algorithm based on content features, not historical performance data
+- PHASE COMPLETE: All deliverables implemented
+- No ground truth data for validating engagement scores - validation will require real-world video testing
+- Scoring algorithm based on content features (audio, motion, speech, faces, hooks)
 
 **Phase 7 (Speaker Reframing):**
 - Falcon SDK integration (C API, commercial licensing unclear for free tier 250 min/month)
@@ -156,7 +160,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T19:08:01Z
-Stopped at: Completed 05-03-PLAN.md
+Last session: 2026-02-02T19:17:11Z
+Stopped at: Completed 05-04-PLAN.md (Phase 5 complete)
 Resume file: None
-Next: Continue Phase 5 (05-04) - Complete engagement scoring foundation with CLI integration
+Next: Begin Phase 6 - Engagement Clip Detection
