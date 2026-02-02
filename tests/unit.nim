@@ -13,6 +13,7 @@ import ../src/transcript/formats
 import ../src/cmds/transcript as transcriptCmd
 import ../src/cmds/caption as captionCmd
 import ../src/render/captions
+import ../src/analyze/hooks
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -977,3 +978,73 @@ when defined(enable_ml):
       # Check rate during cooldown (t=0.5, before 1.0s cooldown expires)
       let fps = sampler.updateSamplingRate(sceneScore = 0.1, faceCount = 0, currentTime = 0.5)
       check fps == 5.0  # Still at high rate
+
+# Engagement Types Tests
+
+suite "Engagement Types":
+  test "default params has equal weights":
+    let params = defaultEngagementParams()
+    check abs(params.audioWeight - 0.333f) < 0.01
+    check abs(params.motionWeight - 0.333f) < 0.01
+    check abs(params.speechWeight - 0.333f) < 0.01
+    check params.hookBoost == 15.0f
+    check params.minSegmentDurationMs == 2000
+
+  test "percentile normalization basic":
+    let signal = @[0.0f, 25.0f, 50.0f, 75.0f, 100.0f]
+    let normalized = normalizePercentile(signal, 0.0, 1.0)
+    # With 0% and 100% percentiles, should map 0->0, 100->100
+    check normalized[0] == 0.0f
+    check normalized[4] == 100.0f
+
+  test "percentile normalization outliers":
+    let signal = @[0.0f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f, 100.0f]
+    # 5th percentile ~ 10, 95th percentile ~ 10
+    let normalized = normalizePercentile(signal)
+    # Outliers (0 and 100) should be clamped
+    check normalized[0] >= 0.0f
+    check normalized[9] <= 100.0f
+
+  test "percentile normalization empty":
+    let signal: seq[float32] = @[]
+    let normalized = normalizePercentile(signal)
+    check normalized.len == 0
+
+  test "percentile normalization single value":
+    let signal = @[42.0f]
+    let normalized = normalizePercentile(signal)
+    check normalized.len == 1
+    check normalized[0] == 50.0f
+
+  test "percentile normalization all same":
+    let signal = @[5.0f, 5.0f, 5.0f, 5.0f]
+    let normalized = normalizePercentile(signal)
+    check normalized.len == 4
+    # All same values should map to 50.0
+    for val in normalized:
+      check val == 50.0f
+
+  test "segment duration calculation":
+    var seg = newEngagementSegment(1000, 3500)
+    check seg.durationMs == 2500
+
+  test "segment isEmpty":
+    var seg = newEngagementSegment(0, 1000)
+    check seg.isEmpty() == true
+    seg.text = "Hello"
+    check seg.isEmpty() == false
+
+  test "computePercentileBounds basic":
+    let signal = @[0.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f]
+    let bounds = computePercentileBounds(signal, 0.1, 0.9)
+    # 10th percentile (index 1) = 10.0, 90th percentile (index 9) = 90.0
+    check abs(bounds.low - 10.0f) < 1.0f
+    check abs(bounds.high - 90.0f) < 1.0f
+
+  test "normalizeValue clamps correctly":
+    # Value below range should clamp to 0
+    check normalizeValue(5.0f, 10.0f, 20.0f) == 0.0f
+    # Value above range should clamp to 100
+    check normalizeValue(25.0f, 10.0f, 20.0f) == 100.0f
+    # Value in middle should be 50
+    check normalizeValue(15.0f, 10.0f, 20.0f) == 50.0f
