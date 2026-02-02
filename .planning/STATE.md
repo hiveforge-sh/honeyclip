@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 4 of 10 (Face Detection Infrastructure) — In Progress
-Plan: 1 of 3 in phase
+Plan: 2 of 3 in phase
 Status: In Progress
-Last activity: 2026-02-02 — Completed 04-01-PLAN.md
+Last activity: 2026-02-02 — Completed 04-02-PLAN.md
 
-Progress: [████████████████░░░░░░░░░░░░░░░░░░░░░░░░] 41%
+Progress: [████████████████░░░░░░░░░░░░░░░░░░░░░░░░] 43%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
+- Total plans completed: 15
 - Average duration: 3.6 min
-- Total execution time: 0.85 hours
+- Total execution time: 0.9 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [████████████████░░░░░░░
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
 | 02-transcript-foundation | 4 | 15min | 3.8min |
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
-| 04-face-detection-infrastructure | 1 | 2.5min | 2.5min |
+| 04-face-detection-infrastructure | 2 | 5.5min | 2.8min |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (4min), 03-04 (5min), 03-05 (4min), 04-01 (2.5min)
+- Last 5 plans: 03-04 (5min), 03-05 (4min), 04-01 (2.5min), 04-02 (3min)
 - Trend: Fast completion for infrastructure tasks
 
 *Updated after each plan completion*
@@ -101,6 +101,10 @@ Recent decisions affecting current work:
 - Default confidence filter 0.3 (higher than libfacedetection 0.02 default) (04-01)
 - Cache location .honeyclip/ alongside video (not getTempDir) for persistence (04-01)
 - 20 face cache file limit per directory (vs 10 for motion cache) (04-01)
+- 1fps baseline sampling for static scenes, 5fps during scene changes or face state changes (04-02)
+- Scene change threshold 0.4 via FFmpeg scdet filter (04-02)
+- 1-second cooldown duration after spike events before returning to baseline (04-02)
+- Frame skipping strategy avoids filter graph recreation overhead (04-02)
 
 ### Pending Todos
 
@@ -121,7 +125,7 @@ None yet.
 
 **Phase 4 (Face Detection):**
 - Face detection false positive rate can reach 85% in production (Metropolitan Police finding) - ADDRESSED: Multi-frame consensus algorithm implemented (04-01)
-- Adaptive frame sampling needed to avoid CPU waste - PENDING: Will be addressed in 04-02
+- Adaptive frame sampling needed to avoid CPU waste - RESOLVED: Implemented in 04-02 with 1-5fps dynamic rate
 
 **Phase 5 (Engagement Scoring):**
 - No ground truth data for validating engagement scores without cloud platform metrics
@@ -134,6 +138,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 04-01-PLAN.md
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
-Next: Execute 04-02-PLAN.md (Face Analyzer Implementation)
+Next: Execute 04-03-PLAN.md (Face Analyzer Command)
