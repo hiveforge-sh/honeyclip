@@ -13,7 +13,7 @@ import ../src/transcript/formats
 import ../src/cmds/transcript as transcriptCmd
 import ../src/cmds/caption as captionCmd
 import ../src/render/captions
-import ../src/analyze/hooks
+import ../src/analyze/engagement_types
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -1048,3 +1048,83 @@ suite "Engagement Types":
     check normalizeValue(25.0f, 10.0f, 20.0f) == 100.0f
     # Value in middle should be 50
     check normalizeValue(15.0f, 10.0f, 20.0f) == 50.0f
+
+# Hook Detection Tests
+
+suite "Hook Detection":
+  test "question opening detected":
+    let patterns = loadBuiltinPatterns()
+    let matches = matchTextPatterns("What makes this special?", patterns)
+    check matches.len > 0
+    check "question_opening" in matches
+
+  test "mid-sentence what not detected as question":
+    let patterns = loadBuiltinPatterns()
+    let matches = matchTextPatterns("I know what you mean", patterns)
+    # "what" in middle of sentence should not match ^what pattern
+    check not ("question_opening" in matches)
+
+  test "emphasis word detected":
+    let patterns = loadBuiltinPatterns()
+    let matches = matchTextPatterns("You must see this", patterns)
+    check matches.len > 0
+    check "emphasis_words" in matches
+
+  test "combined detection requires prosody":
+    let patterns = loadBuiltinPatterns()
+    # Text pattern matches but no prosody
+    var flatAudio = newSeq[float32](10)
+    for i in 0..<10: flatAudio[i] = 0.3f
+    let result = detectHook("What is this?", flatAudio, 0.3f, patterns)
+    check result.textMatches.len > 0
+    check not result.hasProsodyIndicator
+    check not result.isHook  # Requires BOTH
+
+  test "combined detection with volume spike":
+    let patterns = loadBuiltinPatterns()
+    # Text pattern matches AND volume spike
+    let audioWithSpike = @[0.1f, 0.2f, 0.8f, 0.3f, 0.1f]  # spike > 1.5x avg
+    let result = detectHook("What is this?", audioWithSpike, 0.3f, patterns)
+    check result.textMatches.len > 0
+    check result.hasProsodyIndicator
+    check result.isHook  # Has BOTH
+
+  test "combined detection with pause":
+    let patterns = loadBuiltinPatterns()
+    # Text pattern matches AND pause at start
+    let audioWithPause = @[0.01f, 0.01f, 0.01f, 0.3f, 0.3f]  # silence then normal
+    let result = detectHook("What is this?", audioWithPause, 0.3f, patterns)
+    check result.textMatches.len > 0
+    check result.hasProsodyIndicator
+    check result.isHook  # Has BOTH
+
+  test "rate limiting keeps max 3 per minute":
+    var hooks: seq[tuple[timestampMs: int64, result: HookResult]] = @[]
+    for i in 0..<5:
+      hooks.add((int64(i * 10000), HookResult(isHook: true, confidence: 0.8f)))
+    let limited = rateLimitHooks(hooks, maxPerMinute = 3)
+    check limited.len == 3
+
+  test "rate limiting across multiple minutes":
+    var hooks: seq[tuple[timestampMs: int64, result: HookResult]] = @[]
+    # Add 5 hooks in first minute
+    for i in 0..<5:
+      hooks.add((int64(i * 10000), HookResult(isHook: true, confidence: 0.5f)))
+    # Add 5 hooks in second minute
+    for i in 0..<5:
+      hooks.add((int64(60000 + i * 10000), HookResult(isHook: true, confidence: 0.6f)))
+    let limited = rateLimitHooks(hooks, maxPerMinute = 3)
+    # Should get 3 from first minute + 3 from second = 6
+    check limited.len == 6
+
+  test "rate limiting preserves highest confidence":
+    var hooks: seq[tuple[timestampMs: int64, result: HookResult]] = @[]
+    # Add hooks with varying confidence
+    hooks.add((int64(0), HookResult(isHook: true, confidence: 0.5f)))
+    hooks.add((int64(10000), HookResult(isHook: true, confidence: 0.9f)))  # Highest
+    hooks.add((int64(20000), HookResult(isHook: true, confidence: 0.7f)))
+    hooks.add((int64(30000), HookResult(isHook: true, confidence: 0.6f)))
+    let limited = rateLimitHooks(hooks, maxPerMinute = 2)
+    check limited.len == 2
+    # Should include timestamp 10000 (highest confidence)
+    check int64(10000) in limited
