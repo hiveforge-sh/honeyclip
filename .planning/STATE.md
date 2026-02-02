@@ -11,16 +11,16 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 3 of 10 (Caption Rendering)
-Plan: 3 of TBD in phase
+Plan: 4 of TBD in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 03-03-PLAN.md
+Last activity: 2026-02-02 — Completed 03-04-PLAN.md
 
-Progress: [███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 27.5%
+Progress: [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
+- Total plans completed: 12
 - Average duration: 3.7 min
 - Total execution time: 0.7 hours
 
@@ -30,10 +30,10 @@ Progress: [███████████░░░░░░░░░░░░
 |-------|-------|-------|----------|
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
 | 02-transcript-foundation | 4 | 15min | 3.8min |
-| 03-caption-rendering | 3 | 10.5min | 3.5min |
+| 03-caption-rendering | 4 | 15.5min | 3.9min |
 
 **Recent Trend:**
-- Last 5 plans: 02-04 (4min), 03-01 (4min), 03-02 (2.5min), 03-03 (4min)
+- Last 5 plans: 03-01 (4min), 03-02 (2.5min), 03-03 (4min), 03-04 (5min)
 - Trend: Stable around 4 min
 
 *Updated after each plan completion*
@@ -88,6 +88,10 @@ Recent decisions affecting current work:
 - FCPXML captions as title clips in gap element (non-destructive overlay) (03-03)
 - Frame-based timing for NLE exports (frame-accurate positioning) (03-03)
 - Speaker colors via effect parameters (visual differentiation in NLE) (03-03)
+- CLI subcommands (burn, export) for different caption workflows (03-04)
+- Style presets with CLI override flags for flexible customization (03-04)
+- JSON transcript input (requires prior transcript extraction) (03-04)
+- Exported parseCaptionStyle and loadTranscriptFromJSON for testability (03-04)
 
 ### Pending Todos
 
@@ -120,7 +124,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-02-02T09:40:08Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
 Next: Continue phase 3 or next phase planning
