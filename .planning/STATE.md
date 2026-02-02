@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 7 of 10 (Speaker Tracking & Reframing) — In progress
-Plan: 5 of 6 in phase
+Plan: 3 of 6 in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 07-05-PLAN.md
+Last activity: 2026-02-02 — Completed 07-03-PLAN.md
 
-Progress: [███████████████████████████████░░░░░░░░░] 72.5%
+Progress: [██████████████████████████████░░░░░░░░░░] 70.0%
 
 ## Performance Metrics
 
@@ -37,7 +37,7 @@ Progress: [███████████████████████
 | 07-speaker-tracking-reframing | 3 | 13.3min | 4.43min |
 
 **Recent Trend:**
-- Last 5 plans: 06-04 (4min), 07-01 (3min), 07-02 (5.3min), 07-05 (5min)
+- Last 5 plans: 07-01 (3min), 07-02 (5.3min), 07-03 (5min), 07-04 (planned), 07-05 (planned)
 - Trend: Phase 7 in progress with consistent velocity (4.43min avg)
 
 *Updated after each plan completion*
@@ -158,6 +158,12 @@ Recent decisions affecting current work:
 - Cosine similarity >0.7 threshold for same person matching (research-backed) (07-02)
 - Empty embedding return on failure for graceful degradation to IoU-only tracking (07-02)
 - getTensorData[T] helper in onnx.nim for type-safe ONNX output access (07-02)
+- Combined cost metric: 70% IoU distance + 30% appearance distance (spatial proximity favored) (07-03)
+- IoU < 0.5 triggers infinite cost (1e6) to prevent unlikely matches (07-03)
+- Greedy assignment algorithm optimal for small N (typical 1-5 faces in video) (07-03)
+- Kalman filters stored in tracker and synchronized with track lifecycle (07-03)
+- Temporal embedding smoothing (0.9 old + 0.1 new) for stable re-identification (07-03)
+- Active speaker detection via largest face heuristic during speaking segments (07-03)
 - Easing presets: Slow=1.5s, Medium=0.75s, Fast=0.35s matching speed requirements (07-04)
 - Medium shot padding formula: face height * 2.5 for head and shoulders visible (07-04)
 - Debouncing spatial threshold: 20 pixels minimum distance to trigger crop switch (07-04)
@@ -207,7 +213,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T23:13:28Z
-Stopped at: Completed 07-05-PLAN.md
+Last session: 2026-02-02T23:14:51Z
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None
-Next: Complete Phase 7 - Plan 07-06 (CLI integration for reframe command)
+Next: Continue Phase 7 - Speaker Reframing (plans 07-04 through 07-06)
