@@ -321,21 +321,18 @@ proc runCaptionExport(args: seq[string]) =
   # Parse style for export
   let style = parseCaptionStyle(args)
 
-  # Get media info
-  let mediaInfo = initMediaInfo(videoPath)
-
   # Export based on format
   conwrite(&"Exporting captions to {format.toUpperAscii()} format...")
 
   case format:
   of "fcp7":
-    # Note: Actual FCP7 export would need the full write function from fcp7.nim
-    # For now, this is a placeholder showing the integration point
-    error "FCP7 export with captions not yet integrated (requires full XML builder)"
+    writeCaptionOnlyFCP7(videoPath, captions, style, outputPath)
+    conwrite("")
+    echo &"Created: {outputPath}"
   of "fcpxml":
-    # Note: Actual FCPXML export would need the full write function from fcp11.nim
-    # For now, this is a placeholder showing the integration point
-    error "FCPXML export with captions not yet integrated (requires full XML builder)"
+    writeCaptionOnlyFCPXML(videoPath, captions, style, outputPath)
+    conwrite("")
+    echo &"Created: {outputPath}"
   else:
     error &"Unknown format: {format}"
 
