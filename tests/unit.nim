@@ -1,5 +1,5 @@
 import unittest
-import std/[os, tempfiles]
+import std/[os, tempfiles, strutils]
 
 import ../src/[av, edit, ffmpeg, timeline]
 import ../src/util/[color, fun, lang]
@@ -8,6 +8,8 @@ import ../src/media
 import ../src/wavutil
 import ../src/exports/[kdenlive, fcp11]
 import ../src/transcript/types
+import ../src/transcript/grouping
+import ../src/transcript/formats
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -208,6 +210,121 @@ test "transcript-Word-construction":
   check word.speaker == -1  # defaults to unassigned
   check word.isNonSpeech == false
   check word.label == ""
+
+test "transcript-SRT-format":
+  # Test SRT timestamp format uses comma
+  let srtTimestamp = formatTimestamp(1234, usePeriod=false)
+  check srtTimestamp == "00:00:01,234"
+  check srtTimestamp.contains(",")
+  check not srtTimestamp.contains(".")
+
+  # Test SRT arrow format
+  let startTime = formatTimestamp(0, usePeriod=false)
+  let endTime = formatTimestamp(2500, usePeriod=false)
+  check startTime == "00:00:00,000"
+  check endTime == "00:00:02,500"
+
+test "transcript-VTT-format":
+  # Test VTT timestamp format uses period
+  let vttTimestamp = formatTimestamp(1234, usePeriod=true)
+  check vttTimestamp == "00:00:01.234"
+  check vttTimestamp.contains(".")
+  check not vttTimestamp.contains(",")
+
+  # Test VTT header presence
+  let tempDir = createTempDir("tmp", "")
+  defer: removeDir(tempDir)
+  let vttFile = tempDir / "test.vtt"
+
+  # Create minimal test data
+  var transcript = newTranscript()
+  transcript.addWord(newWord("Hello", 0, 500, 0.9))
+  let captions = groupIntoCaptions(transcript)
+  exportVTT(captions, vttFile)
+
+  # Verify file starts with WEBVTT
+  let content = readFile(vttFile)
+  check content.startsWith("WEBVTT\n")
+
+test "transcript-Caption-grouping":
+  var transcript = newTranscript()
+
+  # Create words that should split into multiple captions
+  # "Hello world. How are you?" - should split at sentence boundary
+  transcript.addWord(newWord("Hello", 0, 300, 0.9))
+  transcript.addWord(newWord("world.", 300, 800, 0.9))
+  transcript.addWord(newWord("How", 800, 1000, 0.9))
+  transcript.addWord(newWord("are", 1000, 1200, 0.9))
+  transcript.addWord(newWord("you?", 1200, 1500, 0.9))
+
+  # Group with tight char limit to force split
+  let captions = groupIntoCaptions(transcript, maxChars=15)
+
+  # Should create at least 2 captions (split at sentence boundary)
+  check captions.len >= 2
+
+  # First caption should be sentence
+  check captions[0].text.contains("Hello world.")
+  check captions[0].words.len == 2
+
+test "transcript-Caption-speaker-change":
+  var transcript = newTranscript()
+
+  # Create words with different speakers
+  var word1 = newWord("Hello", 0, 500, 0.9)
+  word1.speaker = 0
+  transcript.addWord(word1)
+
+  var word2 = newWord("world", 500, 1000, 0.9)
+  word2.speaker = 0
+  transcript.addWord(word2)
+
+  var word3 = newWord("Goodbye", 1000, 1500, 0.9)
+  word3.speaker = 1  # Speaker change
+  transcript.addWord(word3)
+
+  let captions = groupIntoCaptions(transcript)
+
+  # Should create at least 2 captions due to speaker change
+  check captions.len >= 2
+
+  # Second caption should have speakerChanged = true
+  check captions[1].speakerChanged == true
+  check captions[1].speaker == 1
+
+test "transcript-speaker-label-placement":
+  var transcript = newTranscript()
+
+  # Create caption with speaker 0
+  var word1 = newWord("Hello", 0, 500, 0.9)
+  word1.speaker = 0
+  transcript.addWord(word1)
+
+  var word2 = newWord("world", 500, 1000, 0.9)
+  word2.speaker = 1  # Speaker change
+  transcript.addWord(word2)
+
+  let captions = groupIntoCaptions(transcript)
+  check captions.len == 2
+
+  # Test SRT format
+  let tempDir = createTempDir("tmp", "")
+  defer: removeDir(tempDir)
+  let srtFile = tempDir / "test.srt"
+  exportSRT(captions, srtFile)
+
+  let srtContent = readFile(srtFile)
+
+  # First caption with speaker 0 should NOT have label (no previous speaker)
+  # Second caption with speaker 1 should have label (speaker changed)
+  check srtContent.contains("- Speaker 1:")
+
+  # Test VTT format
+  let vttFile = tempDir / "test.vtt"
+  exportVTT(captions, vttFile)
+
+  let vttContent = readFile(vttFile)
+  check vttContent.contains("<v Speaker1>")
 
 # ML FFI Wrapper Tests
 # These tests verify FFI wrappers compile correctly

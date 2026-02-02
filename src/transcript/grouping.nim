@@ -67,7 +67,7 @@ proc groupIntoCaptions*(transcript: Transcript, maxChars: int = 42, maxDuration:
   var currentText = ""
   var lastSpeaker = -2  # Track previous caption's speaker
 
-  proc finishCaption() =
+  template finishCaption() =
     if currentCaption.words.len > 0:
       currentCaption.text = currentText.strip()
       currentCaption.startMs = currentCaption.words[0].startMs
