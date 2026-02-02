@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Caption Rendering** - Burn captions into video, styling, NLE caption tracks
 - [x] **Phase 4: Face Detection Infrastructure** - Face detection, adaptive sampling, caching layer
 - [x] **Phase 5: Engagement Scoring Foundation** - Audio/motion/speech analysis, scoring algorithm
-- [ ] **Phase 6: Engagement Clip Detection** - Scene boundaries, ranking, batch export
+- [x] **Phase 6: Engagement Clip Detection** - Scene boundaries, ranking, batch export
 - [ ] **Phase 7: Speaker Tracking & Reframing** - Face tracking, ROI smoothing, vertical output
 - [ ] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
 - [ ] **Phase 9: NLE Integration & Markers** - Engagement markers, speaker markers, multi-format export
@@ -122,10 +122,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md: Clip types and multi-signal boundary detection
-- [ ] 06-02-PLAN.md: CMX3600 EDL and JSON metadata export
-- [ ] 06-03-PLAN.md: Overlap-aware ranking and parallel batch export
-- [ ] 06-04-PLAN.md: CLI `clips` command with preview and export modes
+- [x] 06-01-PLAN.md: Clip types and multi-signal boundary detection
+- [x] 06-02-PLAN.md: CMX3600 EDL and JSON metadata export
+- [x] 06-03-PLAN.md: Overlap-aware ranking and parallel batch export
+- [x] 06-04-PLAN.md: CLI `clips` command with preview and export modes
 
 ### Phase 7: Speaker Tracking & Reframing
 **Goal**: Track speakers across frames and auto-reframe video to center active speaker
@@ -197,7 +197,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. Caption Rendering | 5/5 | Complete | 2026-02-02 |
 | 4. Face Detection Infrastructure | 4/4 | Complete | 2026-02-02 |
 | 5. Engagement Scoring Foundation | 4/4 | Complete | 2026-02-02 |
-| 6. Engagement Clip Detection | 0/4 | In Progress | - |
+| 6. Engagement Clip Detection | 4/4 | Complete | 2026-02-02 |
 | 7. Speaker Tracking & Reframing | 0/TBD | Not started | - |
 | 8. Multi-Aspect Export & Workflow | 0/TBD | Not started | - |
 | 9. NLE Integration & Markers | 0/TBD | Not started | - |

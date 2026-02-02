@@ -26,8 +26,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **ENGR-02**: Analyze motion/visual activity (frame differences)
 - [x] **ENGR-03**: Analyze speech features (rate, pauses, hooks)
 - [x] **ENGR-04**: Combine signals into engagement score (0-100)
-- [ ] **ENGR-05**: Detect scene boundaries for clip segmentation
-- [ ] **ENGR-06**: Rank clips by engagement score
+- [x] **ENGR-05**: Detect scene boundaries for clip segmentation
+- [x] **ENGR-06**: Rank clips by engagement score
 
 ### Speaker Tracking
 
@@ -39,7 +39,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Export & Workflow
 
 - [ ] **EXPRT-01**: Export in multiple aspect ratios (16:9, 9:16, 1:1)
-- [ ] **EXPRT-02**: Batch export multiple clips from single video
+- [x] **EXPRT-02**: Batch export multiple clips from single video
 - [ ] **EXPRT-03**: Generate preview thumbnails before full render
 - [ ] **EXPRT-04**: Allow clip boundary adjustments after detection
 - [ ] **EXPRT-05**: Analysis-only mode (export project, skip video render)
@@ -108,14 +108,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENGR-02 | Phase 5 | Complete |
 | ENGR-03 | Phase 5 | Complete |
 | ENGR-04 | Phase 5 | Complete |
-| ENGR-05 | Phase 6 | Pending |
-| ENGR-06 | Phase 6 | Pending |
+| ENGR-05 | Phase 6 | Complete |
+| ENGR-06 | Phase 6 | Complete |
 | SPKR-01 | Phase 4 | Complete |
 | SPKR-02 | Phase 7 | Pending |
 | SPKR-03 | Phase 7 | Pending |
 | SPKR-04 | Phase 7 | Pending |
 | EXPRT-01 | Phase 8 | Pending |
-| EXPRT-02 | Phase 6 | Pending |
+| EXPRT-02 | Phase 6 | Complete |
 | EXPRT-03 | Phase 8 | Pending |
 | EXPRT-04 | Phase 8 | Pending |
 | EXPRT-05 | Phase 8 | Pending |
@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-02 after Phase 5 completion*
+*Last updated: 2026-02-02 after Phase 6 completion*
