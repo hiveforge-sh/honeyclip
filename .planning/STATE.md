@@ -10,19 +10,19 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 4 of 10 (Face Detection Infrastructure) — In Progress
-Plan: 2 of 3 in phase
-Status: In Progress
-Last activity: 2026-02-02 — Completed 04-02-PLAN.md
+Phase: 4 of 10 (Face Detection Infrastructure) — Phase Complete
+Plan: 3 of 3 in phase
+Status: Phase Complete
+Last activity: 2026-02-02 — Completed 04-03-PLAN.md
 
-Progress: [████████████████░░░░░░░░░░░░░░░░░░░░░░░░] 43%
+Progress: [█████████████████░░░░░░░░░░░░░░░░░░░░░░░] 46%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
+- Total plans completed: 16
 - Average duration: 3.6 min
-- Total execution time: 0.9 hours
+- Total execution time: 0.95 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [████████████████░░░░░░░
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
 | 02-transcript-foundation | 4 | 15min | 3.8min |
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
-| 04-face-detection-infrastructure | 2 | 5.5min | 2.8min |
+| 04-face-detection-infrastructure | 3 | 9.2min | 3.1min |
 
 **Recent Trend:**
-- Last 5 plans: 03-04 (5min), 03-05 (4min), 04-01 (2.5min), 04-02 (3min)
-- Trend: Fast completion for infrastructure tasks
+- Last 5 plans: 03-05 (4min), 04-01 (2.5min), 04-02 (3min), 04-03 (3.7min)
+- Trend: Fast completion for infrastructure tasks, Phase 4 complete
 
 *Updated after each plan completion*
 
@@ -105,6 +105,9 @@ Recent decisions affecting current work:
 - Scene change threshold 0.4 via FFmpeg scdet filter (04-02)
 - 1-second cooldown duration after spike events before returning to baseline (04-02)
 - Frame skipping strategy avoids filter graph recreation overhead (04-02)
+- All analysis parameters in cache key for proper invalidation (04-03)
+- Conversion helpers in faces.nim to avoid circular dependency (04-03)
+- Default FaceAnalysisParams: minConfidence 0.3, consensus 3@0.6, minFaceRatio 0.05, baseFps 1.0, maxFps 5.0, sceneThreshold 0.4 (04-03)
 
 ### Pending Todos
 
@@ -124,8 +127,9 @@ None yet.
 - RESOLVED: All transcript components implemented and integrated
 
 **Phase 4 (Face Detection):**
-- Face detection false positive rate can reach 85% in production (Metropolitan Police finding) - ADDRESSED: Multi-frame consensus algorithm implemented (04-01)
+- Face detection false positive rate can reach 85% in production (Metropolitan Police finding) - RESOLVED: Multi-frame consensus algorithm implemented (04-01)
 - Adaptive frame sampling needed to avoid CPU waste - RESOLVED: Implemented in 04-02 with 1-5fps dynamic rate
+- Phase 4 complete: faces() API ready for engagement scoring integration
 
 **Phase 5 (Engagement Scoring):**
 - No ground truth data for validating engagement scores without cloud platform metrics
@@ -138,6 +142,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 04-02-PLAN.md
+Stopped at: Completed 04-03-PLAN.md (Phase 4 complete)
 Resume file: None
-Next: Execute 04-03-PLAN.md (Face Analyzer Command)
+Next: Begin Phase 5 (Engagement Scoring)
