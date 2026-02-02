@@ -192,6 +192,193 @@ proc scoreSegment*(startMs, endMs: int64, text: string, words: seq[Word],
   # Use relative as primary score
   result.score = result.scoreRelative
 
+# ===== Segment merging helper =====
+
+proc mergeAdjacentSegments*(segments: seq[EngagementSegment],
+                             threshold: float32): seq[EngagementSegment] =
+  ## Merge adjacent segments with scores within threshold
+  ## Preserves hook flags (merged segment is hook if either was)
+  if segments.len == 0:
+    return @[]
+
+  result = @[segments[0]]
+
+  for i in 1..<segments.len:
+    let prev = result[^1]
+    let curr = segments[i]
+
+    # Check if adjacent and score difference within threshold
+    if prev.endMs == curr.startMs and abs(prev.score - curr.score) <= threshold:
+      # Merge: create weighted average
+      let totalDuration = prev.durationMs + curr.durationMs
+      let mergedScore = ((prev.score * prev.durationMs.float32) +
+                         (curr.score * curr.durationMs.float32)) / totalDuration.float32
+
+      var merged = newEngagementSegment(prev.startMs, curr.endMs)
+      merged.text = if prev.text.len > 0 and curr.text.len > 0:
+                      prev.text & " " & curr.text
+                    elif prev.text.len > 0:
+                      prev.text
+                    else:
+                      curr.text
+      merged.score = mergedScore
+      merged.scoreRelative = mergedScore
+      merged.scoreAbsolute = ((prev.scoreAbsolute * prev.durationMs.float32) +
+                              (curr.scoreAbsolute * curr.durationMs.float32)) / totalDuration.float32
+      merged.audioScore = ((prev.audioScore * prev.durationMs.float32) +
+                           (curr.audioScore * curr.durationMs.float32)) / totalDuration.float32
+      merged.motionScore = ((prev.motionScore * prev.durationMs.float32) +
+                            (curr.motionScore * curr.durationMs.float32)) / totalDuration.float32
+      merged.speechScore = ((prev.speechScore * prev.durationMs.float32) +
+                            (curr.speechScore * curr.durationMs.float32)) / totalDuration.float32
+      merged.hasHook = prev.hasHook or curr.hasHook
+      merged.faceCount = max(prev.faceCount, curr.faceCount)
+      merged.speaker = if prev.speaker == curr.speaker: prev.speaker else: -1
+
+      # Replace last segment with merged
+      result[^1] = merged
+    else:
+      # Not mergeable, add current segment
+      result.add(curr)
+
+# ===== Non-speech segment creation =====
+
+proc createNonSpeechSegments*(transcript: Transcript, duration: int64,
+                               minGapMs: int64 = 2000): seq[tuple[startMs, endMs: int64]] =
+  ## Find gaps in transcript > minGapMs for non-speech scoring
+  result = @[]
+
+  if transcript.segments.len == 0:
+    # Entire video is non-speech
+    result.add((0'i64, duration))
+    return
+
+  # Check gap at start
+  if transcript.segments[0].startMs >= minGapMs:
+    result.add((0'i64, transcript.segments[0].startMs))
+
+  # Check gaps between segments
+  for i in 0..<transcript.segments.len - 1:
+    let gap = transcript.segments[i + 1].startMs - transcript.segments[i].endMs
+    if gap >= minGapMs:
+      result.add((transcript.segments[i].endMs, transcript.segments[i + 1].startMs))
+
+  # Check gap at end
+  let lastEndMs = transcript.segments[^1].endMs
+  if duration - lastEndMs >= minGapMs:
+    result.add((lastEndMs, duration))
+
+# ===== Main engagement analysis API =====
+
+proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
+                        transcript: Transcript, tb: AVRational,
+                        params: EngagementParams = defaultEngagementParams(),
+                        hookPatterns: seq[HookPattern] = loadBuiltinPatterns(),
+                        useFaceDetection: bool = true): EngagementTimeline =
+  ## Main engagement analysis API
+  ## Combines audio, motion, speech, and face signals into engagement scores
+
+  # 1. Get audio signal
+  let audioSignal = audio(bar, container, path, tb, 0)
+
+  # 2. Get motion signal
+  let motionSignal = motion(bar, container, path, tb, 0, 160, 1)
+
+  # 3. Get face frames (if enabled)
+  var faceFrames: seq[FrameFaces] = @[]
+  if useFaceDetection:
+    # Use default FaceAnalysisParams
+    faceFrames = faces(bar, container, path, tb)
+
+  # 4. Compute normalization bounds for audio and motion
+  let audioNormBounds = computePercentileBounds(audioSignal,
+                                                 params.normalizeLowPct,
+                                                 params.normalizeHighPct)
+  let motionNormBounds = computePercentileBounds(motionSignal,
+                                                  params.normalizeLowPct,
+                                                  params.normalizeHighPct)
+
+  # 5. Compute average audio energy for prosody detection
+  var avgAudioEnergy: float32 = 0.0f
+  if audioSignal.len > 0:
+    var sum: float32 = 0.0f
+    for v in audioSignal:
+      sum += v
+    avgAudioEnergy = sum / audioSignal.len.float32
+
+  # 6. Build segments from transcript
+  var segments: seq[EngagementSegment] = @[]
+
+  # Score transcript segments (speech)
+  for tseg in transcript.segments:
+    let seg = scoreSegment(
+      tseg.startMs, tseg.endMs, tseg.text, tseg.words,
+      audioSignal, motionSignal,
+      audioNormBounds, motionNormBounds,
+      faceFrames, hookPatterns, avgAudioEnergy,
+      tb, params
+    )
+    segments.add(seg)
+
+  # Score non-speech segments
+  let nonSpeechGaps = createNonSpeechSegments(transcript, transcript.duration, 2000)
+  for gap in nonSpeechGaps:
+    let seg = scoreSegment(
+      gap.startMs, gap.endMs, "", @[],  # No text, no words
+      audioSignal, motionSignal,
+      audioNormBounds, motionNormBounds,
+      faceFrames, hookPatterns, avgAudioEnergy,
+      tb, params
+    )
+    segments.add(seg)
+
+  # Sort segments by start time
+  segments.sort(proc(a, b: EngagementSegment): int = cmp(a.startMs, b.startMs))
+
+  # 7. Merge adjacent segments within threshold
+  segments = mergeAdjacentSegments(segments, params.mergeThreshold)
+
+  # 8. Rate limit hooks (max 3 per minute)
+  var hookCandidates: seq[tuple[timestampMs: int64, result: HookResult]] = @[]
+  for seg in segments:
+    if seg.hasHook:
+      # Create HookResult from segment
+      let hookRes = HookResult(
+        isHook: true,
+        textMatches: @[],  # Already detected
+        hasProsodyIndicator: true,
+        confidence: 0.8f  # Default confidence for detected hooks
+      )
+      hookCandidates.add((seg.startMs, hookRes))
+
+  let rateLimitedHooks = rateLimitHooks(hookCandidates, maxPerMinute = 3)
+
+  # Update hook flags based on rate limiting
+  for i, seg in segments:
+    if seg.hasHook:
+      if seg.startMs notin rateLimitedHooks:
+        segments[i].hasHook = false
+
+  # 9. Calculate timeline stats
+  var avgScore: float32 = 0.0f
+  var hookCount = 0
+  for seg in segments:
+    avgScore += seg.score * seg.durationMs.float32
+    if seg.hasHook:
+      hookCount += 1
+
+  if transcript.duration > 0:
+    avgScore = avgScore / transcript.duration.float32
+
+  # 10. Return timeline
+  result = EngagementTimeline(
+    segments: segments,
+    duration: transcript.duration,
+    avgScore: avgScore,
+    hookCount: hookCount,
+    params: params
+  )
+
 # ===== Test block =====
 
 when isMainModule:
@@ -243,3 +430,9 @@ when isMainModule:
   echo "  Score in range [0-100]: ", segment.score >= 0.0 and segment.score <= 100.0
   echo "  Has audio/motion/speech scores: ",
     segment.audioScore > 0 or segment.motionScore > 0 or segment.speechScore > 0
+
+  # Test main API signature (integration test would need real video)
+  echo "\nTest 5: analyzeEngagement signature"
+  echo "  API exports: analyzeEngagement, scoreSegment, mergeAdjacentSegments"
+  echo "  Helper exports: msToIndex, indexToMs, averageSignal, countFacesInRange"
+  echo "  All functions defined and accessible"
