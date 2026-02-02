@@ -68,13 +68,14 @@ Plans:
   1. User can auto-generate captions from transcript output
   2. User can burn captions into video with customizable styling (font, size, position, color)
   3. User can export captions as separate editable track for NLE import
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md: Caption styling types, presets, and ASS file generation
-- [ ] 03-02-PLAN.md: FFmpeg filter integration for caption burning
-- [ ] 03-03-PLAN.md: NLE caption track export (FCP7, FCPXML)
-- [ ] 03-04-PLAN.md: CLI `caption` command with burn and export subcommands
+- [x] 03-01-PLAN.md: Caption styling types, presets, and ASS file generation
+- [x] 03-02-PLAN.md: FFmpeg filter integration for caption burning
+- [x] 03-03-PLAN.md: NLE caption track export (FCP7, FCPXML)
+- [x] 03-04-PLAN.md: CLI `caption` command with burn and export subcommands
+- [ ] 03-05-PLAN.md: Gap closure - Wire NLE export functions to CLI command
 
 ### Phase 4: Face Detection Infrastructure
 **Goal**: Detect faces in video with adaptive frame sampling and persistent caching
