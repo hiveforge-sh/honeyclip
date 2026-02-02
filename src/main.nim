@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement]
+import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd]
 import util/[color, fun]
 import palet/edit
 
@@ -22,6 +22,7 @@ type Command = tuple[name: string, handler: proc(args: seq[string])]
 const cmdHandlers: seq[Command] = @[
   ("cache", cache.main),
   ("caption", caption.main),
+  ("clips", clipsCmd.main),
   ("desc", desc.main),
   ("engage", engagement.main),
   ("info", info.main),
