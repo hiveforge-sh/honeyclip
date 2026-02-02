@@ -220,6 +220,85 @@ func timecode(self: MediaInfo): string = # In SMPTE
       return v.timecode
   return "00:00:00:00"
 
+proc writeCaptionOnlyFCPXML*(videoPath: string, captions: seq[Caption], style: CaptionStyle, outputPath: string) =
+  ## Write FCPXML file with caption track only
+  ## videoPath must be an actual video file path (not JSON transcript)
+  let mi = initMediaInfo(videoPath)
+  let (width, height) = mi.getRes()
+  # Get framerate from video stream, default to 30fps if no video
+  let tb = if mi.v.len > 0: makeSaneTimebase(mi.v[0].avg_rate) else: AVRational(num: 30, den: 1)
+
+  func fraction(val: int): string =
+    if val == 0:
+      return "0s"
+    return &"{val * tb.den.int}/{tb.num}s"
+
+  let fcpxml = <>fcpxml(version = "1.11")
+  let resources = newElement("resources")
+  fcpxml.add resources
+
+  let projName = videoPath.splitFile.name
+  let duration = int(mi.duration * tb)
+
+  # Add format resource
+  let formatId = "r1"
+  resources.add(<>format(id = formatId, name = makeName(mi, tb),
+      frameDuration = fraction(1), width = $width, height = $height,
+      colorSpace = getColorspace(mi)))
+
+  # Add asset resource
+  let assetId = "r2"
+  let hasVideo = (if mi.v.len > 0: "1" else: "0")
+  let hasAudio = (if mi.a.len > 0: "1" else: "0")
+  let audioChannels = (if mi.a.len == 0: "2" else: $mi.a[0].channels)
+
+  let asset = <>asset(id = assetId, name = projName,
+      start = "0s", hasVideo = hasVideo, format = formatId,
+      hasAudio = hasAudio, audioSources = "1",
+      audioChannels = audioChannels, duration = fraction(duration))
+
+  let mediaRep = newElement("media-rep")
+  mediaRep.attrs = {"kind": "original-media", "src": videoPath.pathToUri()}.toXmlAttributes
+  asset.add mediaRep
+  resources.add asset
+
+  # Create library/event/project structure
+  let lib = <>library()
+  let evt = <>event(name = projName)
+  let proj = <>project(name = projName)
+  let sampleRate = if mi.a.len > 0: (if mi.a[0].sampleRate == 44100: "44.1k" else: "48k") else: "48k"
+  let audioLayout = if mi.a.len > 0: mi.a[0].layout else: "stereo"
+  let sequence = <>sequence(format = formatId, tcStart = "0s", tcFormat = "NDF",
+      audioLayout = audioLayout, audioRate = sampleRate)
+  let spine = <>spine()
+
+  # Add video asset-clip to spine
+  let assetClip = newElement("asset-clip")
+  assetClip.attrs = {
+    "name": projName,
+    "ref": assetId,
+    "offset": "0s",
+    "duration": fraction(duration),
+    "start": "0s",
+    "tcFormat": "NDF"
+  }.toXmlAttributes
+  spine.add assetClip
+
+  # Add caption track
+  addCaptionTrackFCPXML(spine, captions, style, tb)
+
+  sequence.add spine
+  proj.add sequence
+  evt.add proj
+  lib.add evt
+  fcpxml.add lib
+
+  if outputPath == "-":
+    echo $fcpxml
+  else:
+    let xmlStr = "<?xml version='1.0' encoding='utf-8'?>\n" & $fcpxml
+    writeFile(outputPath, xmlStr)
+
 proc fcp11_write_xml*(groupName, version, output: string, resolve: bool, tl: v3) =
   func fraction(val: int): string =
     if val == 0:
