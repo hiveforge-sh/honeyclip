@@ -7,6 +7,7 @@ import ../src/cmds/info
 import ../src/media
 import ../src/wavutil
 import ../src/exports/[kdenlive, fcp11]
+import ../src/transcript/types
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -177,6 +178,36 @@ test "uuid":
     for j, c in uuid:
       if j notin [8, 13, 18, 23]: # Skip dashes
         check(c in "0123456789abcdef")
+
+test "transcript-formatTimestamp":
+  check formatTimestamp(0) == "00:00:00,000"
+  check formatTimestamp(1234) == "00:00:01,234"
+  check formatTimestamp(3661234) == "01:01:01,234"
+  check formatTimestamp(1234, usePeriod=true) == "00:00:01.234"
+
+test "transcript-isLowConfidence":
+  let word1 = newWord("hello", 0, 1000, 0.3)
+  let word2 = newWord("world", 1000, 2000, 0.7)
+  let word3 = newWord("test", 2000, 3000, 0.4)
+
+  # Test with default threshold (0.5)
+  check isLowConfidence(word1) == true
+  check isLowConfidence(word2) == false
+
+  # Test with custom threshold (0.3)
+  check isLowConfidence(word3, 0.3) == false
+  check isLowConfidence(word1, 0.3) == false
+  check isLowConfidence(word1, 0.4) == true
+
+test "transcript-Word-construction":
+  let word = newWord("hello", 100, 500, 0.95)
+  check word.text == "hello"
+  check word.startMs == 100
+  check word.endMs == 500
+  check word.confidence == 0.95
+  check word.speaker == -1  # defaults to unassigned
+  check word.isNonSpeech == false
+  check word.label == ""
 
 # ML FFI Wrapper Tests
 # These tests verify FFI wrappers compile correctly
