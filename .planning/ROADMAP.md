@@ -112,17 +112,20 @@ Plans:
 - [x] 05-04-PLAN.md: CLI `engage` command with JSON output
 
 ### Phase 6: Engagement Clip Detection
-**Goal**: Automatically detect optimal clip boundaries and rank clips by engagement score
+**Goal**: Automatically detect optimal clip boundaries and rank clips by engagement score for batch export
 **Depends on**: Phase 5
 **Requirements**: ENGR-05, ENGR-06, EXPRT-02
 **Success Criteria** (what must be TRUE):
   1. User can detect scene boundaries that define natural clip segmentation points
   2. User sees clips ranked by engagement score from highest to lowest
   3. User can batch export multiple clips from single video based on engagement ranking
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md: TBD during phase planning
+- [ ] 06-01-PLAN.md: Clip types and multi-signal boundary detection
+- [ ] 06-02-PLAN.md: CMX3600 EDL and JSON metadata export
+- [ ] 06-03-PLAN.md: Overlap-aware ranking and parallel batch export
+- [ ] 06-04-PLAN.md: CLI `clips` command with preview and export modes
 
 ### Phase 7: Speaker Tracking & Reframing
 **Goal**: Track speakers across frames and auto-reframe video to center active speaker
@@ -185,7 +188,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -194,7 +197,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 3. Caption Rendering | 5/5 | Complete | 2026-02-02 |
 | 4. Face Detection Infrastructure | 4/4 | Complete | 2026-02-02 |
 | 5. Engagement Scoring Foundation | 4/4 | Complete | 2026-02-02 |
-| 6. Engagement Clip Detection | 0/TBD | Not started | - |
+| 6. Engagement Clip Detection | 0/4 | In Progress | - |
 | 7. Speaker Tracking & Reframing | 0/TBD | Not started | - |
 | 8. Multi-Aspect Export & Workflow | 0/TBD | Not started | - |
 | 9. NLE Integration & Markers | 0/TBD | Not started | - |
