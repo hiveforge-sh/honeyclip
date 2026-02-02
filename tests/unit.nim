@@ -10,6 +10,7 @@ import ../src/exports/[kdenlive, fcp11]
 import ../src/transcript/types
 import ../src/transcript/grouping
 import ../src/transcript/formats
+import ../src/cmds/transcript as transcriptCmd
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -80,7 +81,7 @@ test "exports":
       "Hello \\ World", "11"))
 
 test "info":
-  main(@["resources/testsrc.mp4"])
+  info.main(@["resources/testsrc.mp4"])
 
 test "margin":
   var levels: seq[bool]
@@ -325,6 +326,95 @@ test "transcript-speaker-label-placement":
 
   let vttContent = readFile(vttFile)
   check vttContent.contains("<v Speaker1>")
+
+# Transcript command helper tests
+
+test "transcript-countSpeakers":
+  var transcript = newTranscript()
+
+  # Test with speakers [0, 0, 1, 1, 2]
+  var word1 = newWord("Hello", 0, 100, 0.9)
+  word1.speaker = 0
+  transcript.addWord(word1)
+
+  var word2 = newWord("world", 100, 200, 0.9)
+  word2.speaker = 0
+  transcript.addWord(word2)
+
+  var word3 = newWord("How", 200, 300, 0.9)
+  word3.speaker = 1
+  transcript.addWord(word3)
+
+  var word4 = newWord("are", 300, 400, 0.9)
+  word4.speaker = 1
+  transcript.addWord(word4)
+
+  var word5 = newWord("you", 400, 500, 0.9)
+  word5.speaker = 2
+  transcript.addWord(word5)
+
+  check transcriptCmd.countSpeakers(transcript) == 3
+
+test "transcript-countSpeakers-unassigned":
+  var transcript = newTranscript()
+
+  # Test with all -1 (unassigned)
+  transcript.addWord(newWord("Hello", 0, 100, 0.9))
+  transcript.addWord(newWord("world", 100, 200, 0.9))
+
+  check transcriptCmd.countSpeakers(transcript) == 0
+
+test "transcript-createBackup":
+  let tempDir = createTempDir("tmp", "")
+  defer: removeDir(tempDir)
+
+  let testFile = tempDir / "test.srt"
+  let bakFile = testFile & ".bak"
+
+  # Create initial file
+  writeFile(testFile, "original content")
+  check fileExists(testFile)
+  check not fileExists(bakFile)
+
+  # Create backup
+  transcriptCmd.createBackup(testFile)
+  check fileExists(bakFile)
+  check not fileExists(testFile)
+  check readFile(bakFile) == "original content"
+
+  # Create new file
+  writeFile(testFile, "new content")
+  check fileExists(testFile)
+
+  # Create backup again (should overwrite existing .bak)
+  transcriptCmd.createBackup(testFile)
+  check fileExists(bakFile)
+  check readFile(bakFile) == "new content"
+
+test "transcript-createBackup-nonexistent":
+  let tempDir = createTempDir("tmp", "")
+  defer: removeDir(tempDir)
+
+  let testFile = tempDir / "nonexistent.srt"
+
+  # Should not throw when file doesn't exist
+  transcriptCmd.createBackup(testFile)
+  check not fileExists(testFile)
+  check not fileExists(testFile & ".bak")
+
+test "transcript-generateOutputPath":
+  # Test with default output dir (same as input)
+  check transcriptCmd.generateOutputPath("/path/to/video.mp4", "", ".srt") == "/path/to/video.srt"
+  check transcriptCmd.generateOutputPath("/path/to/video.mp4", "", ".vtt") == "/path/to/video.vtt"
+  check transcriptCmd.generateOutputPath("/path/to/video.mp4", "", ".json") == "/path/to/video.json"
+
+  # Test with custom output dir
+  check transcriptCmd.generateOutputPath("/path/to/video.mp4", "/other", ".srt") == "/other/video.srt"
+  check transcriptCmd.generateOutputPath("/path/to/video.mp4", "/custom/dir", ".json") == "/custom/dir/video.json"
+
+  # Test with different input formats
+  check transcriptCmd.generateOutputPath("/videos/clip.mkv", "", ".srt") == "/videos/clip.srt"
+  check transcriptCmd.generateOutputPath("/home/user/test.avi", "/out", ".vtt") == "/out/test.vtt"
 
 # ML FFI Wrapper Tests
 # These tests verify FFI wrappers compile correctly
