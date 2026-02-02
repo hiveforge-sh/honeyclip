@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 6 of 10 (Engagement Clip Detection) — Complete
-Plan: 4 of 4 in phase
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 06-04-PLAN.md
+Phase: 7 of 10 (Speaker Tracking & Reframing) — In progress
+Plan: 4 of 6 in phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 07-04-PLAN.md
 
-Progress: [████████████████████████████░░░░░░░░░░░] 65.0%
+Progress: [█████████████████████████████░░░░░░░░░░] 67.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 26
-- Average duration: 3.2 min
+- Total plans completed: 27
+- Average duration: 3.1 min
 - Total execution time: 1.5 hours
 
 **By Phase:**
@@ -34,10 +34,11 @@ Progress: [███████████████████████
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
+| 07-speaker-tracking-reframing | 1 | 2min | 2.0min |
 
 **Recent Trend:**
-- Last 5 plans: 06-02 (1.5min), 06-01 (3min), 06-03 (2.25min), 06-04 (4min)
-- Trend: Phase 6 complete with excellent efficiency (2.7min avg)
+- Last 5 plans: 06-01 (3min), 06-03 (2.25min), 06-04 (4min), 07-04 (2min)
+- Trend: Phase 7 in progress with excellent efficiency (2.0min avg so far)
 
 *Updated after each plan completion*
 
@@ -149,6 +150,10 @@ Recent decisions affecting current work:
 - Default to --list mode if neither --list nor --export specified (safety-first preview) (06-04)
 - No clips detected shows helpful message instead of error (better UX) (06-04)
 - Qualified type names (clips.Clip vs timeline.Clip) to avoid collisions (06-04)
+- Easing presets: Slow=1.5s, Medium=0.75s, Fast=0.35s matching speed requirements (07-04)
+- Medium shot padding formula: face height * 2.5 for head and shoulders visible (07-04)
+- Debouncing spatial threshold: 20 pixels minimum distance to trigger crop switch (07-04)
+- Cubic-bezier control points: Slow(0.25,0.25), Medium(0.42,0.58), Fast(0.55,1.0) for distinct feels (07-04)
 
 ### Pending Todos
 
@@ -190,7 +195,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T20:16:56Z
-Stopped at: Completed 06-04-PLAN.md (Phase 6 complete)
+Last session: 2026-02-02T23:03:16Z
+Stopped at: Completed 07-04-PLAN.md
 Resume file: None
-Next: Begin Phase 7 - Speaker Reframing
+Next: Continue Phase 7 - Speaker Reframing (plans 07-05, 07-06)
