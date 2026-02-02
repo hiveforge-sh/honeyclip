@@ -1,12 +1,12 @@
 import unittest
-import std/[os, tempfiles, strutils]
+import std/[os, tempfiles, strutils, xmltree]
 
 import ../src/[av, edit, ffmpeg, timeline]
 import ../src/util/[color, fun, lang]
 import ../src/cmds/info
 import ../src/media
 import ../src/wavutil
-import ../src/exports/[kdenlive, fcp11]
+import ../src/exports/[kdenlive, fcp11, fcp7]
 import ../src/transcript/types
 import ../src/transcript/grouping
 import ../src/transcript/formats
@@ -606,6 +606,151 @@ test "caption-prepareCaptionFilter":
   # Cleanup
   cleanupCaptionTemp(tempFile)
   check not fileExists(tempFile)
+
+# NLE Caption Export Tests
+
+test "nle-hexToFCP7Color":
+  check hexToFCP7Color("#ffffff") == "1.0 1.0 1.0"
+  check hexToFCP7Color("#ff0000") == "1.0 0.0 0.0"
+  check hexToFCP7Color("#000000") == "0.0 0.0 0.0"
+  check hexToFCP7Color("#00ff00") == "0.0 1.0 0.0"
+  check hexToFCP7Color("#0000ff") == "0.0 0.0 1.0"
+
+test "nle-hexToFCPXMLColor":
+  check hexToFCPXMLColor("#ffffff") == "1 1 1 1"
+  check hexToFCPXMLColor("#ff0000") == "1 0 0 1"
+  check hexToFCPXMLColor("#000000") == "0 0 0 1"
+  check hexToFCPXMLColor("#00ff00") == "0 1 0 1"
+
+test "nle-addCaptionTrackFCP7":
+  # Create sample captions
+  var transcript = newTranscript()
+  transcript.addWord(newWord("Hello", 0, 500, 0.9))
+  transcript.addWord(newWord("world", 500, 1000, 0.9))
+  let captions = groupIntoCaptions(transcript)
+
+  # Create minimal XmlNode video element
+  let video = newElement("video")
+
+  # Add caption track
+  let style = getPreset("traditional")
+  addCaptionTrackFCP7(video, captions, style, 30, "FALSE")
+
+  # Verify track element added
+  check video.len > 0
+  let track = video[0]
+  check track.tag == "track"
+
+  # Verify clipitem count matches caption count
+  check track.len == captions.len
+
+  # Verify each clipitem has Text effect
+  for i in 0..<track.len:
+    let clipitem = track[i]
+    check clipitem.tag == "clipitem"
+    # Look for effect element
+    var hasEffect = false
+    for child in clipitem:
+      if child.tag == "effect":
+        hasEffect = true
+        # Check for Text effect name
+        for effectChild in child:
+          if effectChild.tag == "name" and effectChild.innerText == "Text":
+            check true
+    check hasEffect
+
+test "nle-addCaptionTrackFCPXML":
+  # Create sample captions
+  var transcript = newTranscript()
+  transcript.addWord(newWord("Test", 0, 500, 0.9))
+  transcript.addWord(newWord("caption", 500, 1000, 0.9))
+  let captions = groupIntoCaptions(transcript)
+
+  # Create minimal XmlNode spine element
+  let spine = newElement("spine")
+
+  # Add caption track
+  let style = getPreset("traditional")
+  let tb = AVRational(num: 30000, den: 1001)
+  addCaptionTrackFCPXML(spine, captions, style, tb)
+
+  # Verify gap element added
+  check spine.len > 0
+  let gap = spine[0]
+  check gap.tag == "gap"
+
+  # Verify title elements added
+  check gap.len == captions.len
+
+  # Verify title count matches caption count
+  for i in 0..<gap.len:
+    let title = gap[i]
+    check title.tag == "title"
+
+test "nle-speaker-color-in-exports":
+  # Create captions with different speakers
+  var transcript = newTranscript()
+
+  var word1 = newWord("Speaker", 0, 500, 0.9)
+  word1.speaker = 0
+  transcript.addWord(word1)
+
+  var word2 = newWord("one", 500, 1000, 0.9)
+  word2.speaker = 0
+  transcript.addWord(word2)
+
+  var word3 = newWord("Speaker", 1000, 1500, 0.9)
+  word3.speaker = 1
+  transcript.addWord(word3)
+
+  var word4 = newWord("two", 1500, 2000, 0.9)
+  word4.speaker = 1
+  transcript.addWord(word4)
+
+  let captions = groupIntoCaptions(transcript)
+
+  # Verify we have at least 2 captions due to speaker change
+  check captions.len >= 2
+  check captions[0].speaker == 0
+  check captions[1].speaker == 1
+
+  # Test FCP7 export - verify color parameters vary by speaker
+  let video = newElement("video")
+  let style = getPreset("traditional")
+  addCaptionTrackFCP7(video, captions, style, 30, "FALSE")
+
+  check video.len > 0
+  let track = video[0]
+  check track.len >= 2
+
+  # Extract color values from first two clips
+  var color1 = ""
+  var color2 = ""
+  for child in track[0]:
+    if child.tag == "effect":
+      for param in child:
+        if param.tag == "parameter":
+          for paramChild in param:
+            if paramChild.tag == "name" and paramChild.innerText == "Fill Color":
+              # Find value sibling
+              for valueChild in param:
+                if valueChild.tag == "value":
+                  color1 = valueChild.innerText
+
+  for child in track[1]:
+    if child.tag == "effect":
+      for param in child:
+        if param.tag == "parameter":
+          for paramChild in param:
+            if paramChild.tag == "name" and paramChild.innerText == "Fill Color":
+              for valueChild in param:
+                if valueChild.tag == "value":
+                  color2 = valueChild.innerText
+
+  # Colors should be different for different speakers
+  check color1.len > 0
+  check color2.len > 0
+  check color1 != color2
 
 # ML FFI Wrapper Tests
 # These tests verify FFI wrappers compile correctly

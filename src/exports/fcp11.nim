@@ -57,7 +57,7 @@ proc pathToUri(a: string): string =
   else:
     return "file://" & absPath
 
-proc hexToFCPXMLColor(hex: string): string =
+proc hexToFCPXMLColor*(hex: string): string =
   ## Convert hex color (#RRGGBB) to FCPXML color format (R G B A)
   var color = hex
   if color.startsWith("#"):

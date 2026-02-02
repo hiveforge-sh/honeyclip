@@ -243,7 +243,7 @@ proc handlePath(src: string): string =
   else:
     absPath
 
-proc hexToFCP7Color(hex: string): string =
+proc hexToFCP7Color*(hex: string): string =
   ## Convert hex color (#RRGGBB) to FCP7 color format (normalized 0.0-1.0 RGB)
   var color = hex
   if color.startsWith("#"):
