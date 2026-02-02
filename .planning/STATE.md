@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 3 of 10 (Caption Rendering)
-Plan: 2 of TBD in phase
+Plan: 3 of TBD in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 03-02-PLAN.md
+Last activity: 2026-02-02 — Completed 03-03-PLAN.md
 
-Progress: [█████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 25.0%
+Progress: [███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 27.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
-- Average duration: 3.6 min
-- Total execution time: 0.6 hours
+- Total plans completed: 11
+- Average duration: 3.7 min
+- Total execution time: 0.7 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [█████████░░░░░░░░░░░░░░
 |-------|-------|-------|----------|
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
 | 02-transcript-foundation | 4 | 15min | 3.8min |
-| 03-caption-rendering | 2 | 6.5min | 3.3min |
+| 03-caption-rendering | 3 | 10.5min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (4min), 02-04 (4min), 03-01 (4min), 03-02 (2.5min)
-- Trend: Improving (2.5 min last plan)
+- Last 5 plans: 02-04 (4min), 03-01 (4min), 03-02 (2.5min), 03-03 (4min)
+- Trend: Stable around 4 min
 
 *Updated after each plan completion*
 
@@ -84,6 +84,10 @@ Recent decisions affecting current work:
 - Temporary ASS file generation with cleanup pattern (03-02)
 - Windows colon escaping (C: -> C\:) for FFmpeg filter paths (03-02)
 - Exported filter builder functions for testing and reuse (03-02)
+- FCP7 captions as text generator clips (editable in Premiere/Resolve) (03-03)
+- FCPXML captions as title clips in gap element (non-destructive overlay) (03-03)
+- Frame-based timing for NLE exports (frame-accurate positioning) (03-03)
+- Speaker colors via effect parameters (visual differentiation in NLE) (03-03)
 
 ### Pending Todos
 
@@ -117,6 +121,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 03-02-PLAN.md
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
-Next: Plan 03-03 or next phase planning
+Next: Continue phase 3 or next phase planning
