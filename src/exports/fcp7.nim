@@ -340,6 +340,76 @@ proc addCaptionTrackFCP7*(video: XmlNode, captions: seq[Caption], style: Caption
 
   video.add captionTrack
 
+proc writeCaptionOnlyFCP7*(videoPath: string, captions: seq[Caption], style: CaptionStyle, outputPath: string) =
+  ## Write FCP7 XML file with caption track only
+  ## videoPath must be an actual video file path (not JSON transcript)
+  let mi = initMediaInfo(videoPath)
+  let (width, height) = mi.getRes()
+  # Get framerate from video stream, default to 30fps if no video
+  let tb = if mi.v.len > 0: makeSaneTimebase(mi.v[0].avg_rate) else: AVRational(num: 30, den: 1)
+  let (timebase, ntsc) = setTbNtsc(tb)
+
+  let xmeml = <>xmeml(version = "5")
+  let sequence = newElement("sequence")
+
+  sequence.add elem("name", videoPath.splitFile.name & "_captions")
+  let rate1 = newElement("rate")
+  rate1.add elem("timebase", $timebase)
+  rate1.add elem("ntsc", ntsc)
+  sequence.add rate1
+
+  let media = newElement("media")
+  let video = newElement("video")
+  let vformat = newElement("format")
+  let vschar = newElement("samplecharacteristics")
+
+  vschar.add elem("width", $width)
+  vschar.add elem("height", $height)
+  vschar.add elem("pixelaspectratio", "square")
+
+  let rate2 = newElement("rate")
+  rate2.add elem("timebase", $timebase)
+  rate2.add elem("ntsc", ntsc)
+  vschar.add rate2
+  vformat.add vschar
+  video.add vformat
+
+  # Add video clip reference
+  let videoTrack = newElement("track")
+  let duration = int(mi.duration * tb)
+  let clipitem = <>clipitem(id = "clipitem-1")
+  clipitem.add elem("name", videoPath.splitFile.name)
+  clipitem.add elem("enabled", "TRUE")
+  clipitem.add elem("start", "0")
+  clipitem.add elem("end", $duration)
+  clipitem.add elem("in", "0")
+  clipitem.add elem("out", $duration)
+
+  let filedef = <>file(id = "file-1")
+  filedef.add elem("name", videoPath.splitFile.name)
+  filedef.add elem("pathurl", handlePath(videoPath))
+  let fileRate = newElement("rate")
+  fileRate.add elem("timebase", $timebase)
+  fileRate.add elem("ntsc", ntsc)
+  filedef.add fileRate
+  clipitem.add filedef
+
+  videoTrack.add clipitem
+  video.add videoTrack
+
+  # Add caption track
+  addCaptionTrackFCP7(video, captions, style, timebase, ntsc)
+
+  media.add video
+  sequence.add media
+  xmeml.add sequence
+
+  if outputPath == "-":
+    echo $xmeml
+  else:
+    let xmlStr = "<?xml version='1.0' encoding='utf-8'?>\n" & $xmeml
+    writeFile(outputPath, xmlStr)
+
 proc fcp7_write_xml*(name: string, output: string, resolve: bool, tl: v3) =
   let (width, height) = tl.res
   let (timebase, ntsc) = setTbNtsc(tl.tb)
