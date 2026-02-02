@@ -11,29 +11,29 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 2 of 10 (Transcript Foundation)
-Plan: 1 of 4 in phase
+Plan: 2 of 4 in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 02-01-PLAN.md
+Last activity: 2026-02-02 — Completed 02-02-PLAN.md
 
-Progress: [██████████░░] 83%
+Progress: [███████████░] 92%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 4.0 min
-- Total execution time: 0.33 hours
+- Total plans completed: 6
+- Average duration: 3.8 min
+- Total execution time: 0.38 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
-| 02-transcript-foundation | 1 | 3min | 3.0min |
+| 02-transcript-foundation | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (5min), 01-03 (4min), 01-04 (3min), 02-01 (3min)
-- Trend: Consistent 3-5 min velocity
+- Last 5 plans: 01-03 (4min), 01-04 (3min), 02-01 (3min), 02-02 (4min)
+- Trend: Stable 3-4 min velocity
 
 *Updated after each plan completion*
 
@@ -67,6 +67,12 @@ Recent decisions affecting current work:
 - SRT uses comma separator, VTT uses period for timestamp milliseconds (02-01)
 - Word-level timestamps via whisper filter format=json with max_len=1 (02-01)
 - Speaker -1 = unassigned until diarization, 0+ = identified speakers (02-01)
+- Template instead of nested proc to avoid Nim closure memory safety issues (02-02)
+- 42-char default caption limit (standard readable line length) (02-02)
+- Prefer sentence boundaries when within 20% of char limit (02-02)
+- Never break before small words (a, the, to, of, etc.) (02-02)
+- Speaker labels only on speaker change to reduce visual clutter (02-02)
+- UTF-8 output without BOM for maximum player compatibility (02-02)
 
 ### Pending Todos
 
@@ -99,6 +105,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 02-01-PLAN.md
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
-Next: Continue Phase 2 with plan 02-02 (caption grouping)
+Next: Continue Phase 2 with plan 02-03 (speaker diarization)
