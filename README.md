@@ -1,6 +1,6 @@
-<p align="center">
-  <img src="gh-social-header.jpg" alt="honeyclip - the best moments, extracted" width="600">
-</p>
+
+<img src="gh-social-header.jpg" alt="honeyclip - the best moments, extracted">
+
 
 <p align="center">
   <a href="https://github.com/hiveforge-sh/honeyclip/actions"><img src="https://img.shields.io/github/actions/workflow/status/hiveforge-sh/honeyclip/build.yml?style=flat" alt="Build Status"></a>
