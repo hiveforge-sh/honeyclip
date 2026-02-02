@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 5 of 10 (Engagement Scoring Foundation) — In Progress
-Plan: 2 of 3 in phase
+Plan: 1 of 4 in phase
 Status: In Progress
-Last activity: 2026-02-02 — Completed 05-02-PLAN.md
+Last activity: 2026-02-02 — Completed 05-01-PLAN.md
 
 Progress: [███████████████████░░░░░░░░░░░░░░░░░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
+- Total plans completed: 18
 - Average duration: 3.4 min
-- Total execution time: 1.08 hours
+- Total execution time: 1.04 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [███████████████████░░░░
 | 02-transcript-foundation | 4 | 15min | 3.8min |
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
-| 05-engagement-scoring-foundation | 2 | 12min | 6.0min |
+| 05-engagement-scoring-foundation | 1 | 6min | 6.0min |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (3min), 04-03 (3.7min), 04-04 (2min), 05-01 (6min), 05-02 (6min)
+- Last 5 plans: 04-02 (3min), 04-03 (3.7min), 04-04 (2min), 05-01 (6min)
 - Trend: Phase 5 showing slightly longer durations for new analysis features
 
 *Updated after each plan completion*
@@ -112,10 +112,11 @@ Recent decisions affecting current work:
 - --clear-faces flag operates on .honeyclip/ in current directory (04-04)
 - --info flag shows both system and face caches (04-04)
 - Face detection tests conditional on enable_ml to support incremental ML builds (04-04)
-- Hook requires BOTH text pattern match AND prosody indicator (no false positives from text alone) (05-02)
-- Max 3 hooks per minute to avoid over-flagging (05-02)
-- Prosody detection via simplified heuristics (volume spike >1.5x, pause >200ms) not full pitch extraction (05-02)
-- Rate limiting keeps highest confidence hooks within each minute window (05-02)
+- Equal weights (33.3% each) for audio, motion, speech signals in engagement scoring (05-01)
+- Percentile normalization (5th-95th) over min-max for outlier robustness (05-01)
+- Dual scoring: relative (normalized to video) and absolute (fixed thresholds) (05-01)
+- Hook boost default 15.0 points, face boost 5.0 per face (max 10.0 total) (05-01)
+- Minimum segment duration 2000ms, merge threshold 10.0 points (05-01)
 
 ### Pending Todos
 
