@@ -12,8 +12,8 @@ This roadmap transforms honeyclip from a silence removal tool into a comprehensi
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation & Build Infrastructure** - ML library integration, FFI patterns, cross-platform builds
-- [ ] **Phase 2: Transcript Foundation** - Word-level timestamps, SRT/VTT export, speaker diarization
+- [x] **Phase 1: Foundation & Build Infrastructure** - ML library integration, FFI patterns, cross-platform builds
+- [x] **Phase 2: Transcript Foundation** - Word-level timestamps, SRT/VTT export, speaker diarization
 - [ ] **Phase 3: Caption Rendering** - Burn captions into video, styling, NLE caption tracks
 - [ ] **Phase 4: Face Detection Infrastructure** - Face detection, adaptive sampling, caching layer
 - [ ] **Phase 5: Engagement Scoring Foundation** - Audio/motion/speech analysis, scoring algorithm
@@ -55,10 +55,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md: Transcript types and word-level extraction from whisper.cpp
-- [ ] 02-02-PLAN.md: SRT/VTT/JSON format exporters with caption grouping
-- [ ] 02-03-PLAN.md: Speaker diarization via pyannote.audio and nimpy
-- [ ] 02-04-PLAN.md: CLI `transcript` command integration
+- [x] 02-01-PLAN.md: Transcript types and word-level extraction from whisper.cpp
+- [x] 02-02-PLAN.md: SRT/VTT/JSON format exporters with caption grouping
+- [x] 02-03-PLAN.md: Speaker diarization via pyannote.audio and nimpy
+- [x] 02-04-PLAN.md: CLI `transcript` command integration
 
 ### Phase 3: Caption Rendering
 **Goal**: Generate and render captions from transcripts with styling and NLE export
@@ -179,8 +179,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Build Infrastructure | 0/5 | Planned | - |
-| 2. Transcript Foundation | 0/4 | Planned | - |
+| 1. Foundation & Build Infrastructure | 5/5 | Complete | 2026-02-01 |
+| 2. Transcript Foundation | 4/4 | Complete | 2026-02-02 |
 | 3. Caption Rendering | 0/TBD | Not started | - |
 | 4. Face Detection Infrastructure | 0/TBD | Not started | - |
 | 5. Engagement Scoring Foundation | 0/TBD | Not started | - |

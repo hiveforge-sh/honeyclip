@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Transcript
 
-- [ ] **TRNS-01**: Extract full transcript with word-level timestamps
-- [ ] **TRNS-02**: Export transcript in SRT format
-- [ ] **TRNS-03**: Export transcript in VTT format
-- [ ] **TRNS-04**: Identify and label speakers (speaker diarization)
+- [x] **TRNS-01**: Extract full transcript with word-level timestamps
+- [x] **TRNS-02**: Export transcript in SRT format
+- [x] **TRNS-03**: Export transcript in VTT format
+- [x] **TRNS-04**: Identify and label speakers (speaker diarization)
 
 ### Captions
 
@@ -97,10 +97,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRNS-01 | Phase 2 | Pending |
-| TRNS-02 | Phase 2 | Pending |
-| TRNS-03 | Phase 2 | Pending |
-| TRNS-04 | Phase 2 | Pending |
+| TRNS-01 | Phase 2 | Complete |
+| TRNS-02 | Phase 2 | Complete |
+| TRNS-03 | Phase 2 | Complete |
+| TRNS-04 | Phase 2 | Complete |
 | CAPT-01 | Phase 3 | Pending |
 | CAPT-02 | Phase 3 | Pending |
 | CAPT-03 | Phase 3 | Pending |

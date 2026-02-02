@@ -6,16 +6,16 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 2 - Transcript Foundation (Complete)
+**Current focus:** Phase 3 - Caption Rendering
 
 ## Current Position
 
-Phase: 2 of 10 (Transcript Foundation)
-Plan: 4 of 4 in phase
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 02-04-PLAN.md
+Phase: 3 of 10 (Caption Rendering)
+Plan: 0 of TBD in phase
+Status: Not started
+Last activity: 2026-02-02 — Completed Phase 2 (Transcript Foundation)
 
-Progress: [████████████] 100% (Phase 2)
+Progress: [████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 20%
 
 ## Performance Metrics
 
@@ -109,6 +109,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 02-04-PLAN.md (Phase 2 complete)
+Stopped at: Completed Phase 2 (Transcript Foundation)
 Resume file: None
-Next: Begin Phase 3 (Engagement Scoring)
+Next: Plan Phase 3 (Caption Rendering)
