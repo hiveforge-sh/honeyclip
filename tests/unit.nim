@@ -870,3 +870,110 @@ when defined(enable_ml):
       type TestSize = Size
       check COLOR_BGR2RGB.int == 4
       check COLOR_RGB2GRAY.int == 7
+
+# Face Detection Tests
+# These tests validate face detection consensus and filtering algorithms
+# Import is conditional to avoid build failures when ML libs not available
+
+when defined(enable_ml):
+  import ../src/analyze/faces
+
+  suite "Face Detection":
+    test "IoU identical rectangles":
+      let a = FaceDetection(x: 100, y: 100, width: 50, height: 50)
+      let b = FaceDetection(x: 100, y: 100, width: 50, height: 50)
+      check iou(a, b) == 1.0
+
+    test "IoU no overlap":
+      let a = FaceDetection(x: 0, y: 0, width: 50, height: 50)
+      let b = FaceDetection(x: 100, y: 100, width: 50, height: 50)
+      check iou(a, b) == 0.0
+
+    test "IoU partial overlap":
+      let a = FaceDetection(x: 0, y: 0, width: 100, height: 100)
+      let b = FaceDetection(x: 50, y: 50, width: 100, height: 100)
+      # Overlap is 50x50 = 2500
+      # Union is 100*100 + 100*100 - 2500 = 17500
+      # IoU = 2500/17500 = 0.1428...
+      check abs(iou(a, b) - (2500.0 / 17500.0)) < 0.001
+
+    test "FaceConsensus filters unstable faces":
+      var consensus = newFaceConsensus(windowSize = 3, threshold = 0.6)
+
+      # Add face appearing in 2/3 frames (66.7% >= 60% threshold, should be stable)
+      consensus.addFrame(@[FaceDetection(x: 100, y: 100, width: 50, height: 50, frameIndex: 0)])
+      consensus.addFrame(@[])  # No face in frame 2
+      consensus.addFrame(@[FaceDetection(x: 100, y: 100, width: 50, height: 50, frameIndex: 2)])
+
+      let stable = consensus.getStableFaces()
+      # 2/3 = 0.667 >= 0.6, so face should be marked stable
+      check stable.len == 1
+      check stable[0].stable == true
+
+    test "FaceConsensus keeps stable faces":
+      var consensus = newFaceConsensus(windowSize = 3, threshold = 0.6)
+
+      # Add face appearing in 3/3 frames (100% > threshold)
+      let face = FaceDetection(x: 100, y: 100, width: 50, height: 50)
+      consensus.addFrame(@[face])
+      consensus.addFrame(@[face])
+      consensus.addFrame(@[face])
+
+      let stable = consensus.getStableFaces()
+      check stable.len == 1
+      check stable[0].stable == true
+
+    test "FaceConsensus rejects truly unstable faces":
+      var consensus = newFaceConsensus(windowSize = 3, threshold = 0.6)
+
+      # Add face appearing in only 1/3 frames (33% < 60% threshold)
+      consensus.addFrame(@[FaceDetection(x: 100, y: 100, width: 50, height: 50, frameIndex: 0)])
+      consensus.addFrame(@[])  # No face in frame 2
+      consensus.addFrame(@[])  # No face in frame 3
+
+      let stable = consensus.getStableFaces()
+      # 1/3 = 0.33 < 0.6, so face should be marked unstable
+      check stable.len == 1
+      check stable[0].stable == false
+
+    test "filterBySize removes small faces":
+      let faces = @[
+        FaceDetection(x: 0, y: 0, width: 10, height: 10),  # Too small (10/480 = 2%)
+        FaceDetection(x: 0, y: 0, width: 50, height: 50),  # OK (50/480 = 10%)
+      ]
+      let filtered = filterBySize(faces, frameHeight = 480, minRatio = 0.05)
+      check filtered.len == 1
+      check filtered[0].height == 50
+
+    test "filterBySize keeps faces at exact threshold":
+      let faces = @[
+        FaceDetection(x: 0, y: 0, width: 24, height: 24),  # Exactly 5% of 480
+      ]
+      let filtered = filterBySize(faces, frameHeight = 480, minRatio = 0.05)
+      check filtered.len == 1
+
+    test "AdaptiveSampler spikes on scene change":
+      var sampler = newAdaptiveSampler(baseFps = 1.0, maxFps = 5.0, sceneThreshold = 0.4)
+      let fps = sampler.updateSamplingRate(sceneScore = 0.5, faceCount = 0, currentTime = 0.0)
+      check fps == 5.0  # Spiked due to scene change
+
+    test "AdaptiveSampler spikes on face state change":
+      var sampler = newAdaptiveSampler(baseFps = 1.0, maxFps = 5.0, sceneThreshold = 0.4)
+      # First update establishes baseline
+      discard sampler.updateSamplingRate(sceneScore = 0.1, faceCount = 0, currentTime = 0.0)
+      # Face count changes (0 -> 1), should spike
+      let fps = sampler.updateSamplingRate(sceneScore = 0.1, faceCount = 1, currentTime = 0.5)
+      check fps == 5.0
+
+    test "AdaptiveSampler returns to baseline after cooldown":
+      var sampler = newAdaptiveSampler(baseFps = 1.0, maxFps = 5.0, cooldown = 1.0)
+      discard sampler.updateSamplingRate(sceneScore = 0.5, faceCount = 0, currentTime = 0.0)  # Spike
+      let fps = sampler.updateSamplingRate(sceneScore = 0.1, faceCount = 0, currentTime = 2.0)  # After cooldown
+      check fps == 1.0  # Back to baseline
+
+    test "AdaptiveSampler maintains high rate during cooldown":
+      var sampler = newAdaptiveSampler(baseFps = 1.0, maxFps = 5.0, cooldown = 1.0)
+      discard sampler.updateSamplingRate(sceneScore = 0.5, faceCount = 0, currentTime = 0.0)  # Spike at t=0
+      # Check rate during cooldown (t=0.5, before 1.0s cooldown expires)
+      let fps = sampler.updateSamplingRate(sceneScore = 0.1, faceCount = 0, currentTime = 0.5)
+      check fps == 5.0  # Still at high rate
