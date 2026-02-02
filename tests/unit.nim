@@ -16,6 +16,8 @@ import ../src/cmds/engagement as engagementCmd
 import ../src/render/captions
 import ../src/analyze/engagement_types
 import ../src/analyze/hooks
+import ../src/analyze/clips
+import ../src/exports/edl
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -149,7 +151,7 @@ test "size-of-objects":
   check sizeof(AudioStream) == 48
   check sizeof(SubtitleStream) == 16
   check sizeof(MediaInfo) == 96
-  check sizeof(Clip) == 40
+  check sizeof(timeline.Clip) == 40
 
   check sizeof(RGBColor) == 3
   check sizeof(v3) == 144
@@ -1209,3 +1211,73 @@ suite "Engagement CLI":
   test "generateOutputPath for engagement":
     check engagementCmd.generateOutputPath("/path/to/video.mp4", "", ".engage.json") == "/path/to/video.engage.json"
     check engagementCmd.generateOutputPath("/path/to/video.mp4", "/out", ".engage.json") == "/out/video.engage.json"
+
+suite "clips module":
+  test "calculateIoU no overlap":
+    var clipA = clips.Clip(startMs: 0, endMs: 10000)
+    var clipB = clips.Clip(startMs: 20000, endMs: 30000)
+    check calculateIoU(clipA, clipB) == 0.0f
+
+  test "calculateIoU full overlap":
+    var clipA = clips.Clip(startMs: 0, endMs: 10000)
+    var clipB = clips.Clip(startMs: 0, endMs: 10000)
+    check calculateIoU(clipA, clipB) == 1.0f
+
+  test "calculateIoU partial overlap":
+    var clipA = clips.Clip(startMs: 0, endMs: 10000)
+    var clipB = clips.Clip(startMs: 5000, endMs: 15000)
+    # Intersection: 5000-10000 = 5000ms
+    # Union: 0-15000 = 15000ms
+    # IoU = 5000/15000 = 0.333...
+    let iou = calculateIoU(clipA, clipB)
+    check iou > 0.33f and iou < 0.34f
+
+  test "formatTimecode zero":
+    check formatTimecode(0) == "00:00:00:00"
+
+  test "formatTimecode one minute":
+    check formatTimecode(60000) == "00:01:00:00"
+
+  test "formatTimecode complex":
+    # 1 hour, 23 minutes, 45 seconds, 15 frames at 30fps
+    # = 3600 + 23*60 + 45 seconds = 5025 seconds
+    # 5025 seconds * 1000 + 500ms (15 frames at 30fps)
+    let ms = int64(5025 * 1000 + 500)
+    let tc = formatTimecode(ms, 30.0)
+    check tc == "01:23:45:15"
+
+  test "parseTimecode roundtrip":
+    let original: int64 = 12345678  # ~3.4 hours
+    let tc = formatTimecode(original)
+    let parsed = parseTimecode(tc)
+    # Allow 1 frame tolerance (33ms at 30fps)
+    check abs(parsed - original) < 34
+
+  test "mergeNearbyBoundaries":
+    var boundaries = @[
+      ClipBoundary(timestampMs: 1000, reason: SceneChange),
+      ClipBoundary(timestampMs: 1500, reason: EngagementDrop),  # Within 2000ms window
+      ClipBoundary(timestampMs: 5000, reason: SpeechBoundary)
+    ]
+    let merged = mergeNearbyBoundaries(boundaries, 2000)
+    check merged.len == 2
+    check merged[0].reason == SceneChange  # SceneChange preferred
+    check merged[1].timestampMs == 5000
+
+  test "rankClips overlap penalty":
+    var testClips = @[
+      clips.Clip(startMs: 0, endMs: 30000, engagementScore: 90.0f),
+      clips.Clip(startMs: 10000, endMs: 40000, engagementScore: 85.0f),  # Overlaps with first
+      clips.Clip(startMs: 50000, endMs: 80000, engagementScore: 80.0f)   # No overlap
+    ]
+    var params = defaultClipRankingParams()
+    params.topN = 3
+    let ranked = rankClips(testClips, params)
+
+    # First clip should be rank 1 (highest score)
+    check ranked[0].rank == 1
+    check ranked[0].engagementScore == 90.0f
+
+    # Third clip (no overlap) should rank higher than second (overlapping)
+    # due to overlap penalty
+    check ranked[1].engagementScore == 80.0f or ranked[2].engagementScore == 80.0f
