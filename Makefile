@@ -97,7 +97,7 @@ endif
 	@# Step 3: Nim dependencies
 	@echo "$(CYAN)[3/4] Installing Nim dependencies...$(RESET)"
 	@if command -v nimble >/dev/null 2>&1; then \
-		nimble install -y nimpy checksums; \
+		nimble install -y nimpy || echo "$(YELLOW)nimpy may already be installed$(RESET)"; \
 	else \
 		echo "$(YELLOW)Skipping: nimble not found$(RESET)"; \
 	fi
