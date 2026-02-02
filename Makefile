@@ -1,7 +1,7 @@
 # Makefile for honeyclip dependency installation
 # Supports: WSL, Linux, macOS, Windows (Git Bash/MSYS2)
 
-.PHONY: help install-deps install-python-deps install-nim-deps install-pyannote check-deps clean-python
+.PHONY: help prerequisites install-deps install-python-deps install-nim-deps install-pyannote check-deps clean-python
 
 # Detect platform
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
@@ -21,17 +21,111 @@ RESET := \033[0m
 help:
 	@echo "$(CYAN)honeyclip Dependency Installation$(RESET)"
 	@echo ""
-	@echo "$(GREEN)Available targets:$(RESET)"
-	@echo "  make install-deps       - Install all dependencies (Python + Nim)"
+	@echo "$(GREEN)Quick start:$(RESET)"
+	@echo "  make prerequisites      - $(YELLOW)One command to install everything$(RESET)"
+	@echo ""
+	@echo "$(GREEN)Individual targets:$(RESET)"
+	@echo "  make install-deps       - Install Python + Nim dependencies"
 	@echo "  make install-python-deps - Install Python dependencies only"
 	@echo "  make install-nim-deps   - Install Nim dependencies only"
 	@echo "  make install-pyannote   - Install pyannote.audio for speaker diarization"
+	@echo "  make install-system-deps - Install system packages (cmake, nasm, etc.)"
 	@echo "  make check-deps         - Check if dependencies are installed"
-	@echo "  make clean-python       - Remove Python virtual environment"
+	@echo "  make clean-python       - Remove Python cache files"
 	@echo ""
 	@echo "$(YELLOW)Platform detected: $(UNAME_S)$(RESET)"
 ifeq ($(IS_WSL),1)
 	@echo "$(YELLOW)Running in WSL$(RESET)"
+endif
+
+# One-command setup for all prerequisites
+prerequisites: check-python
+	@echo "$(CYAN)======================================$(RESET)"
+	@echo "$(CYAN)  honeyclip Prerequisites Setup$(RESET)"
+	@echo "$(CYAN)======================================$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)Platform: $(UNAME_S)$(RESET)"
+ifeq ($(IS_WSL),1)
+	@echo "$(YELLOW)Environment: WSL$(RESET)"
+endif
+	@echo ""
+	@# Step 1: System dependencies
+	@echo "$(CYAN)[1/4] Installing system dependencies...$(RESET)"
+	@$(MAKE) -s install-system-deps-silent || true
+	@echo ""
+	@# Step 2: Python dependencies
+	@echo "$(CYAN)[2/4] Installing Python dependencies...$(RESET)"
+	$(PIP) install --upgrade pip
+	$(PIP) install av pytest
+	@echo ""
+	@# Step 3: Nim dependencies
+	@echo "$(CYAN)[3/4] Installing Nim dependencies...$(RESET)"
+	@if command -v nimble >/dev/null 2>&1; then \
+		nimble install -y nimpy checksums; \
+	else \
+		echo "$(YELLOW)Skipping: nimble not found$(RESET)"; \
+	fi
+	@echo ""
+	@# Step 4: pyannote.audio (speaker diarization)
+	@echo "$(CYAN)[4/4] Installing pyannote.audio (speaker diarization)...$(RESET)"
+	@echo "$(YELLOW)Note: This downloads ~2GB (PyTorch + models)$(RESET)"
+	@$(MAKE) -s install-pyannote-silent
+	@echo ""
+	@echo "$(GREEN)======================================$(RESET)"
+	@echo "$(GREEN)  Prerequisites installed!$(RESET)"
+	@echo "$(GREEN)======================================$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)Remaining manual steps:$(RESET)"
+	@echo "  1. Get HuggingFace token:"
+	@echo "     $(CYAN)https://huggingface.co/settings/tokens$(RESET)"
+	@echo ""
+	@echo "  2. Accept pyannote model license:"
+	@echo "     $(CYAN)https://huggingface.co/pyannote/speaker-diarization-3.1$(RESET)"
+	@echo ""
+	@echo "  3. Set environment variable:"
+	@echo "     $(CYAN)export HF_TOKEN=your_token_here$(RESET)"
+	@echo ""
+	@echo "  4. Verify setup:"
+	@echo "     $(CYAN)make check-deps$(RESET)"
+	@echo ""
+
+# Silent version of install-system-deps (no prompts, best effort)
+install-system-deps-silent:
+ifeq ($(UNAME_S),Darwin)
+	@command -v brew >/dev/null 2>&1 && brew install cmake nasm pkg-config python3 2>/dev/null || echo "  Homebrew not available, skipping"
+else ifeq ($(UNAME_S),Linux)
+	@if [ -f /etc/debian_version ]; then \
+		sudo apt-get update -qq && sudo apt-get install -y -qq cmake nasm pkg-config python3 python3-pip build-essential 2>/dev/null || echo "  apt install skipped (may need sudo)"; \
+	elif [ -f /etc/fedora-release ]; then \
+		sudo dnf install -y -q cmake nasm pkg-config python3 python3-pip gcc gcc-c++ 2>/dev/null || echo "  dnf install skipped"; \
+	elif [ -f /etc/arch-release ]; then \
+		sudo pacman -S --noconfirm --quiet cmake nasm pkg-config python python-pip base-devel 2>/dev/null || echo "  pacman install skipped"; \
+	fi
+endif
+
+# Silent pyannote install
+install-pyannote-silent:
+ifeq ($(UNAME_S),Darwin)
+	@$(PIP) install -q torch torchvision torchaudio 2>/dev/null || $(PIP) install torch torchvision torchaudio
+	@$(PIP) install -q pyannote.audio 2>/dev/null || $(PIP) install pyannote.audio
+else ifeq ($(UNAME_S),Linux)
+	@if command -v nvidia-smi >/dev/null 2>&1; then \
+		$(PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 2>/dev/null || \
+		$(PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121; \
+	else \
+		$(PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu 2>/dev/null || \
+		$(PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu; \
+	fi
+	@$(PIP) install -q pyannote.audio 2>/dev/null || $(PIP) install pyannote.audio
+else
+	@if command -v nvidia-smi >/dev/null 2>&1; then \
+		$(PIP) install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 2>/dev/null || \
+		$(PIP) install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121; \
+	else \
+		$(PIP) install -q torch torchvision torchaudio 2>/dev/null || \
+		$(PIP) install torch torchvision torchaudio; \
+	fi
+	@$(PIP) install -q pyannote.audio 2>/dev/null || $(PIP) install pyannote.audio
 endif
 
 # Install all dependencies
