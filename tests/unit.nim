@@ -984,123 +984,112 @@ when defined(enable_ml):
       let fps = sampler.updateSamplingRate(sceneScore = 0.1, faceCount = 0, currentTime = 0.5)
       check fps == 5.0  # Still at high rate
 
-# Tracking Tests (Kalman Filter)
+# Face Embedding Tests
+# These tests validate face embedding extraction and cosine similarity
 
 when defined(enable_ml):
-  import ../src/tracking/kalman
+  import ../src/tracking/embeddings
 
-  suite "Kalman Filter":
-    test "newKalmanFilter initializes state from bbox":
-      let bbox = FaceRect(x: 100, y: 200, width: 50, height: 50, confidence: 0.9, angle: 0)
-      let kf = newKalmanFilter(bbox)
+  suite "Face Embeddings":
+    test "cosineSimilarity identical vectors":
+      let a = @[1.0f, 0.0f, 0.0f]
+      let b = @[1.0f, 0.0f, 0.0f]
+      check cosineSimilarity(a, b) == 1.0
 
-      # State should match initial bbox
-      check kf.state[0] == 100.0  # x
-      check kf.state[1] == 200.0  # y
-      check kf.state[2] == 50.0   # width
-      check kf.state[3] == 50.0   # height
-      check kf.state[4] == 0.0    # vx
-      check kf.state[5] == 0.0    # vy
+    test "cosineSimilarity orthogonal vectors":
+      let a = @[1.0f, 0.0f, 0.0f]
+      let b = @[0.0f, 1.0f, 0.0f]
+      check abs(cosineSimilarity(a, b) - 0.0) < 0.001
 
-      # Covariance diagonal should be initialized to 1.0
-      for i in 0..5:
-        check kf.covariance[i][i] == 1.0
+    test "cosineSimilarity opposite vectors":
+      let a = @[1.0f, 0.0f, 0.0f]
+      let b = @[-1.0f, 0.0f, 0.0f]
+      check abs(cosineSimilarity(a, b) - (-1.0)) < 0.001
 
-    test "predict increases uncertainty":
-      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
-      var kf = newKalmanFilter(bbox, processNoise = 0.1)
+    test "cosineSimilarity range check":
+      # Partially aligned vectors
+      let a = @[1.0f, 1.0f, 0.0f]
+      let b = @[1.0f, 0.0f, 0.0f]
+      let sim = cosineSimilarity(a, b)
+      # Should be in valid range [-1, 1]
+      check sim >= -1.0 and sim <= 1.0
+      # Should be positive (same general direction)
+      check sim > 0.0
 
-      let initialCovariance = kf.covariance[0][0]
-      discard kf.predict()
+    test "cosineSimilarity empty vectors":
+      let a: seq[float32] = @[]
+      let b: seq[float32] = @[]
+      check cosineSimilarity(a, b) == 0.0
 
-      # Covariance should increase after prediction
-      check kf.covariance[0][0] > initialCovariance
+    test "cosineSimilarity mismatched lengths":
+      let a = @[1.0f, 0.0f]
+      let b = @[1.0f, 0.0f, 0.0f]
+      check cosineSimilarity(a, b) == 0.0
 
-    test "predict applies constant velocity model":
-      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
-      var kf = newKalmanFilter(bbox)
+    test "preprocessFace output dimensions":
+      # Create dummy image data (112x112 RGB)
+      let imgSize = 112
+      var imageData = newSeq[uint8](imgSize * imgSize * 3)
+      # Initialize with test pattern
+      for i in 0..<imageData.len:
+        imageData[i] = uint8(i mod 256)
 
-      # Set velocity
-      kf.state[4] = 5.0  # vx = 5
-      kf.state[5] = 3.0  # vy = 3
+      # Preprocess entire image as face region
+      let processed = preprocessFace(
+        cast[ptr uint8](unsafeAddr imageData[0]),
+        x = 0, y = 0, w = imgSize, h = imgSize,
+        stride = imgSize * 3,
+        imgW = imgSize, imgH = imgSize
+      )
 
-      let predicted = kf.predict()
+      # Output should be [1, 3, 112, 112] = 37632 floats
+      check processed.len == 1 * 3 * 112 * 112
+      check processed.len == 37632
 
-      # Position should be updated by velocity
-      check predicted.x == 105  # 100 + 5
-      check predicted.y == 103  # 100 + 3
-      check predicted.width == 50  # unchanged
-      check predicted.height == 50  # unchanged
-      check predicted.confidence == 0.5  # predicted, not detected
+    test "preprocessFace normalization range":
+      # Create image with known values
+      let imgSize = 112
+      var imageData = newSeq[uint8](imgSize * imgSize * 3)
+      # Fill with mid-gray (127) to test normalization
+      for i in 0..<imageData.len:
+        imageData[i] = 127
 
-    test "update reduces uncertainty":
-      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
-      var kf = newKalmanFilter(bbox, processNoise = 0.1, measurementNoise = 0.1)
+      let processed = preprocessFace(
+        cast[ptr uint8](unsafeAddr imageData[0]),
+        x = 0, y = 0, w = imgSize, h = imgSize,
+        stride = imgSize * 3,
+        imgW = imgSize, imgH = imgSize
+      )
 
-      # Predict to increase uncertainty
-      discard kf.predict()
-      let covarianceAfterPredict = kf.covariance[0][0]
+      # With value 127, normalization is (127 - 127.5) / 128.0 ≈ -0.004
+      # All values should be approximately 0 (within floating point precision)
+      var allNearZero = true
+      for val in processed:
+        if abs(val) > 0.01:
+          allNearZero = false
+          break
+      check allNearZero
 
-      # Update with detection to reduce uncertainty
-      let detection = FaceRect(x: 105, y: 103, width: 50, height: 50, confidence: 0.9, angle: 0)
-      kf.update(detection)
+    test "preprocessFace invalid crop":
+      # Test with invalid bounding box (outside image)
+      let imgSize = 112
+      var imageData = newSeq[uint8](imgSize * imgSize * 3)
 
-      # Covariance should decrease after update
-      check kf.covariance[0][0] < covarianceAfterPredict
+      let processed = preprocessFace(
+        cast[ptr uint8](unsafeAddr imageData[0]),
+        x = 200, y = 200, w = 50, h = 50,  # Outside image bounds
+        stride = imgSize * 3,
+        imgW = imgSize, imgH = imgSize
+      )
 
-    test "update computes velocity":
-      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
-      var kf = newKalmanFilter(bbox)
-
-      # Initial velocity should be zero
-      check kf.state[4] == 0.0
-      check kf.state[5] == 0.0
-
-      # Update with detection at new position
-      let detection = FaceRect(x: 110, y: 105, width: 50, height: 50, confidence: 0.9, angle: 0)
-      kf.update(detection)
-
-      # Velocity should be calculated from position change
-      # Note: Kalman gain will reduce the update, so velocity won't be exactly 10 and 5
-      check kf.state[4] > 0.0  # vx should be positive
-      check kf.state[5] > 0.0  # vy should be positive
-
-    test "getBbox returns current state":
-      let bbox = FaceRect(x: 100, y: 200, width: 50, height: 60, confidence: 0.9, angle: 0)
-      let kf = newKalmanFilter(bbox)
-
-      let (x, y, w, h) = kf.getBbox()
-      check x == 100
-      check y == 200
-      check w == 50
-      check h == 60
-
-    test "predict-update cycle tracks moving object":
-      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
-      var kf = newKalmanFilter(bbox, processNoise = 0.01, measurementNoise = 0.1)
-
-      # Simulate object moving right by 5 pixels per frame
-      for i in 1..10:
-        # Predict
-        let predicted = kf.predict()
-
-        # Simulate detection (with slight noise)
-        let detection = FaceRect(
-          x: 100 + i * 5,
-          y: 100,
-          width: 50,
-          height: 50,
-          confidence: 0.9,
-          angle: 0
-        )
-
-        # Update
-        kf.update(detection)
-
-      # After tracking, velocity should be close to 5 pixels/frame
-      # (allowing for Kalman smoothing)
-      check kf.state[4] > 3.0 and kf.state[4] < 7.0
-      check abs(kf.state[5]) < 2.0  # vy should be near zero
+      # Should return zeros for invalid crop
+      check processed.len == 37632
+      var allZero = true
+      for val in processed:
+        if val != 0.0f:
+          allZero = false
+          break
+      check allZero
 
 # Engagement Types Tests
 
