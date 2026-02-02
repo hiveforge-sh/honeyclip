@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 6 of 10 (Engagement Clip Detection) — In Progress
-Plan: 2 of 4 in phase
+Plan: 3 of 4 in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 06-01-PLAN.md
+Last activity: 2026-02-02 — Completed 06-03-PLAN.md
 
-Progress: [██████████████████████████░░░░░░░░░░░░░] 60.0%
+Progress: [███████████████████████████░░░░░░░░░░░░] 62.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 24
-- Average duration: 3.4 min
-- Total execution time: 1.33 hours
+- Total plans completed: 25
+- Average duration: 3.3 min
+- Total execution time: 1.4 hours
 
 **By Phase:**
 
@@ -33,11 +33,11 @@ Progress: [███████████████████████
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
-| 06-engagement-clip-detection | 2 | 4.5min | 2.25min |
+| 06-engagement-clip-detection | 3 | 6.75min | 2.25min |
 
 **Recent Trend:**
-- Last 5 plans: 05-03 (3min), 05-04 (6min), 06-02 (1.5min), 06-01 (3min)
-- Trend: Phase 6 maintaining efficiency with focused modules
+- Last 5 plans: 05-04 (6min), 06-02 (1.5min), 06-01 (3min), 06-03 (2.25min)
+- Trend: Phase 6 maintaining high efficiency with focused modules
 
 *Updated after each plan completion*
 
@@ -139,6 +139,13 @@ Recent decisions affecting current work:
 - Boundaries extend to sentence ends to avoid mid-sentence cuts (06-01)
 - Clip duration targets: 15-60 seconds (30s optimal) for social media (06-01)
 - Multi-signal boundary detection: scene changes + engagement drops + speech alignment (06-01)
+- IoU threshold 0.3 triggers overlap penalty (30.0 points per overlap) (06-03)
+- Top 5 clips by default with hook boost (+5.0 points) (06-03)
+- Prefer longer clips when overlapping (extra 5.0 point penalty for shorter) (06-03)
+- Parallel export with 4 concurrent FFmpeg processes by default (06-03)
+- Frame-accurate clip extraction with libx264 re-encoding (06-03)
+- Output directory defaults to subfolder next to source video (06-03)
+- Timestamp-based filename format: video_00m30s-01m15s.mp4 (06-03)
 
 ### Pending Todos
 
@@ -174,7 +181,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T20:02:48Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-02-02T20:09:23Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
-Next: Continue Phase 6 - Plan 03 (Clip Detection Algorithm)
+Next: Continue Phase 6 - Plan 04 (CLI Integration)
