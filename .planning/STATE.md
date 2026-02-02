@@ -6,23 +6,23 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 5 - Engagement Scoring Foundation
+**Current focus:** Phase 6 - Engagement Clip Detection
 
 ## Current Position
 
-Phase: 5 of 10 (Engagement Scoring Foundation) — Complete
-Plan: 4 of 4 in phase
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 05-04-PLAN.md
+Phase: 6 of 10 (Engagement Clip Detection) — In Progress
+Plan: 2 of 4 in phase
+Status: In progress
+Last activity: 2026-02-02 — Completed 06-01-PLAN.md
 
-Progress: [██████████████████████░░░░░░░░░░░░░░░░░] 55.0%
+Progress: [██████████████████████████░░░░░░░░░░░░░] 60.0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22
+- Total plans completed: 24
 - Average duration: 3.4 min
-- Total execution time: 1.25 hours
+- Total execution time: 1.33 hours
 
 **By Phase:**
 
@@ -33,10 +33,11 @@ Progress: [██████████████████████░
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
+| 06-engagement-clip-detection | 2 | 4.5min | 2.25min |
 
 **Recent Trend:**
-- Last 5 plans: 04-04 (2min), 05-01 (6min), 05-02 (6min), 05-03 (3min), 05-04 (6min)
-- Trend: Phase 5 averaged 5.25min/plan, slightly longer than prior phases (more integration work)
+- Last 5 plans: 05-03 (3min), 05-04 (6min), 06-02 (1.5min), 06-01 (3min)
+- Trend: Phase 6 maintaining efficiency with focused modules
 
 *Updated after each plan completion*
 
@@ -125,6 +126,19 @@ Recent decisions affecting current work:
 - JSON engagement output includes both relative and absolute scores for flexibility (05-04)
 - Summary mode shows top 5 segments and score distribution histogram (05-04)
 - Timebase extracted from video stream (or audio if no video) for analyzeEngagement (05-04)
+- EDLClip DTO for decoupled export (CLI converts Clip->EDLClip, export module stays simple) (06-02)
+- Both EDL and JSON formats in same module (share EDLClip type, minimize duplication) (06-02)
+- 30fps default for SMPTE timecode (maximum NLE compatibility, NTSC industry standard) (06-02)
+- Reel names 8 char max, uppercase, alphanumeric (CMX3600 standard SMPTE 258M) (06-02)
+- FFmpeg scdet filter with 0.4 threshold for scene change detection (06-01)
+- EDLClip DTO for decoupled export (CLI converts Clip->EDLClip, export module stays simple) (06-02)
+- Both EDL and JSON formats in same module (share EDLClip type, minimize duplication) (06-02)
+- 30fps default for SMPTE timecode (maximum NLE compatibility, NTSC industry standard) (06-02)
+- Reel names 8 char max, uppercase, alphanumeric (CMX3600 standard SMPTE 258M) (06-02)
+- 2-second merge window for nearby boundaries to reduce fragmentation (06-01)
+- Boundaries extend to sentence ends to avoid mid-sentence cuts (06-01)
+- Clip duration targets: 15-60 seconds (30s optimal) for social media (06-01)
+- Multi-signal boundary detection: scene changes + engagement drops + speech alignment (06-01)
 
 ### Pending Todos
 
@@ -160,7 +174,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T19:17:11Z
-Stopped at: Completed 05-04-PLAN.md (Phase 5 complete)
+Last session: 2026-02-02T16:29:53Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
 Next: Begin Phase 6 - Engagement Clip Detection
