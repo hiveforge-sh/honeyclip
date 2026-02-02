@@ -6,6 +6,8 @@ import ../media
 import ../log
 import ../ffmpeg
 import ../timeline
+import ../transcript/grouping
+import ../render/captions
 
 #[
 Export a FCPXML 11 file readable with Final Cut Pro 10.6.8 or later.
@@ -54,6 +56,134 @@ proc pathToUri(a: string): string =
     return "file:///" & normalizedPath
   else:
     return "file://" & absPath
+
+proc hexToFCPXMLColor(hex: string): string =
+  ## Convert hex color (#RRGGBB) to FCPXML color format (R G B A)
+  var color = hex
+  if color.startsWith("#"):
+    color = color[1..^1]
+
+  # Parse RGB
+  let r = parseHexInt(color[0..1])
+  let g = parseHexInt(color[2..3])
+  let b = parseHexInt(color[4..5])
+
+  # Normalize to 0.0-1.0
+  let rNorm = r.float / 255.0
+  let gNorm = g.float / 255.0
+  let bNorm = b.float / 255.0
+
+  result = &"{rNorm:.0f} {gNorm:.0f} {bNorm:.0f} 1"
+
+proc addCaptionTrackFCPXML*(spine: XmlNode, captions: seq[Caption], style: CaptionStyle, tb: AVRational) =
+  ## Add caption titles to FCPXML spine
+  if captions.len == 0:
+    return
+
+  func fraction(val: int): string =
+    if val == 0:
+      return "0s"
+    return &"{val * tb.den.int}/{tb.num}s"
+
+  # Create gap element as container (doesn't displace video)
+  let gap = newElement("gap")
+  gap.attrs = {
+    "name": "Caption Gap",
+    "offset": "0s",
+    "duration": fraction(0)  # Will be set by titles
+  }.toXmlAttributes
+
+  for index, caption in captions:
+    # Convert timing from milliseconds to frames
+    let startFrame = (caption.startMs * tb.num.int) div (tb.den.int * 1000)
+    let endFrame = (caption.endMs * tb.num.int) div (tb.den.int * 1000)
+    let durationFrames = endFrame - startFrame
+
+    # Truncate text for name
+    var titleName = caption.text
+    if titleName.len > 20:
+      titleName = titleName[0..16] & "..."
+
+    let title = newElement("title")
+    title.attrs = {
+      "name": titleName,
+      "offset": fraction(startFrame),
+      "duration": fraction(durationFrames),
+      "start": "3600s"  # Standard title start time
+    }.toXmlAttributes
+
+    # Add text content parameter
+    let textParam = newElement("param")
+    textParam.attrs = {"name": "Text", "key": "9999/10227/10228/1/100/101", "value": caption.text}.toXmlAttributes
+    title.add textParam
+
+    # Add position parameter based on style
+    var posY = "0"
+    case style.position
+    of cpBottomCenter:
+      posY = "-300"
+    of cpCenter:
+      posY = "0"
+    of cpTopCenter:
+      posY = "300"
+
+    let posParam = newElement("param")
+    posParam.attrs = {"name": "Position", "key": "9999/10227/10228/2/351", "value": &"0 {posY}"}.toXmlAttributes
+    title.add posParam
+
+    # Add flatten parameter (text layout)
+    let flattenParam = newElement("param")
+    flattenParam.attrs = {"name": "Flatten", "key": "9999/10227/10228/2/354", "value": "1"}.toXmlAttributes
+    title.add flattenParam
+
+    # Add text style with font and color
+    let textStyle = newElement("text-style")
+    textStyle.attrs = {"ref": "ts1"}.toXmlAttributes
+    title.add textStyle
+
+    # Determine color based on speaker
+    var textColor = style.color
+    if caption.speaker >= 0:
+      textColor = getSpeakerColor(caption.speaker)
+
+    let textStyleDef = newElement("text-style-def")
+    textStyleDef.attrs = {
+      "id": &"ts{index + 1}",
+    }.toXmlAttributes
+
+    let textStyleDefInner = newElement("text-style")
+    textStyleDefInner.attrs = {
+      "font": style.fontName,
+      "fontSize": $style.fontSize,
+      "fontColor": hexToFCPXMLColor(textColor)
+    }.toXmlAttributes
+    textStyleDef.add textStyleDefInner
+
+    title.add textStyleDef
+
+    # Add word-level timing if highlighting enabled
+    if style.highlightEnabled and caption.words.len > 0:
+      # Create keyframed color for word timing
+      for i, word in caption.words:
+        let wordOffsetMs = word.startMs - caption.startMs
+        let wordFrame = (wordOffsetMs * tb.num.int) div (tb.den.int * 1000)
+
+        let keyframe = newElement("text-style-def")
+        keyframe.attrs = {
+          "id": &"ts{index + 1}w{i}",
+        }.toXmlAttributes
+
+        let keyframeStyle = newElement("text-style")
+        keyframeStyle.attrs = {
+          "fontColor": hexToFCPXMLColor(textColor)
+        }.toXmlAttributes
+        keyframe.add keyframeStyle
+
+        title.add keyframe
+
+    gap.add title
+
+  spine.add gap
 
 proc parseSMPTE*(val: string, fps: AVRational): int =
   if val.len == 0:
