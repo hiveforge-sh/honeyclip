@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Build Infrastructure** - ML library integration, FFI patterns, cross-platform builds
 - [x] **Phase 2: Transcript Foundation** - Word-level timestamps, SRT/VTT export, speaker diarization
-- [ ] **Phase 3: Caption Rendering** - Burn captions into video, styling, NLE caption tracks
+- [x] **Phase 3: Caption Rendering** - Burn captions into video, styling, NLE caption tracks
 - [ ] **Phase 4: Face Detection Infrastructure** - Face detection, adaptive sampling, caching layer
 - [ ] **Phase 5: Engagement Scoring Foundation** - Audio/motion/speech analysis, scoring algorithm
 - [ ] **Phase 6: Engagement Clip Detection** - Scene boundaries, ranking, batch export
@@ -75,7 +75,7 @@ Plans:
 - [x] 03-02-PLAN.md: FFmpeg filter integration for caption burning
 - [x] 03-03-PLAN.md: NLE caption track export (FCP7, FCPXML)
 - [x] 03-04-PLAN.md: CLI `caption` command with burn and export subcommands
-- [ ] 03-05-PLAN.md: Gap closure - Wire NLE export functions to CLI command
+- [x] 03-05-PLAN.md: Gap closure - Wire NLE export functions to CLI command
 
 ### Phase 4: Face Detection Infrastructure
 **Goal**: Detect faces in video with adaptive frame sampling and persistent caching
@@ -185,7 +185,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundation & Build Infrastructure | 5/5 | Complete | 2026-02-01 |
 | 2. Transcript Foundation | 4/4 | Complete | 2026-02-02 |
-| 3. Caption Rendering | 0/4 | Planned | - |
+| 3. Caption Rendering | 5/5 | Complete | 2026-02-02 |
 | 4. Face Detection Infrastructure | 0/TBD | Not started | - |
 | 5. Engagement Scoring Foundation | 0/TBD | Not started | - |
 | 6. Engagement Clip Detection | 0/TBD | Not started | - |

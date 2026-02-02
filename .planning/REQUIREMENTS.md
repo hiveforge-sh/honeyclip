@@ -16,9 +16,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Captions
 
-- [ ] **CAPT-01**: Generate auto-captions from transcript
-- [ ] **CAPT-02**: Burn captions into video with styling
-- [ ] **CAPT-03**: Export captions as separate editable track for NLEs
+- [x] **CAPT-01**: Generate auto-captions from transcript
+- [x] **CAPT-02**: Burn captions into video with styling
+- [x] **CAPT-03**: Export captions as separate editable track for NLEs
 
 ### Engagement Scoring
 
@@ -101,9 +101,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRNS-02 | Phase 2 | Complete |
 | TRNS-03 | Phase 2 | Complete |
 | TRNS-04 | Phase 2 | Complete |
-| CAPT-01 | Phase 3 | Pending |
-| CAPT-02 | Phase 3 | Pending |
-| CAPT-03 | Phase 3 | Pending |
+| CAPT-01 | Phase 3 | Complete |
+| CAPT-02 | Phase 3 | Complete |
+| CAPT-03 | Phase 3 | Complete |
 | ENGR-01 | Phase 5 | Pending |
 | ENGR-02 | Phase 5 | Pending |
 | ENGR-03 | Phase 5 | Pending |
