@@ -448,3 +448,174 @@ iterator facesPipeline*(processor: VideoProcessor,
           yield (filteredFrame, sceneScore, timestamp)
 
         av_frame_unref(filteredFrame)
+
+# ===== Main face analysis function =====
+
+type
+  FaceAnalysisParams* = object
+    ## Parameters for face analysis
+    stream*: int32          # Video stream index (default 0)
+    targetHeight*: int32    # Scale height for detection (default 480)
+    minConfidence*: float   # Detection confidence threshold (default 0.3)
+    consensusWindow*: int   # Frames for consensus (default 3)
+    consensusThreshold*: float  # Agreement ratio (default 0.6)
+    minFaceRatio*: float    # Min face height as frame ratio (default 0.05)
+    baseFps*: float         # Baseline sampling (default 1.0)
+    maxFps*: float          # Max sampling during spikes (default 5.0)
+    sceneThreshold*: float  # Scene change threshold (default 0.4)
+
+proc toCacheArgs(params: FaceAnalysisParams): string =
+  ## Convert params to cache key string for proper invalidation
+  ## Include ALL parameters that affect output
+  fmt"{params.stream},{params.targetHeight},{params.minConfidence}," &
+  fmt"{params.consensusWindow},{params.consensusThreshold},{params.minFaceRatio}," &
+  fmt"{params.baseFps},{params.maxFps},{params.sceneThreshold}"
+
+proc toCachedFace(face: FaceDetection): CachedFace =
+  ## Convert runtime face to cache format
+  CachedFace(
+    x: face.x.uint16,
+    y: face.y.uint16,
+    width: face.width.uint16,
+    height: face.height.uint16,
+    confidence: face.confidence.float32,
+    angle: face.angle.int16,
+    stable: face.stable
+  )
+
+proc toFaceDetection(cached: CachedFace, frameIndex: int64): FaceDetection =
+  ## Convert cached face to runtime format
+  FaceDetection(
+    x: cached.x.int,
+    y: cached.y.int,
+    width: cached.width.int,
+    height: cached.height.int,
+    confidence: cached.confidence.float,
+    angle: cached.angle.int,
+    frameIndex: frameIndex,
+    stable: cached.stable
+  )
+
+proc toCacheEntries(frames: seq[FrameFaces]): seq[FaceCacheEntry] =
+  ## Convert runtime frames to cache entries
+  result = newSeq[FaceCacheEntry](frames.len)
+  for i, frame in frames:
+    result[i] = FaceCacheEntry(
+      frameIndex: frame.frameIndex.uint32,
+      timestamp: frame.timestamp.float32,
+      faces: newSeq[CachedFace](frame.faces.len)
+    )
+    for j, face in frame.faces:
+      result[i].faces[j] = toCachedFace(face)
+
+proc fromCacheEntries(entries: seq[FaceCacheEntry]): seq[FrameFaces] =
+  ## Convert cache entries to runtime frames
+  result = newSeq[FrameFaces](entries.len)
+  for i, entry in entries:
+    result[i] = FrameFaces(
+      frameIndex: entry.frameIndex.int64,
+      timestamp: entry.timestamp.float64,
+      faces: newSeq[FaceDetection](entry.faces.len)
+    )
+    for j, cached in entry.faces:
+      result[i].faces[j] = toFaceDetection(cached, entry.frameIndex.int64)
+
+proc faces*(bar: Bar, container: InputContainer, path: string, tb: AVRational,
+            params: FaceAnalysisParams = FaceAnalysisParams(
+              stream: 0,
+              targetHeight: 480,
+              minConfidence: 0.3,
+              consensusWindow: 3,
+              consensusThreshold: 0.6,
+              minFaceRatio: 0.05,
+              baseFps: 1.0,
+              maxFps: 5.0,
+              sceneThreshold: 0.4
+            )): seq[FrameFaces] =
+  ## Main face analysis function - analyzes video and returns stable face detections
+  ##
+  ## This is the primary API for face detection. It:
+  ## 1. Checks cache for previous results
+  ## 2. Validates stream index
+  ## 3. Processes video with adaptive sampling
+  ## 4. Applies consensus filtering for stability
+  ## 5. Caches results for future runs
+  ##
+  ## Args:
+  ##   bar: Progress bar for user feedback
+  ##   container: Opened video container
+  ##   path: Path to video file (for cache key)
+  ##   tb: Time base (AVRational)
+  ##   params: Analysis parameters (optional, uses defaults)
+  ##
+  ## Returns:
+  ##   Sequence of FrameFaces with stable detections
+  ##
+  ## Cache location: .honeyclip/ folder alongside video file
+  ## Cache invalidation: Any parameter change invalidates cache
+
+  # 1. Check cache first
+  let cacheArgs = params.toCacheArgs()
+  let cacheData = readFaceCache(path, tb, cacheArgs)
+  if cacheData.isSome:
+    return fromCacheEntries(cacheData.get())
+
+  # 2. Validate stream index
+  if params.stream < 0 or params.stream >= container.video.len:
+    error fmt"faces: video stream '{params.stream}' does not exist."
+
+  # 3. Set up video processor
+  let videoStream: ptr AVStream = container.video[params.stream]
+  var processor = VideoProcessor(
+    formatCtx: container.formatContext,
+    codecCtx: initDecoder(videoStream.codecpar),
+    tb: tb,
+    videoIndex: videoStream.index,
+  )
+
+  # 4. Initialize consensus and sampler
+  var consensus = newFaceConsensus(params.consensusWindow, params.consensusThreshold, params.minFaceRatio)
+  var sampler = newAdaptiveSampler(params.baseFps, params.maxFps, params.sceneThreshold)
+
+  # 5. Calculate duration for progress bar
+  var inaccurateDur: float = 1024.0
+  if videoStream.duration != AV_NOPTS_VALUE and videoStream.time_base != AV_NOPTS_VALUE:
+    inaccurateDur = float(videoStream.duration) * float(videoStream.time_base * tb)
+  elif container.duration != 0.0:
+    inaccurateDur = container.duration / float(tb)
+
+  # 6. Process frames
+  bar.start(inaccurateDur, "Detecting faces")
+  for (frame, sceneScore, timestamp) in processor.facesPipeline(sampler, params.targetHeight):
+    let frameIndex = round(timestamp * tb.float64).int64
+
+    # Detect faces in frame
+    let rawFaces = detectFaces(
+      frame.data[0],
+      frame.width.int, frame.height.int,
+      frame.linesize[0].int,
+      frameIndex,
+      params.minConfidence
+    )
+
+    # Filter by size
+    let filteredFaces = filterBySize(rawFaces, frame.height.int, params.minFaceRatio)
+
+    # Add to consensus
+    consensus.addFrame(filteredFaces)
+
+    # Get stable faces for this frame
+    let stableFaces = consensus.getStableFaces()
+
+    result.add(FrameFaces(
+      frameIndex: frameIndex,
+      timestamp: timestamp,
+      faces: stableFaces
+    ))
+
+    bar.tick(frameIndex.float)
+
+  bar.`end`()
+
+  # 7. Write cache
+  writeFaceCache(toCacheEntries(result), path, tb, cacheArgs)
