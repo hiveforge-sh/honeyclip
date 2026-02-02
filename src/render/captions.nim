@@ -6,7 +6,8 @@
 ## - Speaker color palette for visual differentiation
 ## - ASS subtitle file generation with word-level timing (karaoke tags)
 
-import std/strformat
+import std/[strformat, strutils]
+import ../transcript/grouping
 
 type
   CaptionPosition* = enum
@@ -134,3 +135,170 @@ proc getPreset*(name: string): CaptionStyle =
   else:
     # Default to traditional
     result = getPreset("traditional")
+
+# ASS Format Utilities
+
+proc formatASSTime*(ms: int64): string =
+  ## Convert milliseconds to ASS timestamp format (H:MM:SS.cc)
+  ## ASS uses centiseconds (hundredths of a second)
+  let totalSeconds = ms div 1000
+  let centiseconds = (ms mod 1000) div 10
+  let hours = totalSeconds div 3600
+  let minutes = (totalSeconds mod 3600) div 60
+  let seconds = totalSeconds mod 60
+
+  result = &"{hours}:{minutes:02}:{seconds:02}.{centiseconds:02}"
+
+proc escapeASSText*(text: string): string =
+  ## Escape special ASS characters
+  result = text
+  result = result.replace("\\", "\\\\")
+  result = result.replace("{", "\\{")
+  result = result.replace("}", "\\}")
+  result = result.replace("\n", "\\n")
+
+proc colorToASS*(hexColor: string): string =
+  ## Convert hex color (#RRGGBB) to ASS format (&HAABBGGRR)
+  ## ASS uses BGR order with alpha prefix
+  var color = hexColor
+  if color.startsWith("#"):
+    color = color[1..^1]
+
+  # Parse RGB
+  let r = parseHexInt(color[0..1])
+  let g = parseHexInt(color[2..3])
+  let b = parseHexInt(color[4..5])
+
+  # Convert to BGR format with alpha=00 (opaque)
+  result = &"&H00{b:02X}{g:02X}{r:02X}"
+
+proc getASSAlignment*(pos: CaptionPosition): int =
+  ## Get ASS alignment value for position
+  ## ASS alignment: 1-3 bottom, 4-6 middle, 7-9 top (left-center-right)
+  case pos
+  of cpBottomCenter: 2
+  of cpCenter: 5
+  of cpTopCenter: 8
+
+# ASS Generation
+
+proc generateASSHeader*(style: CaptionStyle, width: int, height: int): string =
+  ## Generate ASS file header with style definition
+  result = "[Script Info]\n"
+  result.add(&"Title: honeyclip captions\n")
+  result.add(&"ScriptType: v4.00+\n")
+  result.add(&"PlayResX: {width}\n")
+  result.add(&"PlayResY: {height}\n")
+  result.add(&"WrapStyle: 0\n\n")
+
+  result.add("[V4+ Styles]\n")
+  result.add("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
+
+  # Build style line
+  let styleName = "Default"
+  let fontname = style.fontName
+  let fontsize = style.fontSize
+  let primaryColor = colorToASS(style.color)
+  let secondaryColor = colorToASS(style.color)  # Used for karaoke
+  let outlineColor = colorToASS(style.outlineColor)
+
+  # Background color (for text box)
+  var backColor = "&H00000000"  # Transparent by default
+  if style.backgroundBox and style.boxColor.len > 0:
+    # Parse color@alpha format
+    let parts = style.boxColor.split("@")
+    if parts.len == 2:
+      let boxColorHex = parts[0]
+      let alpha = parseFloat(parts[1])
+      let alphaHex = int(255 * (1.0 - alpha))  # ASS alpha: 00=opaque, FF=transparent
+
+      # Convert named colors to hex
+      var colorHex = boxColorHex
+      if colorHex == "yellow":
+        colorHex = "#ffff00"
+      elif colorHex == "black":
+        colorHex = "#000000"
+      elif colorHex == "white":
+        colorHex = "#ffffff"
+
+      if colorHex.startsWith("#"):
+        colorHex = colorHex[1..^1]
+
+      let r = parseHexInt(colorHex[0..1])
+      let g = parseHexInt(colorHex[2..3])
+      let b = parseHexInt(colorHex[4..5])
+      backColor = &"&H{alphaHex:02X}{b:02X}{g:02X}{r:02X}"
+
+  let bold = -1  # True
+  let italic = 0
+  let underline = 0
+  let strikeout = 0
+  let scaleX = 100
+  let scaleY = 100
+  let spacing = 0
+  let angle = 0.0
+  let borderStyle = if style.backgroundBox: 3 else: 1  # 1=outline, 3=opaque box
+  let outline = if style.outline: style.outlineWidth else: 0
+  let shadow = if style.shadow: 2 else: 0
+  let alignment = getASSAlignment(style.position)
+
+  # Margins
+  let marginL = 0
+  let marginR = 0
+  var marginV = 0
+  if style.position == cpBottomCenter:
+    marginV = style.marginBottom
+  elif style.position == cpTopCenter:
+    marginV = style.marginTop
+
+  let encoding = 1  # UTF-8
+
+  result.add(&"Style: {styleName},{fontname},{fontsize},{primaryColor},{secondaryColor},{outlineColor},{backColor},{bold},{italic},{underline},{strikeout},{scaleX},{scaleY},{spacing},{angle},{borderStyle},{outline},{shadow},{alignment},{marginL},{marginR},{marginV},{encoding}\n\n")
+
+proc generateASSDialogue*(caption: Caption, style: CaptionStyle, styleName: string = "Default"): string =
+  ## Generate ASS dialogue line for a caption
+  ## Includes word-level timing via karaoke tags if highlightEnabled
+  let startTime = formatASSTime(caption.startMs)
+  let endTime = formatASSTime(caption.endMs)
+
+  var text = ""
+
+  # Apply speaker color if specified
+  if caption.speaker >= 0 and style.speakerColors.len > 0:
+    if caption.speaker < style.speakerColors.len:
+      let speakerColor = colorToASS(style.speakerColors[caption.speaker])
+      text.add(&"{{\\c{speakerColor}}}")
+  elif caption.speaker >= 0:
+    # Use default speaker color palette
+    let speakerColor = colorToASS(getSpeakerColor(caption.speaker))
+    if speakerColor != colorToASS("#ffffff"):  # Only add if not default white
+      text.add(&"{{\\c{speakerColor}}}")
+
+  # Build text with karaoke tags if highlighting enabled
+  if style.highlightEnabled and caption.words.len > 0:
+    for i, word in caption.words:
+      let durationMs = word.endMs - word.startMs
+      let durationCs = durationMs div 10  # Convert to centiseconds
+      text.add(&"{{\\k{durationCs}}}{escapeASSText(word.text)}")
+      if i < caption.words.len - 1:
+        text.add(" ")
+  else:
+    text = escapeASSText(caption.text)
+
+  result = &"Dialogue: 0,{startTime},{endTime},{styleName},,0,0,0,,{text}"
+
+proc generateASS*(captions: seq[Caption], style: CaptionStyle, width: int = 1920, height: int = 1080): string =
+  ## Generate complete ASS subtitle file
+  result = generateASSHeader(style, width, height)
+
+  result.add("[Events]\n")
+  result.add("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+
+  for caption in captions:
+    result.add(generateASSDialogue(caption, style))
+    result.add("\n")
+
+proc writeASSFile*(captions: seq[Caption], style: CaptionStyle, outputPath: string, width: int = 1920, height: int = 1080) =
+  ## Write ASS subtitle file to disk
+  let content = generateASS(captions, style, width, height)
+  writeFile(outputPath, content)
