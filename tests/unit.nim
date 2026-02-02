@@ -11,6 +11,7 @@ import ../src/transcript/types
 import ../src/transcript/grouping
 import ../src/transcript/formats
 import ../src/cmds/transcript as transcriptCmd
+import ../src/render/captions
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -415,6 +416,107 @@ test "transcript-generateOutputPath":
   # Test with different input formats
   check transcriptCmd.generateOutputPath("/videos/clip.mkv", "", ".srt") == "/videos/clip.srt"
   check transcriptCmd.generateOutputPath("/home/user/test.avi", "/out", ".vtt") == "/out/test.vtt"
+
+# Caption Styling Tests
+
+test "caption-formatASSTime":
+  check formatASSTime(0) == "0:00:00.00"
+  check formatASSTime(1234) == "0:00:01.23"
+  check formatASSTime(3661234) == "1:01:01.23"
+  check formatASSTime(500) == "0:00:00.50"
+  check formatASSTime(12345) == "0:00:12.34"
+
+test "caption-colorToASS":
+  # White
+  check colorToASS("#ffffff") == "&H00FFFFFF"
+  # Red (note BGR order)
+  check colorToASS("#ff0000") == "&H000000FF"
+  # Green
+  check colorToASS("#00ff00") == "&H0000FF00"
+  # Blue
+  check colorToASS("#0000ff") == "&H00FF0000"
+  # Black
+  check colorToASS("#000000") == "&H00000000"
+
+test "caption-getSpeakerColor":
+  # Valid speaker indices
+  check getSpeakerColor(0) == "#00d4ff"  # Cyan
+  check getSpeakerColor(1) == "#ff6b6b"  # Red/Pink
+  check getSpeakerColor(2) == "#4ecb71"  # Green
+  check getSpeakerColor(3) == "#ffe66d"  # Yellow
+  check getSpeakerColor(4) == "#a29bfe"  # Purple
+
+  # Invalid/unassigned speakers
+  check getSpeakerColor(-1) == "#ffffff"  # Default white
+  check getSpeakerColor(10) == "#ffffff"  # Out of range
+
+test "caption-getPreset-traditional":
+  let style = getPreset("traditional")
+  check style.outline == true
+  check style.outlineWidth == 4
+  check style.fontSize == 60
+  check style.position == cpBottomCenter
+  check style.marginBottom == 150
+  check style.color == "#ffffff"
+  check style.backgroundBox == false
+
+test "caption-getPreset-modern":
+  let style = getPreset("modern")
+  check style.backgroundBox == true
+  check style.position == cpCenter
+  check style.fontSize == 72
+  check style.color == "#000000"
+  check style.boxColor == "yellow@0.8"
+  check style.boxPadding == 20
+  check style.outline == false
+
+test "caption-getPreset-tiktok":
+  # "tiktok" is an alias for "modern"
+  let style1 = getPreset("modern")
+  let style2 = getPreset("tiktok")
+  check style1.backgroundBox == style2.backgroundBox
+  check style1.position == style2.position
+
+test "caption-escapeASSText":
+  check escapeASSText("hello world") == "hello world"
+  check escapeASSText("hello {world}") == "hello \\{world\\}"
+  check escapeASSText("line1\nline2") == "line1\\nline2"
+  check escapeASSText("back\\slash") == "back\\\\slash"
+  check escapeASSText("{test}\\n") == "\\{test\\}\\\\n"
+
+test "caption-generateASSDialogue-simple":
+  var transcript = newTranscript()
+  transcript.addWord(newWord("Hello", 0, 500, 0.9))
+  transcript.addWord(newWord("world", 500, 1000, 0.9))
+  let captions = groupIntoCaptions(transcript)
+
+  let style = getPreset("traditional")
+  let dialogue = generateASSDialogue(captions[0], style)
+
+  # Check that dialogue contains timing
+  check dialogue.contains("0:00:00.00")
+  check dialogue.contains("0:00:01.00")
+  # Check text content
+  check dialogue.contains("Hello world")
+
+test "caption-generateASSDialogue-karaoke":
+  var transcript = newTranscript()
+  var word1 = newWord("Hello", 0, 500, 0.9)
+  var word2 = newWord("world", 500, 1000, 0.9)
+  transcript.addWord(word1)
+  transcript.addWord(word2)
+
+  let captions = groupIntoCaptions(transcript)
+
+  var style = getPreset("traditional")
+  style.highlightEnabled = true
+  let dialogue = generateASSDialogue(captions[0], style)
+
+  # Check for karaoke tags (\k)
+  check dialogue.contains("\\k")
+  # Check it contains both words
+  check dialogue.contains("Hello")
+  check dialogue.contains("world")
 
 # ML FFI Wrapper Tests
 # These tests verify FFI wrappers compile correctly
