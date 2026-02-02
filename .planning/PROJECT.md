@@ -1,8 +1,8 @@
-# Auto-Editor Engagement Analysis
+# honeyclip — Engagement Analysis
 
 ## What This Is
 
-A content intelligence layer for auto-editor that extracts transcripts, scores engagement levels, detects optimal clip boundaries, and auto-reframes speakers for vertical output. Turns long-form videos into actionable insights and short-form-ready segments using local-only processing.
+A content intelligence layer for honeyclip that extracts transcripts, scores engagement levels, detects optimal clip boundaries, and auto-reframes speakers for vertical output. Turns long-form videos into actionable insights and short-form-ready segments using local-only processing.
 
 ## Core Value
 
@@ -45,7 +45,7 @@ Surface the most engaging moments from any video with a single command — trans
 
 ## Context
 
-Auto-editor is a mature Nim CLI tool that builds FFmpeg from source and processes video to remove silent sections. The codebase already has:
+honeyclip is a Nim CLI tool (forked from auto-editor) that builds FFmpeg from source and processes video to remove silent sections. The codebase already has:
 
 - Whisper.cpp integration (currently used for speech detection, not transcript extraction)
 - Audio analysis infrastructure (`src/analyze/audio.nim`)
@@ -75,4 +75,4 @@ Reference: OpusClip's feature set (transcript + virality scoring + auto-clipping
 | New subcommand + integration | Flexibility for standalone use and pipeline integration | — Pending |
 
 ---
-*Last updated: 2026-02-01 after initialization*
+*Last updated: 2026-02-01 after honeyclip rebrand*

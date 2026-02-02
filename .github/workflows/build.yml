@@ -12,13 +12,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            binary_name: auto-editor-linux-x86_64
+            binary_name: honeyclip-linux-x86_64
           - os: ubuntu-24.04-arm
-            binary_name: auto-editor-linux-aarch64
+            binary_name: honeyclip-linux-aarch64
           - os: macos-15-intel
-            binary_name: auto-editor-macos-x86_64
+            binary_name: honeyclip-macos-x86_64
           - os: macos-latest
-            binary_name: auto-editor-macos-arm64
+            binary_name: honeyclip-macos-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -105,9 +105,9 @@ jobs:
       - name: Check final binary size
         run: |
           if [ "${{ runner.os }}" = "macOS" ]; then
-            SIZE=$(stat -f%z auto-editor 2>/dev/null)
+            SIZE=$(stat -f%z honeyclip 2>/dev/null)
           else
-            SIZE=$(stat -c%s auto-editor 2>/dev/null)
+            SIZE=$(stat -c%s honeyclip 2>/dev/null)
           fi
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "Final binary size: ${SIZE_MB}MB"
@@ -120,7 +120,7 @@ jobs:
         run: nimble test
       - name: Rename binary
         run: |
-          mv auto-editor ${{ matrix.binary_name }}
+          mv honeyclip ${{ matrix.binary_name }}
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
@@ -166,11 +166,11 @@ jobs:
         run: nimble windows
       - name: Rename binary
         run: |
-          mv auto-editor.exe auto-editor-windows-amd64.exe
+          mv honeyclip.exe honeyclip-windows-amd64.exe
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
-          files: auto-editor-windows-amd64.exe
+          files: honeyclip-windows-amd64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

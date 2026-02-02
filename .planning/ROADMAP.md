@@ -1,8 +1,8 @@
-# Roadmap: Auto-Editor Engagement Analysis
+# Roadmap: honeyclip Engagement Analysis
 
 ## Overview
 
-This roadmap transforms auto-editor from a silence removal tool into a comprehensive video engagement platform. Over 10 phases, we'll add ML-powered transcript extraction, multi-modal engagement scoring, speaker tracking with auto-reframing, and multi-aspect-ratio export with NLE integration. The journey starts by establishing build infrastructure for ML libraries, then progressively layers transcript features, face detection, engagement analysis, speaker reframing, and workflow polish. Each phase delivers verifiable user value while maintaining auto-editor's local-first, privacy-focused architecture.
+This roadmap transforms honeyclip from a silence removal tool into a comprehensive video engagement platform. Over 10 phases, we'll add ML-powered transcript extraction, multi-modal engagement scoring, speaker tracking with auto-reframing, and multi-aspect-ratio export with NLE integration. The journey starts by establishing build infrastructure for ML libraries, then progressively layers transcript features, face detection, engagement analysis, speaker reframing, and workflow polish. Each phase delivers verifiable user value while maintaining honeyclip's local-first, privacy-focused architecture.
 
 ## Phases
 
