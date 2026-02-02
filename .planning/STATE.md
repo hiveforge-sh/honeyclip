@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 5 of 10 (Engagement Scoring Foundation) — In Progress
-Plan: 1 of 4 in phase
+Plan: 3 of 4 in phase
 Status: In Progress
-Last activity: 2026-02-02 — Completed 05-01-PLAN.md
+Last activity: 2026-02-02 — Completed 05-03-PLAN.md
 
-Progress: [███████████████████░░░░░░░░░░░░░░░░░░░░░] 50%
+Progress: [█████████████████████░░░░░░░░░░░░░░░░░░░] 52.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
-- Average duration: 3.4 min
-- Total execution time: 1.04 hours
+- Total plans completed: 21
+- Average duration: 3.3 min
+- Total execution time: 1.15 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███████████████████░░░░
 | 02-transcript-foundation | 4 | 15min | 3.8min |
 | 03-caption-rendering | 5 | 19.5min | 3.9min |
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
-| 05-engagement-scoring-foundation | 1 | 6min | 6.0min |
+| 05-engagement-scoring-foundation | 4 | 15min | 3.75min |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (3min), 04-03 (3.7min), 04-04 (2min), 05-01 (6min)
-- Trend: Phase 5 showing slightly longer durations for new analysis features
+- Last 5 plans: 04-03 (3.7min), 04-04 (2min), 05-01 (6min), 05-02 (6min), 05-03 (3min)
+- Trend: Phase 5 averaging 3.75min/plan, consistent with prior phases
 
 *Updated after each plan completion*
 
@@ -117,6 +117,11 @@ Recent decisions affecting current work:
 - Dual scoring: relative (normalized to video) and absolute (fixed thresholds) (05-01)
 - Hook boost default 15.0 points, face boost 5.0 per face (max 10.0 total) (05-01)
 - Minimum segment duration 2000ms, merge threshold 10.0 points (05-01)
+- Signal alignment via timebase conversion for precise timestamp mapping (05-03)
+- Speech scoring: 120-180 wpm optimal, 60% rate + 40% confidence weighting (05-03)
+- Face boost capped at +10 points (2 faces max contribution) (05-03)
+- Adjacent segment merging via weighted average by duration (05-03)
+- Non-speech segments (gaps > 2s) scored with audio+motion only (05-03)
 
 ### Pending Todos
 
@@ -151,7 +156,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T19:00:30Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-02-02T19:08:01Z
+Stopped at: Completed 05-03-PLAN.md
 Resume file: None
-Next: Continue Phase 5 (05-03) - Integrate hook detection with engagement scoring
+Next: Continue Phase 5 (05-04) - Complete engagement scoring foundation with CLI integration
