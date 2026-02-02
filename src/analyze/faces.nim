@@ -76,7 +76,7 @@ proc newFaceConsensus*(windowSize: int = 3, threshold: float = 0.6,
     minFaceRatio: minFaceRatio
   )
 
-proc iou(a, b: FaceDetection): float =
+proc iou*(a, b: FaceDetection): float =
   ## Calculate Intersection over Union for two face detections
   ## Returns value between 0.0 (no overlap) and 1.0 (perfect overlap)
 
@@ -144,8 +144,8 @@ proc getStableFaces*(fc: FaceConsensus): seq[FaceDetection] =
     stableFace.stable = appearanceRatio >= fc.threshold
     result.add(stableFace)
 
-proc filterBySize(faces: seq[FaceDetection], frameHeight: int,
-                  minRatio: float): seq[FaceDetection] =
+proc filterBySize*(faces: seq[FaceDetection], frameHeight: int,
+                   minRatio: float): seq[FaceDetection] =
   ## Filter out faces smaller than minRatio of frame height
   result = @[]
   let minHeight = (frameHeight.float * minRatio).int
