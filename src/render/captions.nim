@@ -302,3 +302,76 @@ proc writeASSFile*(captions: seq[Caption], style: CaptionStyle, outputPath: stri
   ## Write ASS subtitle file to disk
   let content = generateASS(captions, style, width, height)
   writeFile(outputPath, content)
+
+# FFmpeg Filter Integration
+
+proc escapeFilterPath(path: string): string =
+  ## Escape path for FFmpeg filter syntax
+  ## Windows: C:/path -> C\\:/path
+  ## Backslashes: \\ -> \\\\
+  ## Single quotes: ' -> \\'
+  result = path
+  result = result.replace("\\", "\\\\")
+  result = result.replace(":", "\\:")
+  result = result.replace("'", "\\'")
+
+proc buildASSFilter*(assPath: string): string =
+  ## Build FFmpeg ass filter string
+  ## Example output: "ass=filename='C\\:/temp/captions.ass'"
+  let escapedPath = escapeFilterPath(assPath)
+  result = &"ass=filename='{escapedPath}'"
+
+proc escapeDrawtextText(text: string): string =
+  ## Escape text for drawtext filter
+  result = text
+  result = result.replace("\\", "\\\\")
+  result = result.replace("'", "\\'")
+  result = result.replace(":", "\\:")
+  result = result.replace("\n", "\\n")
+
+proc buildDrawtextFilter*(text: string, style: CaptionStyle, startMs, endMs: int64): string =
+  ## Build FFmpeg drawtext filter for simple text overlay
+  ## No word highlighting - for basic caption burning
+  let startSec = float(startMs) / 1000.0
+  let endSec = float(endMs) / 1000.0
+  let escapedText = escapeDrawtextText(text)
+  let escapedFontPath = escapeFilterPath(style.fontPath)
+
+  # Build filter parts
+  var parts: seq[string] = @[]
+  parts.add(&"fontfile='{escapedFontPath}'")
+  parts.add(&"fontsize={style.fontSize}")
+  parts.add(&"fontcolor={style.color}")
+  parts.add("x=(w-text_w)/2")  # Center horizontally
+
+  # Y position based on style
+  case style.position
+  of cpBottomCenter:
+    parts.add(&"y=h-{style.marginBottom}")
+  of cpCenter:
+    parts.add("y=(h-text_h)/2")
+  of cpTopCenter:
+    parts.add(&"y={style.marginTop}")
+
+  # Outline
+  if style.outline:
+    parts.add(&"borderw={style.outlineWidth}")
+    parts.add(&"bordercolor={style.outlineColor}")
+
+  # Shadow
+  if style.shadow:
+    parts.add(&"shadowx={style.shadowX}")
+    parts.add(&"shadowy={style.shadowY}")
+    parts.add(&"shadowcolor={style.shadowColor}")
+
+  # Background box
+  if style.backgroundBox:
+    parts.add("box=1")
+    parts.add(&"boxcolor={style.boxColor}")
+    parts.add(&"boxborderw={style.boxPadding}")
+
+  # Text and timing
+  parts.add(&"text='{escapedText}'")
+  parts.add(&"enable='between(t,{startSec},{endSec})'")
+
+  result = "drawtext=" & parts.join(":")
