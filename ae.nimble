@@ -1,10 +1,10 @@
 # Package
-version = "29.5.0"
-author = "WyattBlue"
-description = "Auto-Editor: Efficient media analysis and rendering"
+version = "0.1.0"
+author = "hiveforge-sh"
+description = "honeyclip: Extract the sweetest moments from your video"
 license = "Unlicense"
 srcDir = "src"
-bin = @["main=auto-editor"]
+bin = @["main=honeyclip"]
 
 # Dependencies
 requires "nim >= 2.2.2"

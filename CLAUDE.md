@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Auto-editor is a command-line video editing tool written in Nim that automatically removes silent sections from videos. It builds FFmpeg from source with a curated set of codecs.
+honeyclip is a command-line video editing tool written in Nim that automatically removes silent sections from videos and analyzes engagement. Built on auto-editor, it adds ML-powered engagement analysis, speaker tracking, and smart clip extraction. It builds FFmpeg from source with a curated set of codecs.
 
 ## Build Commands
 
@@ -12,7 +12,10 @@ Auto-editor is a command-line video editing tool written in Nim that automatical
 # Build FFmpeg and dependencies from source (required first time, takes 1-2 hours)
 nimble makeff
 
-# Compile auto-editor binary (release build with LTO)
+# Build ML libraries (libfacedetection, OpenCV, ONNX Runtime)
+nimble makeml
+
+# Compile honeyclip binary (release build with LTO)
 nimble make
 
 # Run Nim unit tests
@@ -24,7 +27,7 @@ python3 tests/test.py
 # Cross-compile FFmpeg for Windows
 nimble makeffwin
 
-# Cross-compile auto-editor.exe for Windows (after makeffwin)
+# Cross-compile honeyclip.exe for Windows (after makeffwin)
 nimble windows
 
 # Clean FFmpeg build artifacts
@@ -52,6 +55,11 @@ Set as environment variables before `nimble makeff`:
 4. Timeline (`src/timeline.nim`) builds clip sequences
 5. Renderers (`src/render/`) output processed video/audio
 6. Exporters (`src/exports/`) generate NLE project files
+
+**ML modules** in `src/ml/`:
+- `facedetect.nim` - Face detection via libfacedetection
+- `onnx.nim` - ONNX Runtime inference
+- `opencv.nim` - OpenCV image processing
 
 **Subcommands** in `src/cmds/`: `cache`, `desc`, `info`, `levels`, `subdump`, `whisper`
 
@@ -82,3 +90,4 @@ The build deliberately disables unused FFmpeg codecs to reduce binary size. See 
 - Nim 2.2.2+
 - cmake, nasm, pkg-config
 - For Windows cross-compile: mingw-w64
+- For ML features: cmake, python3 (for ONNX Runtime build)
