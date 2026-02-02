@@ -120,10 +120,10 @@ class Runner:
         assert v1 == v2
 
     def test_parser(self):
-        self.check(["example.mp4", "--margin"], "needs argument")
+        self.check(["resources/testsrc.mp4", "--margin"], "needs argument")
 
     def info(self):
-        self.raw(["info", "example.mp4"])
+        self.raw(["info", "resources/testsrc.mp4"])
         self.raw(["info", "resources/only-video/man-on-green-screen.mp4"])
         self.raw(["info", "resources/multi-track.mov"])
         self.raw(["info", "resources/new-commentary.mp3"])
@@ -138,7 +138,7 @@ class Runner:
         self.raw(["subdump", "resources/webvtt.mkv"])
 
     def desc(self):
-        self.raw(["desc", "example.mp4"])
+        self.raw(["desc", "resources/testsrc.mp4"])
 
     def test_movflags(self) -> None:
         file = "resources/testsrc.mp4"
@@ -164,7 +164,7 @@ class Runner:
         assert frag not in (fast, nofast), "fragmented output should diff."
 
     def test_example(self) -> None:
-        out = self.main(["example.mp4"], [], output="example_ALTERED.mp4")
+        out = self.main(["resources/testsrc.mp4"], [], output="example_ALTERED.mp4")
         with av.open(out) as container:
             assert container.duration is not None
             assert container.duration > 17300000 and container.duration < 2 << 24
@@ -186,7 +186,7 @@ class Runner:
             assert audio.layout.name == "stereo"
 
     def test_video_to_mp3(self) -> None:
-        out = self.main(["example.mp4"], [], output="example_ALTERED.mp3")
+        out = self.main(["resources/testsrc.mp4"], [], output="example_ALTERED.mp3")
         with av.open(out) as container:
             assert container.duration is not None
             assert container.duration > 17300000 and container.duration < 2 << 24
@@ -199,7 +199,7 @@ class Runner:
             assert audio.layout.name == "stereo"
 
     def test_to_mono(self) -> None:
-        out = self.main(["example.mp4"], ["-layout", "mono"], output="example_mono.mp4")
+        out = self.main(["resources/testsrc.mp4"], ["-layout", "mono"], output="example_mono.mp4")
         with av.open(out) as container:
             assert container.duration is not None
             assert container.duration > 17300000 and container.duration < 2 << 24
@@ -222,31 +222,31 @@ class Runner:
 
     # PR #260
     def test_high_speed(self):
-        self.check(["example.mp4", "--video-speed", "99998"], "empty")
+        self.check(["resources/testsrc.mp4", "--video-speed", "99998"], "empty")
 
     # Issue #184
     def test_units(self):
-        self.main(["example.mp4"], ["--edit", "all/e", "--set-speed", "125%,-30,end"])
-        self.main(["example.mp4"], ["--edit", "audio:threshold=4%"])
+        self.main(["resources/testsrc.mp4"], ["--edit", "all/e", "--set-speed", "125%,-30,end"])
+        self.main(["resources/testsrc.mp4"], ["--edit", "audio:threshold=4%"])
 
     def test_sr_units(self):
-        self.main(["example.mp4"], ["--sample_rate", "44100 Hz"])
-        self.main(["example.mp4"], ["--sample_rate", "44.1 kHz"])
+        self.main(["resources/testsrc.mp4"], ["--sample_rate", "44100 Hz"])
+        self.main(["resources/testsrc.mp4"], ["--sample_rate", "44.1 kHz"])
 
     def test_video_speed(self):
-        self.main(["example.mp4"], ["--video-speed", "1.5"])
+        self.main(["resources/testsrc.mp4"], ["--video-speed", "1.5"])
 
     def test_backwards_range(self):
         """
         Cut out the last 5 seconds of a media file by using negative number in the
         range.
         """
-        self.main(["example.mp4"], ["--edit", "none", "--cut_out", "-5secs,end"])
-        self.main(["example.mp4"], ["--edit", "all/e", "--add_in", "-5secs,end"])
+        self.main(["resources/testsrc.mp4"], ["--edit", "none", "--cut_out", "-5secs,end"])
+        self.main(["resources/testsrc.mp4"], ["--edit", "all/e", "--add_in", "-5secs,end"])
 
     def test_cut_out(self):
         self.main(
-            ["example.mp4"],
+            ["resources/testsrc.mp4"],
             [
                 "--edit",
                 "none",
@@ -259,7 +259,7 @@ class Runner:
             ],
         )
         self.main(
-            ["example.mp4"],
+            ["resources/testsrc.mp4"],
             ["--edit", "all/e", "--video_speed", "2", "--add_in", "2secs,10secs"],
         )
 
@@ -274,15 +274,15 @@ class Runner:
         assert len(fileinfo(out).audios) == 0
 
     def test_margin(self):
-        self.main(["example.mp4"], ["-m", "3"])
-        self.main(["example.mp4"], ["-m", "0.3sec"])
-        self.main(["example.mp4"], ["-m", "0.1 seconds"])
-        self.main(["example.mp4"], ["-m", "6,-3secs"])
+        self.main(["resources/testsrc.mp4"], ["-m", "3"])
+        self.main(["resources/testsrc.mp4"], ["-m", "0.3sec"])
+        self.main(["resources/testsrc.mp4"], ["-m", "0.1 seconds"])
+        self.main(["resources/testsrc.mp4"], ["-m", "6,-3secs"])
 
     def test_input_extension(self):
         """Input file must have an extension. Throw error if none is given."""
         path = os.path.join(self.temp_dir, "example")
-        shutil.copy("example.mp4", path)
+        shutil.copy("resources/testsrc.mp4", path)
         self.check([path, "--no-open"], "must have an extension")
 
     def test_silent_threshold(self):
@@ -304,22 +304,22 @@ class Runner:
         assert len(fileinfo(out).audios) == 2
 
     def test_export_json(self):
-        out = self.main(["example.mp4"], ["--export", "v1"], "c77130d763d40e8.json")
+        out = self.main(["resources/testsrc.mp4"], ["--export", "v1"], "c77130d763d40e8.json")
         self.main([out], [])
-        out = self.main(["example.mp4"], ["--export", "v1"], "c77130d763d40e8.v1")
+        out = self.main(["resources/testsrc.mp4"], ["--export", "v1"], "c77130d763d40e8.v1")
         self.main([out], [])
 
     def test_import_v1(self):
         path = os.path.join(self.temp_dir, "v1.json")
         with open(path, "w") as file:
             file.write(
-                """{"version": "1", "source": "example.mp4", "chunks": [ [0, 26, 1.0], [26, 34, 0] ]}"""
+                """{"version": "1", "source": "resources/testsrc.mp4", "chunks": [ [0, 26, 1.0], [26, 34, 0] ]}"""
             )
 
         self.main([path], [])
 
     def test_res_with_v1(self):
-        v1 = self.main(["example.mp4"], ["--export", "v1"], "input.v1")
+        v1 = self.main(["resources/testsrc.mp4"], ["--export", "v1"], "input.v1")
         out = self.main([v1], ["-res", "720,720"], "output.mp4")
 
         output = fileinfo(out)
@@ -328,7 +328,7 @@ class Runner:
         assert len(output.audios) == 1
 
     def test_premiere_named_export(self) -> None:
-        self.main(["example.mp4"], ["--export", 'premiere:name="Foo Bar"'])
+        self.main(["resources/testsrc.mp4"], ["--export", 'premiere:name="Foo Bar"'])
 
     def test_export_subtitles(self) -> None:
         # Test mov_text subtitle stream handling
@@ -383,13 +383,13 @@ class Runner:
         assert len(cn.attachments) == 0, "Should have 0 attachment streams when -dn flag is used"
 
     def test_scale(self) -> None:
-        cn = fileinfo(self.main(["example.mp4"], ["--scale", "1.5"], "scale.mp4"))
+        cn = fileinfo(self.main(["resources/testsrc.mp4"], ["--scale", "1.5"], "scale.mp4"))
         assert cn.videos[0].fps == 30
         assert cn.videos[0].width == 1920
         assert cn.videos[0].height == 1080
         assert cn.audios[0].samplerate == 48000
 
-        cn = fileinfo(self.main(["example.mp4"], ["--scale", "0.2"], "scale.mp4"))
+        cn = fileinfo(self.main(["resources/testsrc.mp4"], ["--scale", "0.2"], "scale.mp4"))
         assert cn.videos[0].fps == 30
         assert cn.videos[0].width == 256
         assert cn.videos[0].height == 144
@@ -397,7 +397,7 @@ class Runner:
 
     def test_resolution(self):
         out = self.main(
-            ["example.mp4"], ["-res", "700,380", "-b", "darkgreen"], "green"
+            ["resources/testsrc.mp4"], ["-res", "700,380", "-b", "darkgreen"], "green"
         )
         cn = fileinfo(out)
 
@@ -437,24 +437,24 @@ class Runner:
             self.main([test_file], ["--export", "clip-sequence"])
 
     def test_codecs(self) -> None:
-        self.main(["example.mp4"], ["--video-codec", "h264"])
-        self.main(["example.mp4"], ["--audio-codec", "ac3"])
+        self.main(["resources/testsrc.mp4"], ["--video-codec", "h264"])
+        self.main(["resources/testsrc.mp4"], ["--audio-codec", "ac3"])
 
     # Issue #241
     def test_multi_track_edit(self):
         out = self.main(
-            ["example.mp4", "resources/multi-track.mov"],
+            ["resources/testsrc.mp4", "resources/multi-track.mov"],
             ["--edit", "audio:stream=1"],
             "multi-track_ALTERED.mov",
         )
         assert len(fileinfo(out).audios) == 2
 
     # def test_concat(self):
-    #     out = self.main(["example.mp4"], ["--cut-out", "0,171"], "hmm.mp4")
-    #     self.main(["example.mp4", out], ["--debug"])
+    #     out = self.main(["resources/testsrc.mp4"], ["--cut-out", "0,171"], "hmm.mp4")
+    #     self.main(["resources/testsrc.mp4", out], ["--debug"])
 
     # def test_concat_mux_tracks(self):
-    #     inputs = ["example.mp4", "resources/multi-track.mov"]
+    #     inputs = ["resources/testsrc.mp4", "resources/multi-track.mov"]
     #     out = self.main(inputs, ["--mix-audio-streams"], "concat_mux.mov")
     #     assert len(fileinfo(out).audios) == 1
 
@@ -463,23 +463,23 @@ class Runner:
     #         ["resources/multi-track.mov", "resources/multi-track.mov"], [], "out.mov"
     #     )
     #     assert len(fileinfo(out).audios) == 2
-    #     inputs = ["example.mp4", "resources/multi-track.mov"]
+    #     inputs = ["resources/testsrc.mp4", "resources/multi-track.mov"]
     #     out = self.main(inputs, [], "out.mov")
     #     assert len(fileinfo(out).audios) == 2
 
     def test_frame_rate(self):
-        cn = fileinfo(self.main(["example.mp4"], ["-r", "15", "--no-seek"], "fr.mp4"))
+        cn = fileinfo(self.main(["resources/testsrc.mp4"], ["-r", "15", "--no-seek"], "fr.mp4"))
         video = cn.videos[0]
         assert video.fps == 15, video.fps
         assert video.duration - 17.33333333333333333333333 < 3, video.duration
 
-        cn = fileinfo(self.main(["example.mp4"], ["-r", "20"], "fr.mp4"))
+        cn = fileinfo(self.main(["resources/testsrc.mp4"], ["-r", "20"], "fr.mp4"))
         video = cn.videos[0]
         assert video.fps == 20, video.fps
         assert video.duration - 17.33333333333333333333333 < 2
 
     def test_frame_rate_60(self):
-        cn = fileinfo(self.main(["example.mp4"], ["-r", "60"], "fr60.mp4"))
+        cn = fileinfo(self.main(["resources/testsrc.mp4"], ["-r", "60"], "fr60.mp4"))
         video = cn.videos[0]
 
         assert video.fps == 60, video.fps
@@ -568,7 +568,7 @@ class Runner:
         assert fileinfo(out).videos[0].sar == Fraction(2, 3)
 
     def test_audio_norm_f(self) -> None:
-        self.main(["example.mp4"], ["--audio-normalize", "#f"])
+        self.main(["resources/testsrc.mp4"], ["--audio-normalize", "#f"])
 
     def test_audio_norm_ebu(self) -> None:
         """Test that EBU normalization preserves correct pitch/duration."""
@@ -577,12 +577,12 @@ class Runner:
         import hashlib
 
         out_ebu = self.main(
-            ["example.mp4"],
+            ["resources/testsrc.mp4"],
             ["--audio-normalize", "ebu:i=-5,lra=20,gain=5,tp=-1"],
             "ebu_out.wav",
         )
         out_none = self.main(
-            ["example.mp4"], ["--audio-normalize", "#f"], "no_norm_out.wav"
+            ["resources/testsrc.mp4"], ["--audio-normalize", "#f"], "no_norm_out.wav"
         )
 
         with (
@@ -626,7 +626,7 @@ class Runner:
         import struct
 
         out = self.main(
-            ["example.mp4"], ["--audio-normalize", "peak:-3"], "peak_out.wav"
+            ["resources/testsrc.mp4"], ["--audio-normalize", "peak:-3"], "peak_out.wav"
         )
 
         with wave.open(out, "rb") as wav_file:
@@ -645,7 +645,7 @@ class Runner:
 
     def test_wav_output(self) -> None:
         """Test that converting to WAV output produces a valid PCM file."""
-        out = self.main(["example.mp4"], [], "out.wav")
+        out = self.main(["resources/testsrc.mp4"], [], "out.wav")
         # Verify the output file is a valid media file with PCM audio
         with av.open(out) as container:
             assert len(container.streams) == 1
