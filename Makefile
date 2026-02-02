@@ -53,10 +53,22 @@ endif
 
 # Create virtual environment
 venv:
-	@if [ ! -d "$(VENV_DIR)" ]; then \
+	@if [ ! -d "$(VENV_DIR)" ] || [ ! -f "$(VENV_PIP)" ]; then \
 		echo "$(CYAN)Creating Python virtual environment...$(RESET)"; \
-		$(SYS_PYTHON) -m venv $(VENV_DIR); \
-		echo "$(GREEN)Virtual environment created at $(VENV_DIR)$(RESET)"; \
+		rm -rf $(VENV_DIR) 2>/dev/null || true; \
+		$(SYS_PYTHON) -m venv $(VENV_DIR) || { \
+			echo "$(RED)venv creation failed. Installing python3-venv...$(RESET)"; \
+			if [ -f /etc/debian_version ]; then \
+				sudo apt-get update && sudo apt-get install -y python3-venv; \
+			fi; \
+			$(SYS_PYTHON) -m venv $(VENV_DIR); \
+		}; \
+		if [ -f "$(VENV_PIP)" ]; then \
+			echo "$(GREEN)Virtual environment created at $(VENV_DIR)$(RESET)"; \
+		else \
+			echo "$(RED)Failed to create virtual environment$(RESET)"; \
+			exit 1; \
+		fi; \
 	else \
 		echo "$(GREEN)Virtual environment already exists$(RESET)"; \
 	fi
