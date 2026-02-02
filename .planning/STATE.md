@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 3 of 10 (Caption Rendering)
-Plan: 4 of TBD in phase
+Plan: 5 of TBD in phase
 Status: In progress
-Last activity: 2026-02-02 — Completed 03-04-PLAN.md
+Last activity: 2026-02-02 — Completed 03-05-PLAN.md
 
-Progress: [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 30%
+Progress: [█████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 3.7 min
-- Total execution time: 0.7 hours
+- Total execution time: 0.8 hours
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [████████████░░░░░░░░░░░
 |-------|-------|-------|----------|
 | 01-foundation-build-infrastructure | 4 | 17min | 4.3min |
 | 02-transcript-foundation | 4 | 15min | 3.8min |
-| 03-caption-rendering | 4 | 15.5min | 3.9min |
+| 03-caption-rendering | 5 | 19.5min | 3.9min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (4min), 03-02 (2.5min), 03-03 (4min), 03-04 (5min)
+- Last 5 plans: 03-02 (2.5min), 03-03 (4min), 03-04 (5min), 03-05 (4min)
 - Trend: Stable around 4 min
 
 *Updated after each plan completion*
@@ -92,6 +92,9 @@ Recent decisions affecting current work:
 - Style presets with CLI override flags for flexible customization (03-04)
 - JSON transcript input (requires prior transcript extraction) (03-04)
 - Exported parseCaptionStyle and loadTranscriptFromJSON for testability (03-04)
+- Minimal XML structure for caption-only NLE exports (no audio tracks) (03-05)
+- Video clip reference included in caption exports for NLE timeline context (03-05)
+- Support stdout output with "-" path for piping (03-05)
 
 ### Pending Todos
 
@@ -124,7 +127,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-02T09:40:08Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-02-02
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
 Next: Continue phase 3 or next phase planning
