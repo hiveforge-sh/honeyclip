@@ -22,10 +22,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Engagement Scoring
 
-- [ ] **ENGR-01**: Analyze audio energy (RMS, dynamics, pace)
-- [ ] **ENGR-02**: Analyze motion/visual activity (frame differences)
-- [ ] **ENGR-03**: Analyze speech features (rate, pauses, hooks)
-- [ ] **ENGR-04**: Combine signals into engagement score (0-100)
+- [x] **ENGR-01**: Analyze audio energy (RMS, dynamics, pace)
+- [x] **ENGR-02**: Analyze motion/visual activity (frame differences)
+- [x] **ENGR-03**: Analyze speech features (rate, pauses, hooks)
+- [x] **ENGR-04**: Combine signals into engagement score (0-100)
 - [ ] **ENGR-05**: Detect scene boundaries for clip segmentation
 - [ ] **ENGR-06**: Rank clips by engagement score
 
@@ -104,10 +104,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CAPT-01 | Phase 3 | Complete |
 | CAPT-02 | Phase 3 | Complete |
 | CAPT-03 | Phase 3 | Complete |
-| ENGR-01 | Phase 5 | Pending |
-| ENGR-02 | Phase 5 | Pending |
-| ENGR-03 | Phase 5 | Pending |
-| ENGR-04 | Phase 5 | Pending |
+| ENGR-01 | Phase 5 | Complete |
+| ENGR-02 | Phase 5 | Complete |
+| ENGR-03 | Phase 5 | Complete |
+| ENGR-04 | Phase 5 | Complete |
 | ENGR-05 | Phase 6 | Pending |
 | ENGR-06 | Phase 6 | Pending |
 | SPKR-01 | Phase 4 | Complete |
@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-02 after Phase 4 completion*
+*Last updated: 2026-02-02 after Phase 5 completion*
