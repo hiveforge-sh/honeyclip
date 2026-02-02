@@ -136,10 +136,15 @@ Plans:
   2. User can auto-reframe video to center the active speaker in each frame
   3. User can output vertical (9:16) video with speaker-centered framing
   4. Speaker reframing degrades gracefully to center crop when no faces detected
-**Plans**: TBD
+**Plans**: 6 plans
 
 Plans:
-- [ ] 07-01-PLAN.md: TBD during phase planning
+- [ ] 07-01-PLAN.md: Tracking types and Kalman filter for motion prediction
+- [ ] 07-02-PLAN.md: Face embeddings via ArcFace ONNX for re-identification
+- [ ] 07-03-PLAN.md: Hungarian algorithm and DeepSORT-style tracker
+- [ ] 07-04-PLAN.md: Cubic-bezier easing and crop region calculation
+- [ ] 07-05-PLAN.md: FFmpeg compositor for speaker-centered rendering
+- [ ] 07-06-PLAN.md: CLI `reframe` command with speed presets
 
 ### Phase 8: Multi-Aspect Export & Workflow
 **Goal**: Export in multiple aspect ratios with preview and adjustment capabilities
@@ -198,7 +203,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. Face Detection Infrastructure | 4/4 | Complete | 2026-02-02 |
 | 5. Engagement Scoring Foundation | 4/4 | Complete | 2026-02-02 |
 | 6. Engagement Clip Detection | 4/4 | Complete | 2026-02-02 |
-| 7. Speaker Tracking & Reframing | 0/TBD | Not started | - |
+| 7. Speaker Tracking & Reframing | 0/6 | Not started | - |
 | 8. Multi-Aspect Export & Workflow | 0/TBD | Not started | - |
 | 9. NLE Integration & Markers | 0/TBD | Not started | - |
 | 10. CLI Integration | 0/TBD | Not started | - |
