@@ -163,7 +163,7 @@ proc loadCaptionsFromArgs(inputPath, transcriptPath: string, maxChars: int): seq
   # Group into captions
   result = groupIntoCaptions(transcript, maxChars)
 
-proc runCaptionBurn(args: seq[string]): int =
+proc runCaptionBurn(args: seq[string]) =
   ## Burn captions into video
   var inputPath = ""
   var outputPath = ""
@@ -176,7 +176,7 @@ proc runCaptionBurn(args: seq[string]): int =
     case key:
     of "--help", "-h":
       echo helpText
-      return 0
+      quit(0)
     of "--input", "-i":
       expecting = "input"
     of "--output", "-o":
@@ -242,11 +242,10 @@ proc runCaptionBurn(args: seq[string]): int =
   if exitCode == 0:
     conwrite("")
     echo &"Created: {outputPath}"
-    result = 0
   else:
     error &"FFmpeg failed with exit code: {exitCode}"
 
-proc runCaptionExport(args: seq[string]): int =
+proc runCaptionExport(args: seq[string]) =
   ## Export captions to NLE project
   var inputPath = ""
   var outputPath = ""
@@ -261,7 +260,7 @@ proc runCaptionExport(args: seq[string]): int =
     case key:
     of "--help", "-h":
       echo helpText
-      return 0
+      quit(0)
     of "--input", "-i":
       expecting = "input"
     of "--output", "-o":
@@ -340,22 +339,21 @@ proc runCaptionExport(args: seq[string]): int =
   else:
     error &"Unknown format: {format}"
 
-proc main*(cArgs: seq[string]): int =
+proc main*(cArgs: seq[string]) =
   ## Caption command entry point
   if cArgs.len == 0 or cArgs[0] in ["--help", "-h"]:
     echo helpText
-    return 0
+    quit(0)
 
   let subcommand = cArgs[0]
   let subArgs = if cArgs.len > 1: cArgs[1..^1] else: @[]
 
   case subcommand:
   of "burn":
-    result = runCaptionBurn(subArgs)
+    runCaptionBurn(subArgs)
   of "export":
-    result = runCaptionExport(subArgs)
+    runCaptionExport(subArgs)
   of "--help", "-h":
     echo helpText
-    result = 0
   else:
     error &"Unknown subcommand: {subcommand}. Available: burn, export"
