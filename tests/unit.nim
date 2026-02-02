@@ -1,5 +1,5 @@
 import unittest
-import std/[os, tempfiles, strutils, xmltree]
+import std/[os, tempfiles, strutils, xmltree, json]
 
 import ../src/[av, edit, ffmpeg, timeline]
 import ../src/util/[color, fun, lang]
@@ -12,8 +12,10 @@ import ../src/transcript/grouping
 import ../src/transcript/formats
 import ../src/cmds/transcript as transcriptCmd
 import ../src/cmds/caption as captionCmd
+import ../src/cmds/engagement as engagementCmd
 import ../src/render/captions
 import ../src/analyze/engagement_types
+import ../src/analyze/hooks
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -186,10 +188,11 @@ test "uuid":
         check(c in "0123456789abcdef")
 
 test "transcript-formatTimestamp":
-  check formatTimestamp(0) == "00:00:00,000"
-  check formatTimestamp(1234) == "00:00:01,234"
-  check formatTimestamp(3661234) == "01:01:01,234"
-  check formatTimestamp(1234, usePeriod=true) == "00:00:01.234"
+  # Use transcript version explicitly (engagement also has formatTimestamp)
+  check types.formatTimestamp(0) == "00:00:00,000"
+  check types.formatTimestamp(1234) == "00:00:01,234"
+  check types.formatTimestamp(3661234) == "01:01:01,234"
+  check types.formatTimestamp(1234, usePeriod=true) == "00:00:01.234"
 
 test "transcript-isLowConfidence":
   let word1 = newWord("hello", 0, 1000, 0.3)
@@ -1128,3 +1131,81 @@ suite "Hook Detection":
     check limited.len == 2
     # Should include timestamp 10000 (highest confidence)
     check int64(10000) in limited
+
+# Engagement CLI Tests
+
+suite "Engagement CLI":
+  test "timelineToJson produces valid JSON":
+    var timeline = EngagementTimeline(
+      segments: @[],
+      duration: 5000,
+      avgScore: 50.0f,
+      hookCount: 0,
+      params: defaultEngagementParams()
+    )
+    let jsonStr = engagementCmd.timelineToJson(timeline)
+    let parsed = parseJson(jsonStr)
+    check parsed["duration_ms"].getInt() == 5000
+    check parsed["avg_score"].getFloat() > 0.0
+
+  test "timelineToJson includes segment fields":
+    var seg = newEngagementSegment(0, 2500)
+    seg.text = "Test segment"
+    seg.score = 75.5f
+    seg.scoreRelative = 80.0f
+    seg.scoreAbsolute = 72.0f
+    seg.audioScore = 65.0f
+    seg.motionScore = 45.0f
+    seg.speechScore = 82.0f
+    seg.hasHook = true
+    seg.faceCount = 1
+    seg.speaker = 0
+
+    var timeline = EngagementTimeline(
+      segments: @[seg],
+      duration: 5000,
+      avgScore: 75.5f,
+      hookCount: 1,
+      params: defaultEngagementParams()
+    )
+    let jsonStr = engagementCmd.timelineToJson(timeline)
+    let parsed = parseJson(jsonStr)
+
+    check parsed["segments"].len == 1
+    let segJson = parsed["segments"][0]
+    check segJson["start_ms"].getInt() == 0
+    check segJson["end_ms"].getInt() == 2500
+    check segJson["text"].getStr() == "Test segment"
+    check segJson["score"].getFloat() > 75.0
+    check segJson["has_hook"].getBool() == true
+    check segJson["face_count"].getInt() == 1
+    check segJson["speaker"].getInt() == 0
+
+  test "timelineToJson compact mode":
+    var timeline = EngagementTimeline(
+      segments: @[],
+      duration: 1000,
+      avgScore: 50.0f,
+      hookCount: 0,
+      params: defaultEngagementParams()
+    )
+    let compactJson = engagementCmd.timelineToJson(timeline, compact = true)
+    let prettyJson = engagementCmd.timelineToJson(timeline, compact = false)
+
+    # Compact should have no newlines
+    check not compactJson.contains("\n")
+    # Pretty should have newlines
+    check prettyJson.contains("\n")
+
+  test "engagement types export correctly":
+    # Verify we can construct and use engagement types
+    var seg = newEngagementSegment(0, 2500)
+    seg.score = 75.5f
+    seg.hasHook = true
+    check seg.score > 0
+    check seg.hasHook == true
+    check seg.durationMs() == 2500
+
+  test "generateOutputPath for engagement":
+    check engagementCmd.generateOutputPath("/path/to/video.mp4", "", ".engage.json") == "/path/to/video.engage.json"
+    check engagementCmd.generateOutputPath("/path/to/video.mp4", "/out", ".engage.json") == "/out/video.engage.json"
