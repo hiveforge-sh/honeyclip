@@ -984,6 +984,124 @@ when defined(enable_ml):
       let fps = sampler.updateSamplingRate(sceneScore = 0.1, faceCount = 0, currentTime = 0.5)
       check fps == 5.0  # Still at high rate
 
+# Tracking Tests (Kalman Filter)
+
+when defined(enable_ml):
+  import ../src/tracking/kalman
+
+  suite "Kalman Filter":
+    test "newKalmanFilter initializes state from bbox":
+      let bbox = FaceRect(x: 100, y: 200, width: 50, height: 50, confidence: 0.9, angle: 0)
+      let kf = newKalmanFilter(bbox)
+
+      # State should match initial bbox
+      check kf.state[0] == 100.0  # x
+      check kf.state[1] == 200.0  # y
+      check kf.state[2] == 50.0   # width
+      check kf.state[3] == 50.0   # height
+      check kf.state[4] == 0.0    # vx
+      check kf.state[5] == 0.0    # vy
+
+      # Covariance diagonal should be initialized to 1.0
+      for i in 0..5:
+        check kf.covariance[i][i] == 1.0
+
+    test "predict increases uncertainty":
+      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+      var kf = newKalmanFilter(bbox, processNoise = 0.1)
+
+      let initialCovariance = kf.covariance[0][0]
+      discard kf.predict()
+
+      # Covariance should increase after prediction
+      check kf.covariance[0][0] > initialCovariance
+
+    test "predict applies constant velocity model":
+      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+      var kf = newKalmanFilter(bbox)
+
+      # Set velocity
+      kf.state[4] = 5.0  # vx = 5
+      kf.state[5] = 3.0  # vy = 3
+
+      let predicted = kf.predict()
+
+      # Position should be updated by velocity
+      check predicted.x == 105  # 100 + 5
+      check predicted.y == 103  # 100 + 3
+      check predicted.width == 50  # unchanged
+      check predicted.height == 50  # unchanged
+      check predicted.confidence == 0.5  # predicted, not detected
+
+    test "update reduces uncertainty":
+      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+      var kf = newKalmanFilter(bbox, processNoise = 0.1, measurementNoise = 0.1)
+
+      # Predict to increase uncertainty
+      discard kf.predict()
+      let covarianceAfterPredict = kf.covariance[0][0]
+
+      # Update with detection to reduce uncertainty
+      let detection = FaceRect(x: 105, y: 103, width: 50, height: 50, confidence: 0.9, angle: 0)
+      kf.update(detection)
+
+      # Covariance should decrease after update
+      check kf.covariance[0][0] < covarianceAfterPredict
+
+    test "update computes velocity":
+      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+      var kf = newKalmanFilter(bbox)
+
+      # Initial velocity should be zero
+      check kf.state[4] == 0.0
+      check kf.state[5] == 0.0
+
+      # Update with detection at new position
+      let detection = FaceRect(x: 110, y: 105, width: 50, height: 50, confidence: 0.9, angle: 0)
+      kf.update(detection)
+
+      # Velocity should be calculated from position change
+      # Note: Kalman gain will reduce the update, so velocity won't be exactly 10 and 5
+      check kf.state[4] > 0.0  # vx should be positive
+      check kf.state[5] > 0.0  # vy should be positive
+
+    test "getBbox returns current state":
+      let bbox = FaceRect(x: 100, y: 200, width: 50, height: 60, confidence: 0.9, angle: 0)
+      let kf = newKalmanFilter(bbox)
+
+      let (x, y, w, h) = kf.getBbox()
+      check x == 100
+      check y == 200
+      check w == 50
+      check h == 60
+
+    test "predict-update cycle tracks moving object":
+      let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+      var kf = newKalmanFilter(bbox, processNoise = 0.01, measurementNoise = 0.1)
+
+      # Simulate object moving right by 5 pixels per frame
+      for i in 1..10:
+        # Predict
+        let predicted = kf.predict()
+
+        # Simulate detection (with slight noise)
+        let detection = FaceRect(
+          x: 100 + i * 5,
+          y: 100,
+          width: 50,
+          height: 50,
+          confidence: 0.9,
+          angle: 0
+        )
+
+        # Update
+        kf.update(detection)
+
+      # After tracking, velocity should be close to 5 pixels/frame
+      # (allowing for Kalman smoothing)
+      check kf.state[4] > 3.0 and kf.state[4] < 7.0
+      check abs(kf.state[5]) < 2.0  # vy should be near zero
+
 # Engagement Types Tests
 
 suite "Engagement Types":
