@@ -301,11 +301,23 @@ func dirName(package: Package): string =
 
 
 proc getFileHash(filename: string): string =
-  let (existsOutput, existsCode) = gorgeEx("test -f " & filename)
-  if existsCode != 0:
+  if not fileExists(filename):
     raise newException(IOError, "File does not exist: " & filename)
 
-  let (output, exitCode) = gorgeEx("shasum -a 256 " & filename)
+  # Try sha256sum first (Git Bash/Linux), then shasum (macOS), then certutil (Windows)
+  var output: string
+  var exitCode: int
+  (output, exitCode) = gorgeEx("sha256sum " & filename)
+  if exitCode != 0:
+    (output, exitCode) = gorgeEx("shasum -a 256 " & filename)
+  if exitCode != 0:
+    # Windows fallback using certutil
+    (output, exitCode) = gorgeEx("certutil -hashfile " & filename & " SHA256")
+    if exitCode == 0:
+      # certutil output format is different - hash is on second line
+      let lines = output.splitLines()
+      if lines.len >= 2:
+        return lines[1].strip().toLowerAscii()
   if exitCode != 0:
     raise newException(IOError, "Cannot hash file: " & filename)
   return output.split()[0]
@@ -318,14 +330,47 @@ proc checkHash(package: Package, filename: string) =
     quit(1)
 
 
-proc makeInstall() =
+proc makeInstall(packageName: string = "", buildPath: string = "") =
   when defined(macosx):
     exec "make -j$(sysctl -n hw.ncpu)"
+    exec "make install"
   elif defined(linux):
     exec "make -j$(nproc)"
+    exec "make install"
+  elif defined(windows):
+    # Use mingw32-make to avoid Chocolatey's make which has SHELL path issues
+    proc toUnixPath(p: string): string =
+      result = p.replace("\\", "/")
+      if result.len >= 2 and result[1] == ':':
+        result = "/" & result[0].toLowerAscii & result[2..^1]
+    let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
+    # Use mingw32-make instead of make to avoid Windows path space issues with libtool
+    exec &"bash -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make -j4'"
+
+    # LAME uses libtool which breaks on Windows due to space in Git path
+    # Manually install instead of using make install
+    if packageName == "lame":
+      echo "Installing LAME manually (bypassing libtool)..."
+      mkDir(buildPath / "lib")
+      mkDir(buildPath / "include" / "lame")
+      cpFile("libmp3lame" / ".libs" / "libmp3lame.a", buildPath / "lib" / "libmp3lame.a")
+      cpFile("include" / "lame.h", buildPath / "include" / "lame" / "lame.h")
+    elif packageName == "x264":
+      # x264's make install fails on Windows due to gcc-ranlib path translation issues
+      # Manually install the library and headers
+      echo "Installing x264 manually (bypassing ranlib path issue)..."
+      mkDir(buildPath / "lib")
+      mkDir(buildPath / "lib" / "pkgconfig")
+      mkDir(buildPath / "include")
+      cpFile("libx264.a", buildPath / "lib" / "libx264.a")
+      cpFile("x264.h", buildPath / "include" / "x264.h")
+      cpFile("x264_config.h", buildPath / "include" / "x264_config.h")
+      cpFile("x264.pc", buildPath / "lib" / "pkgconfig" / "x264.pc")
+    else:
+      exec &"bash -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make install'"
   else:
     exec "make -j4"
-  exec "make install"
+    exec "make install"
 
 # Forward declarations for ML library build infrastructure
 proc addCcacheIfAvailable(cmakeArgs: var seq[string])
@@ -339,6 +384,16 @@ proc cmakeBuild(package: Package, buildPath: string, crossWindows: bool = false)
     "-DBUILD_SHARED_LIBS=OFF",
     "-DBUILD_STATIC_LIBS=ON",
   ] & package.buildArguments
+
+  # On Windows, use MinGW Makefiles instead of Visual Studio
+  when defined(windows):
+    if not crossWindows:
+      let mingwPath = getHomeDir() / ".choosenim/toolchains/mingw64/bin"
+      cmakeArgs.add("-G")
+      cmakeArgs.add("\"MinGW Makefiles\"")
+      cmakeArgs.add(&"-DCMAKE_C_COMPILER={mingwPath}/gcc.exe")
+      cmakeArgs.add(&"-DCMAKE_CXX_COMPILER={mingwPath}/g++.exe")
+      cmakeArgs.add(&"-DCMAKE_MAKE_PROGRAM={mingwPath}/mingw32-make.exe")
 
   # Add ccache if available
   addCcacheIfAvailable(cmakeArgs)
@@ -456,6 +511,16 @@ proc x265Build(buildPath: string, crossWindows: bool = false) =
     "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # CMake 4 compatibility for subdirectories
   ]
 
+  # On Windows, use MinGW Makefiles instead of Visual Studio
+  when defined(windows):
+    if not crossWindows:
+      let mingwPath = getHomeDir() / ".choosenim/toolchains/mingw64/bin"
+      commonArgs.add("-G")
+      commonArgs.add("\"MinGW Makefiles\"")
+      commonArgs.add(&"-DCMAKE_C_COMPILER={mingwPath}/gcc.exe")
+      commonArgs.add(&"-DCMAKE_CXX_COMPILER={mingwPath}/g++.exe")
+      commonArgs.add(&"-DCMAKE_MAKE_PROGRAM={mingwPath}/mingw32-make.exe")
+
   # Add cross-compilation flags if needed
   if crossWindows:
     commonArgs.add("-DCMAKE_SYSTEM_NAME=Windows")
@@ -527,19 +592,29 @@ proc x265Build(buildPath: string, crossWindows: bool = false) =
   else:
     # For Linux or cross-compilation, use ar with MRI script
     var arCommand = "ar"
+    when defined(windows):
+      if not crossWindows:
+        # Use Unix-style path for bash
+        proc toUnixPath(p: string): string =
+          result = p.replace("\\", "/")
+          if result.len >= 2 and result[1] == ':':
+            result = "/" & result[0].toLowerAscii & result[2..^1]
+        arCommand = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin/ar.exe"
     if crossWindows:
       arCommand = "x86_64-w64-mingw32-ar"
 
     # Create MRI script with paths relative to 8bit directory
     withDir "8bit":
-      exec "echo 'CREATE libx265_combined.a' > combine.mri"
-      exec "echo 'ADDLIB libx265.a' >> combine.mri"
-      exec "echo 'ADDLIB libx265_main10.a' >> combine.mri"
+      var mriContent = "CREATE libx265_combined.a\nADDLIB libx265.a\nADDLIB libx265_main10.a\n"
       if enable12bit:
-        exec "echo 'ADDLIB libx265_main12.a' >> combine.mri"
-      exec "echo 'SAVE' >> combine.mri"
-      exec "echo 'END' >> combine.mri"
-      exec &"{arCommand} -M < combine.mri"
+        mriContent &= "ADDLIB libx265_main12.a\n"
+      mriContent &= "SAVE\nEND\n"
+      writeFile("combine.mri", mriContent)
+      when defined(windows):
+        # On Windows, use bash to run ar with MRI input
+        exec &"bash -c '{arCommand} -M < combine.mri'"
+      else:
+        exec &"{arCommand} -M < combine.mri"
 
   # Replace the 8-bit only library with the combined one
   exec "mv 8bit/libx265_combined.a 8bit/libx265.a"
@@ -551,8 +626,17 @@ proc x265Build(buildPath: string, crossWindows: bool = false) =
 proc mesonBuild(buildPath: string, crossWindows: bool = false) =
   mkDir("build_meson")
 
+  # On Windows, convert buildPath to Unix-style for meson
+  var prefixPath = buildPath
+  when defined(windows):
+    proc toUnixPath(p: string): string =
+      result = p.replace("\\", "/")
+      if result.len >= 2 and result[1] == ':':
+        result = "/" & result[0].toLowerAscii & result[2..^1]
+    prefixPath = toUnixPath(buildPath)
+
   var mesonArgs = @[
-    &"--prefix={buildPath}",
+    &"--prefix={prefixPath}",
     "--buildtype=release",
     "--default-library=static",
     "-Denable_docs=false",
@@ -583,9 +667,17 @@ endian = 'little'
   withDir "build_meson":
     let mesonCmd = "meson setup " & mesonArgs.join(" ") & " .."
     echo "RUN: ", mesonCmd
-    exec mesonCmd
-    exec "ninja"
-    exec "ninja install"
+    when defined(windows):
+      # Find Python Scripts directory where meson is installed
+      let pythonScripts = getEnv("APPDATA") / "Python/Python314/Scripts"
+      let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
+      exec &"bash -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && {mesonCmd}'"
+      exec &"bash -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && ninja'"
+      exec &"bash -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && ninja install'"
+    else:
+      exec mesonCmd
+      exec "ninja"
+      exec "ninja install"
 
 proc ffmpegSetup(crossWindows: bool) =
   # Create directories
@@ -603,6 +695,7 @@ proc ffmpegSetup(crossWindows: bool) =
           exec &"curl -O -L {package.mirrorUrl}"
         else:
           exec &"curl -O -L {package.sourceUrl}"
+        # Use full path because gorgeEx (used in getFileHash) doesn't respect withDir
         checkHash(package, "ffmpeg_sources" / package.location)
 
       var tarArgs = "xf"
@@ -610,7 +703,9 @@ proc ffmpegSetup(crossWindows: bool) =
         tarArgs = "xjf"
 
       if not dirExists(package.name):
-        exec &"tar {tarArgs} {package.location} && mv {package.dirName} {package.name}"
+        exec &"tar {tarArgs} {package.location}"
+        if package.dirName != package.name:
+          mvDir(package.dirName, package.name)
         let patchFile = &"../patches/{package.name}.patch"
         if fileExists(patchFile):
           let cmd = &"patch -d {package.name} -i {absolutePath(patchFile)} -p1 --force"
@@ -630,7 +725,15 @@ proc ffmpegSetup(crossWindows: bool) =
         else:
           # Special handling for nv-codec-headers which doesn't use configure
           if package.name == "nv-codec-headers":
-            exec &"make install PREFIX=\"{buildPath}\""
+            when defined(windows):
+              proc toUnixPath(p: string): string =
+                result = p.replace("\\", "/")
+                if result.len >= 2 and result[1] == ':':
+                  result = "/" & result[0].toLowerAscii & result[2..^1]
+              let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
+              exec &"bash -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make install PREFIX=\"{buildPath}\"'"
+            else:
+              exec &"make install PREFIX=\"{buildPath}\""
           else:
             if not fileExists("Makefile") or package.name == "x264":
               var args = package.buildArguments
@@ -643,10 +746,28 @@ proc ffmpegSetup(crossWindows: bool) =
                 envPrefix = "CC=x86_64-w64-mingw32-gcc-posix CXX=x86_64-w64-mingw32-g++-posix AR=x86_64-w64-mingw32-ar STRIP=x86_64-w64-mingw32-strip RANLIB=x86_64-w64-mingw32-ranlib "
               if package.name != "x264":
                 args.add "--disable-shared"
-              let cmd = &"{envPrefix}./configure --prefix=\"{buildPath}\" --enable-static " & args.join(" ")
-              echo "RUN: ", cmd
-              exec cmd
-            makeInstall()
+              when defined(windows):
+                # Run configure through bash on Windows with MinGW compilers
+                # Convert C:\Users\... to /c/Users/... for Git Bash
+                proc toUnixPath(p: string): string =
+                  result = p.replace("\\", "/")
+                  if result.len >= 2 and result[1] == ':':
+                    result = "/" & result[0].toLowerAscii & result[2..^1]
+                let unixBuildPath = toUnixPath(buildPath)
+                var configureCmd = &"./configure --prefix=\"{unixBuildPath}\" --enable-static " & args.join(" ")
+                let mingwBase = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64"
+                let mingwBin = mingwBase & "/bin"
+                let ccEnv = "CC=\"" & mingwBin & "/gcc.exe\" CXX=\"" & mingwBin & "/g++.exe\" "
+                # Set CONFIG_SHELL to avoid libtool using Windows path with spaces
+                configureCmd = "bash -c 'export PATH=\"" & mingwBin & ":$PATH\" && export CONFIG_SHELL=/usr/bin/sh && " & ccEnv & envPrefix & configureCmd & "'"
+                echo "RUN: ", configureCmd
+                exec configureCmd
+              else:
+                var configureCmd = &"./configure --prefix=\"{buildPath}\" --enable-static " & args.join(" ")
+                configureCmd = envPrefix & configureCmd
+                echo "RUN: ", configureCmd
+                exec configureCmd
+            makeInstall(package.name, buildPath)
 
 var filters: seq[string]
 if enableWhisper:
@@ -693,7 +814,25 @@ proc setupCommonFlags(packages: seq[Package]): string =
   return commonFlags
 
 
+proc setupWindowsShell() =
+  ## On Windows, copy sh.exe to mingw64/bin to avoid path-with-spaces issues.
+  ## GNU Make resolves SHELL to the Windows path of sh.exe, and if that path
+  ## contains spaces (e.g. C:/Program Files/Git/usr/bin/sh.exe), libtool breaks.
+  when defined(windows):
+    let mingwBin = getHomeDir() / ".choosenim/toolchains/mingw64/bin"
+    let shDest = mingwBin / "sh.exe"
+    if not fileExists(shDest):
+      # Find Git's sh.exe
+      let gitShell = "C:/Program Files/Git/usr/bin/sh.exe"
+      if fileExists(gitShell):
+        echo "Copying sh.exe to mingw64/bin to avoid path-with-spaces issues..."
+        cpFile(gitShell, shDest)
+      else:
+        echo "Warning: Could not find Git's sh.exe at ", gitShell
+
 proc setupDeps() =
+  setupWindowsShell()
+
   let (mesonOutput, mesonCode) = gorgeEx("command -v meson")
   let (ninjaOutput, ninjaCode) = gorgeEx("command -v ninja")
 
