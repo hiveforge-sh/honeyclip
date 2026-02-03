@@ -291,7 +291,7 @@ check-deps: check-python
 	@echo ""
 	@echo "$(GREEN)HF_TOKEN:$(RESET)"
 	@if [ -n "$$HF_TOKEN" ]; then \
-		echo "  Set ($${HF_TOKEN:0:8}...)"; \
+		echo "  Set (hidden)"; \
 	else \
 		echo "  $(YELLOW)Not set$(RESET)"; \
 	fi
