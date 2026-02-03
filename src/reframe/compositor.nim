@@ -165,6 +165,21 @@ proc generateCropFilter*(comp: Compositor, fps: float = 30.0): string =
     let kf = comp.keyframes[0]
     return &"crop=w={kf.crop.width}:h={kf.crop.height}:x={kf.crop.x}:y={kf.crop.y}"
 
+  # Check if all keyframes have the same crop (common in fallback-only case)
+  var allSame = true
+  let firstCrop = comp.keyframes[0].crop
+  for i in 1..<comp.keyframes.len:
+    if comp.keyframes[i].crop.x != firstCrop.x or
+       comp.keyframes[i].crop.y != firstCrop.y or
+       comp.keyframes[i].crop.width != firstCrop.width or
+       comp.keyframes[i].crop.height != firstCrop.height:
+      allSame = false
+      break
+
+  if allSame:
+    # All keyframes have same crop - use static filter
+    return &"crop=w={firstCrop.width}:h={firstCrop.height}:x={firstCrop.x}:y={firstCrop.y}"
+
   # Generate interpolated keyframes at high rate for smooth motion
   # Per RESEARCH: 60fps internal rate regardless of source framerate
   const internalFps = 60.0

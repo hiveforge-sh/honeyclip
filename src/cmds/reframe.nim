@@ -232,16 +232,19 @@ Examples:
   conwrite("Building crop keyframes...")
 
   # Calculate target dimensions based on aspect ratio
+  # Round to even numbers for codec compatibility (libx264 requires this)
+  proc roundEven(n: int): int = (n div 2) * 2
+
   var targetWidth, targetHeight: int
   case aspectRatio
   of Portrait:
-    targetHeight = sourceHeight
-    targetWidth = int(targetHeight.float * 9.0 / 16.0)
+    targetHeight = roundEven(sourceHeight)
+    targetWidth = roundEven(int(targetHeight.float * 9.0 / 16.0))
   of Landscape:
-    targetWidth = sourceWidth
-    targetHeight = int(targetWidth.float * 9.0 / 16.0)
+    targetWidth = roundEven(sourceWidth)
+    targetHeight = roundEven(int(targetWidth.float * 9.0 / 16.0))
   of Square:
-    targetWidth = min(sourceWidth, sourceHeight)
+    targetWidth = roundEven(min(sourceWidth, sourceHeight))
     targetHeight = targetWidth
 
   # Initialize compositor
@@ -264,7 +267,8 @@ Examples:
     # Track faces and build crop keyframes
     var lastCrop: CropRegion
     var lastTrackId = -1
-    var lastTimestamp = 0.0
+    var lastTimestamp = -1.0  # Start negative so first keyframe always added
+    var isFirstKeyframe = true
     const debounceThreshold = 0.5  # 0.5 second minimum hold per CONTEXT
 
     for frameData in frameFaces:
@@ -289,12 +293,13 @@ Examples:
             timestamp: frameData.timestamp
           )
 
-        # Apply debounce
-        if frameData.timestamp - lastTimestamp >= debounceThreshold:
+        # Always add first keyframe, then apply debounce
+        if isFirstKeyframe or frameData.timestamp - lastTimestamp >= debounceThreshold:
           comp.addKeyframe(frameData.timestamp, fallbackCrop, -1)
           lastCrop = fallbackCrop
           lastTrackId = -1
           lastTimestamp = frameData.timestamp
+          isFirstKeyframe = false
       else:
         # Select face to follow based on strategy
         var selectedFace = frameData.faces[0]
@@ -328,12 +333,17 @@ Examples:
           timestamp: frameData.timestamp
         )
 
-        # Apply debounce
-        if frameData.timestamp - lastTimestamp >= debounceThreshold:
+        # Always add first keyframe, then apply debounce
+        if isFirstKeyframe or frameData.timestamp - lastTimestamp >= debounceThreshold:
           comp.addKeyframe(frameData.timestamp, crop, 0)
           lastCrop = crop
           lastTrackId = 0
           lastTimestamp = frameData.timestamp
+          isFirstKeyframe = false
+
+    # Add final keyframe at video end if we have any keyframes
+    if comp.keyframes.len > 0 and lastTimestamp < duration:
+      comp.addKeyframe(duration, lastCrop, lastTrackId)
 
   # Step 5: Generate filter and render
   conwrite("Rendering reframed video...")
@@ -353,12 +363,33 @@ Examples:
   # Build complete filter chain
   let filterChain = &"{cropFilter},scale={targetWidth}:{targetHeight}"
 
-  # Execute FFmpeg command
-  let ffmpegCmd = &"ffmpeg -y -i \"{inputPath}\" -filter_complex \"{filterChain}\" " &
-                  &"-c:v libx264 -preset fast -crf 23 -c:a copy \"{outputPath}\""
+  # Find ffmpeg executable - check build directory first, then PATH
+  var ffmpegPath = ""
+  let buildPath = "build" / "bin" / "ffmpeg"
+  if fileExists(buildPath) or fileExists(buildPath & ".exe"):
+    ffmpegPath = if fileExists(buildPath & ".exe"): buildPath & ".exe" else: buildPath
+  else:
+    ffmpegPath = findExe("ffmpeg")
+  if ffmpegPath == "":
+    error "Could not find ffmpeg executable (checked build/bin/ and PATH)"
 
-  conwrite("Running FFmpeg...")
-  let exitCode = execCmd(ffmpegCmd)
+  # Execute FFmpeg command
+  let args = @[
+    "-y",
+    "-i", inputPath,
+    "-vf", filterChain,
+    "-c:v", "libx264",
+    "-preset", "fast",
+    "-crf", "23",
+    "-c:a", "copy",
+    outputPath
+  ]
+
+  echo "Running FFmpeg..."
+  echo &"  Filter: {filterChain}"
+  let process = startProcess(ffmpegPath, args = args, options = {poUsePath, poParentStreams})
+  defer: process.close()
+  let exitCode = process.waitForExit()
   if exitCode != 0:
     error &"FFmpeg failed with exit code {exitCode}"
 

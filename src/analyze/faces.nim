@@ -338,11 +338,11 @@ iterator facesPipeline*(processor: VideoProcessor,
   ## Yields:
   ##   Tuple of (frame, sceneScore, timestamp) for adaptive-rate frames
   ##
-  ## Filter chain: fps={maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={threshold}:s=12
+  ## Filter chain: fps={maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={threshold}:s=1
   ## - maxFps: Run at max rate, use sampler to skip frames
   ## - scale: Resize for faster face detection
   ## - format: BGR24 required by libfacedetection
-  ## - scdet: Scene change detection with threshold and 12-frame scene duration
+  ## - scdet: Scene change detection with threshold, s=1 enables score metadata output
 
   var packet = av_packet_alloc()
   var frame = av_frame_alloc()
@@ -367,7 +367,7 @@ iterator facesPipeline*(processor: VideoProcessor,
     error &"Could not get pixel format name for format: {ord(pixelFormat)}"
 
   # Build filter: run at maxFps, scale, format for face detection, scene detection
-  let filter = &"fps={sampler.maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={sampler.sceneThreshold}:s=12"
+  let filter = &"fps={sampler.maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={sampler.sceneThreshold}:s=1"
 
   let (filterGraph, bufferSrc, bufferSink) = createFilterGraph(
     timeBase, pixFmtName, processor.codecCtx, filter
