@@ -33,6 +33,13 @@ honeyclip example.mp4 --export premiere
 
 ### Build from source
 
+**Requirements:**
+- Nim 2.2.2+
+- cmake, nasm, pkg-config
+- For Windows: Git Bash (provides required Unix tools)
+- For Windows cross-compile: mingw-w64
+- For ML features: cmake, python3
+
 ```bash
 # Install dependencies and build FFmpeg (first time only, takes 1-2 hours)
 nimble makeff
@@ -40,6 +47,8 @@ nimble makeff
 # Build honeyclip
 nimble make
 ```
+
+**Windows users:** Run `nimble makeff` from **Git Bash**, not PowerShell or CMD. The FFmpeg build requires Unix tools (sed, make, etc.) that Git Bash provides.
 
 ## Editing Methods
 
