@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Face Detection Infrastructure** - Face detection, adaptive sampling, caching layer
 - [x] **Phase 5: Engagement Scoring Foundation** - Audio/motion/speech analysis, scoring algorithm
 - [x] **Phase 6: Engagement Clip Detection** - Scene boundaries, ranking, batch export
-- [ ] **Phase 7: Speaker Tracking & Reframing** - Face tracking, ROI smoothing, vertical output
+- [x] **Phase 7: Speaker Tracking & Reframing** - Face tracking, ROI smoothing, vertical output
 - [ ] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
 - [ ] **Phase 9: NLE Integration & Markers** - Engagement markers, speaker markers, multi-format export
 - [ ] **Phase 10: CLI Integration** - New subcommand, existing workflow integration, progress reporting
@@ -139,12 +139,12 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 07-01-PLAN.md: Tracking types and Kalman filter for motion prediction
-- [ ] 07-02-PLAN.md: Face embeddings via ArcFace ONNX for re-identification
-- [ ] 07-03-PLAN.md: Hungarian algorithm and DeepSORT-style tracker
-- [ ] 07-04-PLAN.md: Cubic-bezier easing and crop region calculation
-- [ ] 07-05-PLAN.md: FFmpeg compositor for speaker-centered rendering
-- [ ] 07-06-PLAN.md: CLI `reframe` command with speed presets
+- [x] 07-01-PLAN.md: Tracking types and Kalman filter for motion prediction
+- [x] 07-02-PLAN.md: Face embeddings via ArcFace ONNX for re-identification
+- [x] 07-03-PLAN.md: Hungarian algorithm and DeepSORT-style tracker
+- [x] 07-04-PLAN.md: Cubic-bezier easing and crop region calculation
+- [x] 07-05-PLAN.md: FFmpeg compositor for speaker-centered rendering
+- [x] 07-06-PLAN.md: CLI `reframe` command with speed presets
 
 ### Phase 8: Multi-Aspect Export & Workflow
 **Goal**: Export in multiple aspect ratios with preview and adjustment capabilities
@@ -203,7 +203,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 4. Face Detection Infrastructure | 4/4 | Complete | 2026-02-02 |
 | 5. Engagement Scoring Foundation | 4/4 | Complete | 2026-02-02 |
 | 6. Engagement Clip Detection | 4/4 | Complete | 2026-02-02 |
-| 7. Speaker Tracking & Reframing | 0/6 | Not started | - |
+| 7. Speaker Tracking & Reframing | 6/6 | Complete | 2026-02-03 |
 | 8. Multi-Aspect Export & Workflow | 0/TBD | Not started | - |
 | 9. NLE Integration & Markers | 0/TBD | Not started | - |
 | 10. CLI Integration | 0/TBD | Not started | - |

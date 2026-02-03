@@ -6,23 +6,23 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 7 - Speaker Tracking & Reframing
+**Current focus:** Phase 8 - Multi-Aspect Export & Workflow
 
 ## Current Position
 
-Phase: 7 of 10 (Speaker Tracking & Reframing) — In progress
-Plan: 3 of 6 in phase
-Status: In progress
-Last activity: 2026-02-02 — Completed 07-03-PLAN.md
+Phase: 7 of 10 (Speaker Tracking & Reframing) — Complete
+Plan: 6 of 6 in phase
+Status: Complete
+Last activity: 2026-02-03 — Completed Phase 7
 
-Progress: [██████████████████████████████░░░░░░░░░░] 70.0%
+Progress: [████████████████████████████████████░░░░] 77.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 29
-- Average duration: 3.2 min
-- Total execution time: 1.65 hours
+- Total plans completed: 32
+- Average duration: 3.4 min
+- Total execution time: 1.85 hours
 
 **By Phase:**
 
@@ -34,11 +34,11 @@ Progress: [███████████████████████
 | 04-face-detection-infrastructure | 4 | 11.2min | 2.8min |
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
-| 07-speaker-tracking-reframing | 3 | 13.3min | 4.43min |
+| 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
 
 **Recent Trend:**
-- Last 5 plans: 07-01 (3min), 07-02 (5.3min), 07-03 (5min), 07-04 (planned), 07-05 (planned)
-- Trend: Phase 7 in progress with consistent velocity (4.43min avg)
+- Last 5 plans: 07-02 (5.3min), 07-03 (5min), 07-04 (5min), 07-05 (5min), 07-06 (15min)
+- Trend: Phase 7 complete, final plan took longer due to bug fixes during verification
 
 *Updated after each plan completion*
 
@@ -208,12 +208,18 @@ None yet.
 - Ready for Phase 7 speaker reframing integration
 
 **Phase 7 (Speaker Reframing):**
-- Falcon SDK integration (C API, commercial licensing unclear for free tier 250 min/month)
-- Fallback strategy needed when free tier exceeded
+- PHASE COMPLETE: All deliverables implemented
+- DeepSORT-style tracking with Kalman filter and Hungarian algorithm
+- ArcFace embeddings for face re-identification (ONNX)
+- Cubic-bezier easing for smooth camera transitions
+- FFmpeg compositor for dynamic crop rendering
+- CLI reframe command with aspect ratio and speed presets
+- Graceful fallback to center crop when faces not detected
+- Note: ML features (face detection) stubbed on Windows due to LTO issues
 
 ## Session Continuity
 
-Last session: 2026-02-02T23:14:51Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-02-03
+Stopped at: Completed Phase 7
 Resume file: None
-Next: Continue Phase 7 - Speaker Reframing (plans 07-04 through 07-06)
+Next: Phase 8 - Multi-Aspect Export & Workflow
