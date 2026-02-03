@@ -1,4 +1,4 @@
-# Requirements: Auto-Editor Engagement Analysis
+# Requirements: honeyclip Engagement Analysis
 
 **Defined:** 2026-02-01
 **Core Value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.

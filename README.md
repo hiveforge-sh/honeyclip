@@ -12,8 +12,11 @@
 ## Features
 
 - **Automatic silence removal** — Cut dead air with a single command
-- **ML-powered engagement scoring** — Find the most engaging moments (coming soon)
-- **Speaker tracking & reframing** — Auto-center speakers for vertical video (coming soon)
+- **ML-powered engagement scoring** — Find the most engaging moments with the `engage` command
+- **Smart clip extraction** — Automatically detect and export the best clips with `clips`
+- **Speaker tracking & reframing** — Auto-center speakers for vertical video with `reframe`
+- **Transcript extraction** — Word-level timestamps with speaker diarization via `transcript`
+- **Caption rendering** — Burn styled captions into video with `caption`
 - **Multi-format export** — Premiere, DaVinci Resolve, Final Cut Pro, and more
 
 ## Quick Start

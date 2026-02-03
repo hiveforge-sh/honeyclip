@@ -37,11 +37,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 5 plans
 
 Plans:
-- [ ] 01-01-PLAN.md: ML library build infrastructure (libfacedetection, OpenCV, ONNX Runtime with caching)
-- [ ] 01-02-PLAN.md: Nim FFI wrappers for ML libraries (facedetect.nim, onnx.nim, opencv.nim)
-- [ ] 01-03-PLAN.md: Windows cross-compilation support (makemlwin task)
-- [ ] 01-04-PLAN.md: CI integration and unit tests (build validation, size checks)
-- [ ] 01-05-PLAN.md: Gap closure - ONNX Runtime static linking fix and build validation
+- [x] 01-01-PLAN.md: ML library build infrastructure (libfacedetection, OpenCV, ONNX Runtime with caching)
+- [x] 01-02-PLAN.md: Nim FFI wrappers for ML libraries (facedetect.nim, onnx.nim, opencv.nim)
+- [x] 01-03-PLAN.md: Windows cross-compilation support (makemlwin task)
+- [x] 01-04-PLAN.md: CI integration and unit tests (build validation, size checks)
+- [x] 01-05-PLAN.md: Gap closure - ONNX Runtime static linking fix and build validation
 
 ### Phase 2: Transcript Foundation
 **Goal**: Extract full transcripts with word-level timestamps and speaker identification

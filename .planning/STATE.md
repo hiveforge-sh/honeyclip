@@ -6,7 +6,7 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 6 - Engagement Clip Detection
+**Current focus:** Phase 7 - Speaker Tracking & Reframing
 
 ## Current Position
 

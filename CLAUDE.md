@@ -61,7 +61,7 @@ Set as environment variables before `nimble makeff`:
 - `onnx.nim` - ONNX Runtime inference
 - `opencv.nim` - OpenCV image processing
 
-**Subcommands** in `src/cmds/`: `cache`, `desc`, `info`, `levels`, `subdump`, `whisper`
+**Subcommands** in `src/cmds/`: `cache`, `caption`, `clips`, `desc`, `engage`, `info`, `levels`, `reframe`, `subdump`, `transcript`, `whisper`
 
 **Key data structures** in `src/media.nim`: `VideoStream`, `AudioStream`, `SubtitleStream`, `MediaInfo`
 

@@ -28,13 +28,13 @@ Surface the most engaging moments from any video with a single command — trans
 
 <!-- New capabilities to build -->
 
-- [ ] Extract full transcript with timestamps (SRT output)
-- [ ] Score segments by engagement level (audio energy + motion + speech content)
-- [ ] Detect optimal clip boundaries for high-engagement segments
-- [ ] Track and identify speakers/faces via ML
-- [ ] Auto-reframe video to center active speaker (vertical output)
-- [ ] New subcommand for analysis workflow
-- [ ] Integration with existing edit workflow
+- [x] Extract full transcript with timestamps (SRT output) — `transcript` command
+- [x] Score segments by engagement level (audio energy + motion + speech content) — `engage` command
+- [x] Detect optimal clip boundaries for high-engagement segments — `clips` command
+- [x] Track and identify speakers/faces via ML — face detection infrastructure complete
+- [ ] Auto-reframe video to center active speaker (vertical output) — `reframe` command (Phase 7 in progress)
+- [x] New subcommand for analysis workflow — `engage`, `clips`, `transcript`, `caption` commands
+- [ ] Integration with existing edit workflow — Phase 10
 
 ### Out of Scope
 
@@ -69,10 +69,13 @@ Reference: OpusClip's feature set (transcript + virality scoring + auto-clipping
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Local signals for engagement | No cloud dependencies, faster processing, works offline | — Pending |
-| SRT output format | Standard format, works with all video editors | — Pending |
-| Face detection via ML | Motion-only tracking insufficient for speaker centering | — Pending |
-| New subcommand + integration | Flexibility for standalone use and pipeline integration | — Pending |
+| Local signals for engagement | No cloud dependencies, faster processing, works offline | Implemented in Phase 5 |
+| SRT output format | Standard format, works with all video editors | Implemented in Phase 2 |
+| Face detection via ML | Motion-only tracking insufficient for speaker centering | Implemented in Phase 4 |
+| New subcommand + integration | Flexibility for standalone use and pipeline integration | Phases 2-6 complete |
+| Percentile normalization | Outlier robustness for engagement scoring | Implemented in Phase 5 |
+| Multi-frame consensus | Reduces face detection false positives | Implemented in Phase 4 |
+| ASS subtitle format | Advanced styling and karaoke support for captions | Implemented in Phase 3 |
 
 ---
-*Last updated: 2026-02-01 after honeyclip rebrand*
+*Last updated: 2026-02-03 — Phases 1-6 complete, Phase 7 in progress*
