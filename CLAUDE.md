@@ -91,3 +91,25 @@ The build deliberately disables unused FFmpeg codecs to reduce binary size. See 
 - cmake, nasm, pkg-config
 - For Windows cross-compile: mingw-w64
 - For ML features: cmake, python3 (for ONNX Runtime build)
+
+## Windows Native Build
+
+Building natively on Windows requires:
+
+1. **Nim via choosenim**: Install from https://nim-lang.org/install.html
+   - choosenim bundles MinGW-w64 at `~/.choosenim/toolchains/mingw64/`
+   - The build system automatically uses this GCC to avoid PATH conflicts
+
+2. **Git Bash** (from Git for Windows): Provides Unix tools (bash, tar, curl)
+
+3. **Python 3.14+** with meson/ninja: `pip install meson ninja`
+
+4. **Pre-built FFmpeg libraries**: Run `nimble makeff` in Git Bash first
+   - This builds FFmpeg and codec libraries into `build/`
+
+5. **Build honeyclip**: `nimble make`
+
+**Known limitations on Windows:**
+- LTO is disabled due to GCC 11.1.0 internal compiler error (binary is larger)
+- ML features (face detection, ONNX) are stubbed out due to LTO issues with the ML libraries
+- The `engage` and `reframe` commands work but without ML-based face detection

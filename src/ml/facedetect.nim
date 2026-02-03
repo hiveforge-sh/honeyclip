@@ -11,10 +11,21 @@ type
     confidence*: float  # 0.0-1.0
     angle*: int  # Rotation angle in degrees
 
-# C API imports from facedetectcnn.h
-proc facedetect_cnn(result_buffer: ptr cint, rgb_image_data: ptr uint8,
-                    width, height, step: cint): cint
-    {.importc, header: "facedetectcnn.h".}
+# Stub implementation for Windows build (ML libraries have LTO issues)
+# TODO: Rebuild libfacedetection without -flto for Windows
+when defined(windows):
+  proc facedetect_cnn(result_buffer: ptr cint, rgb_image_data: ptr uint8,
+                      width, height, step: cint): cint =
+    # Return 0 faces detected - placeholder until ML libs rebuilt without LTO
+    if result_buffer != nil:
+      result_buffer[] = 0
+    return 0
+else:
+  # Import using mangled C++ name (library was built without extern "C")
+  # Mangled name: _Z14facedetect_cnnPhS_iii
+  proc facedetect_cnn(result_buffer: ptr cint, rgb_image_data: ptr uint8,
+                      width, height, step: cint): cint
+      {.importc: "_Z14facedetect_cnnPhS_iii", cdecl.}
 
 const
   DETECT_BUFFER_SIZE = 0x9000  # Required buffer size per libfacedetection docs

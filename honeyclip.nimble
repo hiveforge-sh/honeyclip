@@ -38,11 +38,33 @@ if enableCuda:
 if fileExists("build/lib/libfacedetection.a"):
   flags &= "-d:enable_ml "
 
+proc findWindowsGcc(): string =
+  ## Find the MinGW GCC executable on Windows
+  ## Checks choosenim's bundled MinGW first, then falls back to PATH
+  when defined(windows):
+    let choosenimGcc = getHomeDir() / ".choosenim/toolchains/mingw64/bin/gcc.exe"
+    if fileExists(choosenimGcc):
+      return choosenimGcc
+    # Fall back to gcc in PATH (user must ensure correct one is first)
+    return "gcc"
+  else:
+    return "gcc"
+
 task test, "Run unit tests":
-  exec &"nim c {flags} -r tests/unit"
+  when defined(windows):
+    let gcc = findWindowsGcc()
+    exec &"nim c {flags} --gcc.exe:\"{gcc}\" --gcc.linkerexe:\"{gcc}\" -r tests/unit"
+  else:
+    exec &"nim c {flags} -r tests/unit"
 
 task make, "Export the project":
-  exec &"nim c -d:danger --panics:on {flags} --passC:-flto --passL:-flto --out:honeyclip src/main.nim"
+  # LTO disabled on Windows due to GCC 11.1.0 internal compiler error (ICE in choose_baseaddr)
+  when defined(windows):
+    let gcc = findWindowsGcc()
+    # Use explicit gcc path to avoid shim in ~/.nimble/bin that lacks cc1.exe
+    exec &"nim c -d:danger --panics:on {flags} --gcc.exe:\"{gcc}\" --gcc.linkerexe:\"{gcc}\" --out:honeyclip src/main.nim"
+  else:
+    exec &"nim c -d:danger --panics:on {flags} --passC:-flto --passL:-flto --out:honeyclip src/main.nim"
   when defined(macosx):
     exec "strip -ur honeyclip"
     exec "stat -f \"%z bytes\" ./honeyclip"

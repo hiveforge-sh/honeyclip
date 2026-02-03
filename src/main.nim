@@ -324,12 +324,41 @@ func actionFromUserSpeed(val: float64): seq[Action] =
 proc main() =
   if paramCount() < 1:
     if stdin.isatty():
-      echo """Auto-Editor is an automatic video/audio creator and editor. By default, it
-will detect silence and create a new video with those sections cut out. By
-changing some of the options, you can export to a traditional editor like
-Premiere Pro and adjust the edits there, adjust the pacing of the cuts, and
-change the method of editing like using audio loudness and video motion to
-judge making cuts.
+      echo """
+██╗  ██╗ ██████╗ ███╗   ██╗███████╗██╗   ██╗ ██████╗██╗     ██╗██████╗
+██║  ██║██╔═══██╗████╗  ██║██╔════╝╚██╗ ██╔╝██╔════╝██║     ██║██╔══██╗
+███████║██║   ██║██╔██╗ ██║█████╗   ╚████╔╝ ██║     ██║     ██║██████╔╝
+██╔══██║██║   ██║██║╚██╗██║██╔══╝    ╚██╔╝  ██║     ██║     ██║██╔═══╝
+██║  ██║╚██████╔╝██║ ╚████║███████╗   ██║   ╚██████╗███████╗██║██║
+╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚═════╝╚══════╝╚═╝╚═╝
+
+Automatically removes silent sections from videos and analyzes engagement.
+
+Usage:
+  honeyclip <video_file> [options]     Process a video file
+  honeyclip <command> [args]           Run a subcommand
+
+Commands:
+  cache       Manage face detection cache
+  caption     Generate captions/subtitles
+  clips       Extract engaging clips from video
+  desc        Generate video descriptions
+  engage      Analyze video engagement metrics
+  info        Show media file information
+  levels      Show audio levels
+  reframe     Auto-reframe video for different aspect ratios
+  subdump     Extract subtitles from video
+  transcript  Extract transcript from video
+  whisper     Transcribe audio using Whisper
+
+Examples:
+  honeyclip video.mp4                  Remove silent sections
+  honeyclip video.mp4 -o output.mp4    Specify output filename
+  honeyclip video.mp4 --preview        Preview edits without processing
+  honeyclip info video.mp4             Show video information
+  honeyclip clips video.mp4            Find engaging clips
+
+For full options: honeyclip --help
 """
       quit(0)
   else:
