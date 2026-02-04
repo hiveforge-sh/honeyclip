@@ -2707,6 +2707,235 @@ suite "Timeline":
     let sane = makeSaneTimebase(tb)
     check sane.num == 25
     check sane.den == 1
+
+# Easing Function Tests (reframe/easing.nim)
+
+import ../src/reframe/easing
+
+suite "Easing Functions":
+  test "lerp at t=0 returns start":
+    check lerp(10.0, 20.0, 0.0) == 10.0
+
+  test "lerp at t=1 returns end":
+    check lerp(10.0, 20.0, 1.0) == 20.0
+
+  test "lerp at t=0.5 returns midpoint":
+    check lerp(10.0, 20.0, 0.5) == 15.0
+
+  test "lerp with negative values":
+    check lerp(-10.0, 10.0, 0.5) == 0.0
+
+  test "lerp with same start and end":
+    check lerp(5.0, 5.0, 0.5) == 5.0
+
+  test "cubicBezier at t=0 returns p0":
+    check abs(cubicBezier(0.0, 0.0, 0.25, 0.75, 1.0) - 0.0) < 0.001
+
+  test "cubicBezier at t=1 returns p3":
+    check abs(cubicBezier(1.0, 0.0, 0.25, 0.75, 1.0) - 1.0) < 0.001
+
+  test "cubicBezier ease-in-out at midpoint":
+    # For standard ease-in-out (0, 0.42, 0.58, 1), midpoint should be ~0.5
+    let result = cubicBezier(0.5, 0.0, 0.42, 0.58, 1.0)
+    check abs(result - 0.5) < 0.1  # Allow some deviation
+
+  test "cubicBezier linear curve":
+    # Linear: control points at (0, 0.33, 0.67, 1)
+    let result = cubicBezier(0.5, 0.0, 0.333, 0.667, 1.0)
+    check abs(result - 0.5) < 0.05
+
+  test "getDuration Slow preset":
+    check getDuration(Slow) == 1.5
+
+  test "getDuration Medium preset":
+    check getDuration(Medium) == 0.75
+
+  test "getDuration Fast preset":
+    check getDuration(Fast) == 0.35
+
+  test "easingFunction Slow at boundaries":
+    check abs(easingFunction(0.0, Slow) - 0.0) < 0.001
+    check abs(easingFunction(1.0, Slow) - 1.0) < 0.001
+
+  test "easingFunction Medium at boundaries":
+    check abs(easingFunction(0.0, Medium) - 0.0) < 0.001
+    check abs(easingFunction(1.0, Medium) - 1.0) < 0.001
+
+  test "easingFunction Fast at boundaries":
+    check abs(easingFunction(0.0, Fast) - 0.0) < 0.001
+    check abs(easingFunction(1.0, Fast) - 1.0) < 0.001
+
+  test "easingFunction produces values in range":
+    for t in [0.1, 0.25, 0.5, 0.75, 0.9]:
+      let slow = easingFunction(t, Slow)
+      let medium = easingFunction(t, Medium)
+      let fast = easingFunction(t, Fast)
+      check slow >= 0.0 and slow <= 1.0
+      check medium >= 0.0 and medium <= 1.0
+      check fast >= 0.0 and fast <= 1.0
+
+# Crop Region Tests (reframe/crop.nim)
+
+import ../src/reframe/crop
+
+suite "Crop Region Calculation":
+  test "aspectRatioValue Landscape":
+    let ratio = aspectRatioValue(Landscape)
+    check abs(ratio - 16.0/9.0) < 0.001
+
+  test "aspectRatioValue Portrait":
+    let ratio = aspectRatioValue(Portrait)
+    check abs(ratio - 9.0/16.0) < 0.001
+
+  test "aspectRatioValue Square":
+    let ratio = aspectRatioValue(Square)
+    check ratio == 1.0
+
+  test "mediumShotPadding calculation":
+    # Formula: faceHeight * 2.5
+    check mediumShotPadding(100) == 250
+    check mediumShotPadding(200) == 500
+    check mediumShotPadding(40) == 100
+
+  test "calculateCrop centers on face":
+    let face = FaceRect(x: 500, y: 300, width: 100, height: 120, confidence: 0.9, angle: 0)
+    let crop = calculateCrop(face, 1920, 1080, Portrait)
+
+    # Face center is at (550, 360)
+    # Crop should be roughly centered on face
+    let cropCenterX = crop.x + crop.width div 2
+    let cropCenterY = crop.y + crop.height div 2
+    check abs(cropCenterX - 550) < 50  # Allow some boundary adjustment
+    check abs(cropCenterY - 360) < 100
+
+  test "calculateCrop constrains to frame boundaries":
+    # Face near top-left corner
+    let face = FaceRect(x: 10, y: 10, width: 50, height: 60, confidence: 0.9, angle: 0)
+    let crop = calculateCrop(face, 1920, 1080, Portrait)
+
+    check crop.x >= 0
+    check crop.y >= 0
+    check crop.x + crop.width <= 1920
+    check crop.y + crop.height <= 1080
+
+  test "calculateCrop handles face near right edge":
+    let face = FaceRect(x: 1850, y: 500, width: 50, height: 60, confidence: 0.9, angle: 0)
+    let crop = calculateCrop(face, 1920, 1080, Portrait)
+
+    check crop.x >= 0
+    check crop.x + crop.width <= 1920
+
+  test "calculateCrop handles face near bottom":
+    let face = FaceRect(x: 500, y: 1000, width: 50, height: 60, confidence: 0.9, angle: 0)
+    let crop = calculateCrop(face, 1920, 1080, Portrait)
+
+    check crop.y >= 0
+    check crop.y + crop.height <= 1080
+
+  test "calculateCrop maintains aspect ratio":
+    let face = FaceRect(x: 500, y: 300, width: 100, height: 120, confidence: 0.9, angle: 0)
+
+    let portraitCrop = calculateCrop(face, 1920, 1080, Portrait)
+    let portraitRatio = portraitCrop.width.float / portraitCrop.height.float
+    check abs(portraitRatio - 9.0/16.0) < 0.1
+
+    let squareCrop = calculateCrop(face, 1920, 1080, Square)
+    let squareRatio = squareCrop.width.float / squareCrop.height.float
+    check abs(squareRatio - 1.0) < 0.1
+
+  test "calculateFallbackCrop centers on frame":
+    let crop = calculateFallbackCrop(1920, 1080, Portrait)
+
+    # Should be centered
+    let expectedCenterX = 1920 div 2
+    let expectedCenterY = 1080 div 2
+    let cropCenterX = crop.x + crop.width div 2
+    let cropCenterY = crop.y + crop.height div 2
+
+    check abs(cropCenterX - expectedCenterX) < 5
+    check abs(cropCenterY - expectedCenterY) < 5
+
+  test "calculateFallbackCrop fits frame":
+    let crop = calculateFallbackCrop(1920, 1080, Portrait)
+
+    check crop.x >= 0
+    check crop.y >= 0
+    check crop.x + crop.width <= 1920
+    check crop.y + crop.height <= 1080
+
+  test "calculateFallbackCrop Square on wide frame":
+    let crop = calculateFallbackCrop(1920, 1080, Square)
+
+    # Square should fit height (1080) since frame is wider
+    check crop.height == 1080
+    check crop.width == 1080
+
+  test "calculateFallbackCrop Portrait on wide frame":
+    let crop = calculateFallbackCrop(1920, 1080, Portrait)
+
+    # Portrait (9:16) should fit height
+    check crop.height == 1080
+    let expectedWidth = int(1080.0 * 9.0 / 16.0)
+    check abs(crop.width - expectedWidth) < 5
+
+  test "shouldSwitchTarget detects significant movement":
+    let current = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 0.0)
+    let far = CropRegion(x: 200, y: 200, width: 200, height: 300, timestamp: 1.0)
+
+    # Distance > 20 pixels (default threshold)
+    check shouldSwitchTarget(current, far) == true
+
+  test "shouldSwitchTarget ignores small movement":
+    let current = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 0.0)
+    let near = CropRegion(x: 105, y: 105, width: 200, height: 300, timestamp: 1.0)
+
+    # Distance ~7 pixels < 20 threshold
+    check shouldSwitchTarget(current, near) == false
+
+  test "shouldSwitchTarget respects custom threshold":
+    let current = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 0.0)
+    let medium = CropRegion(x: 115, y: 115, width: 200, height: 300, timestamp: 1.0)
+
+    # Distance ~21 pixels
+    check shouldSwitchTarget(current, medium, threshold = 30.0) == false
+    check shouldSwitchTarget(current, medium, threshold = 15.0) == true
+
+  test "shouldSwitchTarget with same position":
+    let current = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 0.0)
+    let same = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 1.0)
+
+    check shouldSwitchTarget(current, same) == false
+
+  test "interpolateCrop at t=0 returns start":
+    let start = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 0.0)
+    let finish = CropRegion(x: 200, y: 200, width: 300, height: 400, timestamp: 1.0)
+
+    let result = interpolateCrop(start, finish, 0.0, Medium)
+    check result.x == start.x
+    check result.y == start.y
+    check result.width == start.width
+    check result.height == start.height
+
+  test "interpolateCrop at t=1 returns end":
+    let start = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 0.0)
+    let finish = CropRegion(x: 200, y: 200, width: 300, height: 400, timestamp: 1.0)
+
+    let result = interpolateCrop(start, finish, 1.0, Medium)
+    check result.x == finish.x
+    check result.y == finish.y
+    check result.width == finish.width
+    check result.height == finish.height
+
+  test "interpolateCrop at midpoint is between start and end":
+    let start = CropRegion(x: 100, y: 100, width: 200, height: 300, timestamp: 0.0)
+    let finish = CropRegion(x: 200, y: 200, width: 300, height: 400, timestamp: 1.0)
+
+    let result = interpolateCrop(start, finish, 0.5, Medium)
+    check result.x > start.x and result.x < finish.x
+    check result.y > start.y and result.y < finish.y
+    check result.width > start.width and result.width < finish.width
+    check result.height > start.height and result.height < finish.height
+
 #
 #   7. honeyclip engage video.mp4 nonexistent-model.bin
 #      Expected: Error with download URL and example curl command
