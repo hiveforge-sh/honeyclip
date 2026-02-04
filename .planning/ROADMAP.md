@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Engagement Clip Detection** - Scene boundaries, ranking, batch export
 - [x] **Phase 7: Speaker Tracking & Reframing** - Face tracking, ROI smoothing, vertical output
 - [x] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
-- [ ] **Phase 9: NLE Integration & Markers** - Engagement markers, speaker markers, multi-format export
+- [x] **Phase 9: NLE Integration & Markers** - Engagement markers, speaker markers, multi-format export
 - [ ] **Phase 10: CLI Integration** - New subcommand, existing workflow integration, progress reporting
 
 ## Phase Details
@@ -179,13 +179,13 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Marker data structures and factory functions
-- [ ] 09-02-PLAN.md — FCP7 XML marker export (Adobe Premiere)
-- [ ] 09-03-PLAN.md — FCPXML marker export (Final Cut Pro X)
-- [ ] 09-04-PLAN.md — EDL marker export (DaVinci Resolve)
-- [ ] 09-05-PLAN.md — AAF export via pyaaf2 (After Effects)
-- [ ] 09-06-PLAN.md — Score visualization rendering (graph + text overlays)
-- [ ] 09-07-PLAN.md — CLI integration (--nle flag for export command)
+- [x] 09-01-PLAN.md — Marker data structures and factory functions
+- [x] 09-02-PLAN.md — FCP7 XML marker export (Adobe Premiere)
+- [x] 09-03-PLAN.md — FCPXML marker export (Final Cut Pro X)
+- [x] 09-04-PLAN.md — EDL marker export (DaVinci Resolve)
+- [x] 09-05-PLAN.md — AAF export via pyaaf2 (After Effects)
+- [x] 09-06-PLAN.md — Score visualization rendering (graph + text overlays)
+- [x] 09-07-PLAN.md — CLI integration (--nle flag for export command)
 
 ### Phase 10: CLI Integration
 **Goal**: Integrate engagement analysis into CLI with new subcommand and progress reporting
@@ -215,5 +215,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 6. Engagement Clip Detection | 4/4 | Complete | 2026-02-02 |
 | 7. Speaker Tracking & Reframing | 6/6 | Complete | 2026-02-03 |
 | 8. Multi-Aspect Export & Workflow | 5/5 | Complete | 2026-02-03 |
-| 9. NLE Integration & Markers | 0/7 | Planned | - |
+| 9. NLE Integration & Markers | 7/7 | Complete | 2026-02-03 |
 | 10. CLI Integration | 0/TBD | Not started | - |

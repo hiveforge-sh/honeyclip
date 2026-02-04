@@ -46,13 +46,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### NLE Integration
 
-- [ ] **NLE-01**: Export to Adobe Premiere (FCP7 XML with markers)
-- [ ] **NLE-02**: Export to After Effects (FCP7 XML or AAF)
-- [ ] **NLE-03**: Export to DaVinci Resolve (FCP7 XML, AAF, or EDL)
-- [ ] **NLE-04**: Export to Final Cut Pro (FCPXML with markers)
-- [ ] **NLE-05**: Include engagement markers at scene boundaries and peaks
-- [ ] **NLE-06**: Include speaker change markers
-- [ ] **NLE-07**: Export engagement scores as text/graphic layer
+- [x] **NLE-01**: Export to Adobe Premiere (FCP7 XML with markers)
+- [x] **NLE-02**: Export to After Effects (FCP7 XML or AAF)
+- [x] **NLE-03**: Export to DaVinci Resolve (FCP7 XML, AAF, or EDL)
+- [x] **NLE-04**: Export to Final Cut Pro (FCPXML with markers)
+- [x] **NLE-05**: Include engagement markers at scene boundaries and peaks
+- [x] **NLE-06**: Include speaker change markers
+- [x] **NLE-07**: Export engagement scores as text/graphic layer
 
 ### CLI & Interface
 
@@ -119,13 +119,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXPRT-03 | Phase 8 | Complete |
 | EXPRT-04 | Phase 8 | Complete |
 | EXPRT-05 | Phase 8 | Complete |
-| NLE-01 | Phase 9 | Pending |
-| NLE-02 | Phase 9 | Pending |
-| NLE-03 | Phase 9 | Pending |
-| NLE-04 | Phase 9 | Pending |
-| NLE-05 | Phase 9 | Pending |
-| NLE-06 | Phase 9 | Pending |
-| NLE-07 | Phase 9 | Pending |
+| NLE-01 | Phase 9 | Complete |
+| NLE-02 | Phase 9 | Complete |
+| NLE-03 | Phase 9 | Complete |
+| NLE-04 | Phase 9 | Complete |
+| NLE-05 | Phase 9 | Complete |
+| NLE-06 | Phase 9 | Complete |
+| NLE-07 | Phase 9 | Complete |
 | CLI-01 | Phase 10 | Pending |
 | CLI-02 | Phase 10 | Pending |
 | CLI-03 | Phase 10 | Pending |
@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-03 after Phase 8 completion*
+*Last updated: 2026-02-03 after Phase 9 completion*
