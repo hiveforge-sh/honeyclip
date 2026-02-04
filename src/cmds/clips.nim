@@ -1,4 +1,4 @@
-import std/[strformat, strutils, os, json, tables, algorithm]
+import std/[strformat, strutils, os, json, tables, algorithm, times]
 import ../log
 import ../util/fun
 import ../util/bar
@@ -178,16 +178,22 @@ Workflow:
     # Default to list mode if neither specified
     showList = true
 
+  var bar = initBar(BarType.modern)
+  defer: bar.destroy()
+
   # Step 1: Extract transcript
-  conwrite(&"Extracting transcript from {inputPath}...")
+  let transcriptStart = epochTime()
+  bar.start(100.0, "Extracting transcript")
   var transcript: Transcript
   try:
     transcript = extractTranscript(inputPath, model, "", "")
   except IOError as e:
     error &"Failed to extract transcript: {e.msg}"
+  bar.`end`()
+  let transcriptTime = epochTime() - transcriptStart
+  let wordCount = transcript.words.len
 
-  # Step 2: Analyze engagement
-  conwrite("Analyzing engagement...")
+  # Step 2: Open container for analysis
   var container = av.open(inputPath)
   defer: container.close()
 
@@ -199,22 +205,25 @@ Workflow:
   else:
     error "No video or audio stream found"
 
+  # Step 3: Analyze engagement (uses internal per-step progress)
+  let analyzeStart = epochTime()
   var timeline: EngagementTimeline
   try:
     let params = defaultEngagementParams()
     let patterns = loadBuiltinPatterns()
-    var bar = initBar(BarType.modern)
     timeline = analyzeEngagement(bar, container, inputPath, transcript, tb,
                                   params, patterns, not noFaces)
   except Exception as e:
     error &"Failed to analyze engagement: {e.msg}"
+  let analyzeTime = epochTime() - analyzeStart
 
-  # Step 3: Detect scene changes
-  conwrite("Detecting scene changes...")
+  # Step 4: Detect scene changes
+  bar.start(100.0, "Detecting scene changes")
   let sceneChanges = extractSceneChanges(inputPath)
+  bar.`end`()
 
-  # Step 4: Detect clips
-  conwrite("Detecting clips...")
+  # Step 5: Detect clip boundaries and clips
+  bar.start(100.0, "Detecting clip boundaries")
   var detectionParams = defaultClipDetectionParams()
   detectionParams.minClipDurationMs = minDuration * 1000
   detectionParams.maxClipDurationMs = maxDuration * 1000
@@ -223,20 +232,30 @@ Workflow:
 
   let boundaries = detectBoundaries(timeline, sceneChanges, detectionParams)
   var detectedClips = detectClips(timeline, boundaries, detectionParams)
+  bar.`end`()
 
   if detectedClips.len == 0:
-    conwrite("")
+    echo ""
     echo "No clips detected meeting criteria."
     echo &"  Min duration: {minDuration}s"
     echo &"  Max duration: {maxDuration}s"
     quit(0)
 
-  # Step 5: Rank clips
+  # Step 6: Rank clips
+  bar.start(float(detectedClips.len), "Ranking clips")
   var rankingParams = defaultClipRankingParams()
   rankingParams.topN = topN
   let rankedClips = rankClips(detectedClips, rankingParams)
+  bar.`end`()
 
-  conwrite("")
+  # Print summary
+  if not quiet:
+    echo ""
+    echo &"Found {rankedClips.len} clips from {detectedClips.len} candidates"
+    echo &"  Words analyzed: {wordCount}"
+    echo &"  Scene changes: {sceneChanges.len}"
+    echo &"  Transcript: {transcriptTime:.1f}s, Analysis: {analyzeTime:.1f}s"
+    echo ""
 
   # Step 6: Output based on mode
   if showList:
