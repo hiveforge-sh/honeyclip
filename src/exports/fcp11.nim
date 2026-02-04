@@ -8,6 +8,7 @@ import ../ffmpeg
 import ../timeline
 import ../transcript/grouping
 import ../render/captions
+import markers
 
 #[
 Export a FCPXML 11 file readable with Final Cut Pro 10.6.8 or later.
@@ -432,3 +433,122 @@ proc fcp11_write_xml*(groupName, version, output: string, resolve: bool, tl: v3)
   else:
     let xmlStr = "<?xml version='1.0' encoding='utf-8'?>\n" & $fcpxml
     writeFile(output, xmlStr)
+
+proc addMarkerFCPXML*(parent: XmlNode, marker: Marker, tb: AVRational) =
+  ## Add a single marker element to FCPXML
+  ##
+  ## FCPXML marker format (simpler than FCP7):
+  ## <marker start="10s" duration="1s" value="Peak #1" note="Score: 85/100"/>
+  ##
+  ## FCPXML uses rational time (e.g., "1001/30000s") or simple seconds
+  ##
+  ## Note: FCPXML markers don't support custom colors in the XML,
+  ## color is set by marker type in Final Cut Pro
+  ##
+  ## Args:
+  ##   parent: The clip or spine element to add marker to
+  ##   marker: Marker data
+  ##   tb: Timebase for timing calculation
+  func fraction(val: int64): string =
+    if val == 0:
+      return "0s"
+    return &"{val * tb.den.int}/{tb.num}s"
+
+  # Convert milliseconds to frame-based timing
+  # timestampMs -> frames: (ms * fps_num) / (fps_den * 1000)
+  let startFrame = (marker.timestampMs * tb.num.int64) div (tb.den.int64 * 1000)
+  let durationFrame = (marker.durationMs * tb.num.int64) div (tb.den.int64 * 1000)
+
+  let markerElem = newElement("marker")
+  markerElem.attrs = {
+    "start": fraction(startFrame),
+    "duration": fraction(if durationFrame > 0: durationFrame else: 1),
+    "value": marker.name,
+    "note": marker.comment
+  }.toXmlAttributes
+
+  parent.add markerElem
+
+proc addMarkersFCPXML*(parent: XmlNode, markers: seq[Marker], tb: AVRational) =
+  ## Add multiple markers to a parent element (clip, gap, or spine)
+  for marker in markers:
+    addMarkerFCPXML(parent, marker, tb)
+
+proc writeMarkersFCPXML*(videoPath: string, markers: seq[Marker], outputPath: string) =
+  ## Write FCPXML file with markers on video clip
+  ## Creates: fcpxml > resources + library > event > project > sequence > spine > asset-clip with markers
+  let mi = initMediaInfo(videoPath)
+  let (width, height) = mi.getRes()
+  # Get framerate from video stream, default to 30fps if no video
+  let tb = if mi.v.len > 0: makeSaneTimebase(mi.v[0].avg_rate) else: AVRational(num: 30, den: 1)
+
+  func fraction(val: int): string =
+    if val == 0:
+      return "0s"
+    return &"{val * tb.den.int}/{tb.num}s"
+
+  let fcpxml = <>fcpxml(version = "1.11")
+  let resources = newElement("resources")
+  fcpxml.add resources
+
+  let projName = videoPath.splitFile.name
+  let duration = int(mi.duration * tb)
+
+  # Add format resource
+  let formatId = "r1"
+  resources.add(<>format(id = formatId, name = makeName(mi, tb),
+      frameDuration = fraction(1), width = $width, height = $height,
+      colorSpace = getColorspace(mi)))
+
+  # Add asset resource
+  let assetId = "r2"
+  let hasVideo = (if mi.v.len > 0: "1" else: "0")
+  let hasAudio = (if mi.a.len > 0: "1" else: "0")
+  let audioChannels = (if mi.a.len == 0: "2" else: $mi.a[0].channels)
+
+  let asset = <>asset(id = assetId, name = projName,
+      start = "0s", hasVideo = hasVideo, format = formatId,
+      hasAudio = hasAudio, audioSources = "1",
+      audioChannels = audioChannels, duration = fraction(duration))
+
+  let mediaRep = newElement("media-rep")
+  mediaRep.attrs = {"kind": "original-media", "src": videoPath.pathToUri()}.toXmlAttributes
+  asset.add mediaRep
+  resources.add asset
+
+  # Create library/event/project structure
+  let lib = <>library()
+  let evt = <>event(name = projName)
+  let proj = <>project(name = projName)
+  let sampleRate = if mi.a.len > 0: (if mi.a[0].sampleRate == 44100: "44.1k" else: "48k") else: "48k"
+  let audioLayout = if mi.a.len > 0: mi.a[0].layout else: "stereo"
+  let sequence = <>sequence(format = formatId, tcStart = "0s", tcFormat = "NDF",
+      audioLayout = audioLayout, audioRate = sampleRate)
+  let spine = <>spine()
+
+  # Add video asset-clip to spine
+  let assetClip = newElement("asset-clip")
+  assetClip.attrs = {
+    "name": projName,
+    "ref": assetId,
+    "offset": "0s",
+    "duration": fraction(duration),
+    "start": "0s",
+    "tcFormat": "NDF"
+  }.toXmlAttributes
+
+  # Add markers to the asset-clip element
+  addMarkersFCPXML(assetClip, markers, tb)
+
+  spine.add assetClip
+  sequence.add spine
+  proj.add sequence
+  evt.add proj
+  lib.add evt
+  fcpxml.add lib
+
+  if outputPath == "-":
+    echo $fcpxml
+  else:
+    let xmlStr = "<?xml version='1.0' encoding='utf-8'?>\n" & $fcpxml
+    writeFile(outputPath, xmlStr)
