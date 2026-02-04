@@ -15,6 +15,7 @@ import ../timeline
 import ../ffmpeg
 import ../transcript/grouping
 import ../render/captions
+import markers
 
 #[
 Premiere Pro uses the Final Cut Pro 7 XML Interchange Format
@@ -243,6 +244,19 @@ proc handlePath(src: string): string =
   else:
     absPath
 
+proc markerColorToFCP7*(hex: string): tuple[r, g, b: int] =
+  ## Convert hex color (#RRGGBB) to FCP7 RGB 0-255 values for markers
+  var color = hex
+  if color.startsWith("#"):
+    color = color[1..^1]
+
+  # Parse RGB
+  let r = parseHexInt(color[0..1])
+  let g = parseHexInt(color[2..3])
+  let b = parseHexInt(color[4..5])
+
+  result = (r: r, g: g, b: b)
+
 proc hexToFCP7Color*(hex: string): string =
   ## Convert hex color (#RRGGBB) to FCP7 color format (normalized 0.0-1.0 RGB)
   var color = hex
@@ -399,6 +413,119 @@ proc writeCaptionOnlyFCP7*(videoPath: string, captions: seq[Caption], style: Cap
 
   # Add caption track
   addCaptionTrackFCP7(video, captions, style, timebase, ntsc)
+
+  media.add video
+  sequence.add media
+  xmeml.add sequence
+
+  if outputPath == "-":
+    echo $xmeml
+  else:
+    let xmlStr = "<?xml version='1.0' encoding='utf-8'?>\n" & $xmeml
+    writeFile(outputPath, xmlStr)
+
+proc addMarkerFCP7*(parent: XmlNode, marker: Marker, timebase: int64) =
+  ## Add a single marker element to FCP7 XML
+  ##
+  ## FCP7 marker format (from Apple docs):
+  ## <marker>
+  ##   <name>Peak #1</name>
+  ##   <comment>Score: 85/100 (#1) - High engagement</comment>
+  ##   <in>3000</in>
+  ##   <out>3030</out>
+  ##   <color><red>0</red><green>255</green><blue>0</blue><alpha>255</alpha></color>
+  ## </marker>
+  ##
+  ## Args:
+  ##   parent: The clip or sequence element to add marker to
+  ##   marker: Marker data from markers module
+  ##   timebase: Frames per second for in/out calculation
+  let markerNode = newElement("marker")
+
+  markerNode.add elem("name", marker.name)
+  markerNode.add elem("comment", marker.comment)
+
+  # Calculate frame positions from milliseconds
+  let inFrame = (marker.timestampMs * timebase) div 1000
+  let outFrame = inFrame + (marker.durationMs * timebase) div 1000
+  markerNode.add elem("in", $inFrame)
+  markerNode.add elem("out", $outFrame)
+
+  # Build color element with 0-255 RGB values
+  let (r, g, b) = markerColorToFCP7(marker.color)
+  let colorNode = newElement("color")
+  colorNode.add elem("red", $r)
+  colorNode.add elem("green", $g)
+  colorNode.add elem("blue", $b)
+  colorNode.add elem("alpha", "255")
+  markerNode.add colorNode
+
+  parent.add markerNode
+
+proc addMarkersFCP7*(clipitem: XmlNode, markers: seq[Marker], timebase: int64) =
+  ## Add multiple markers to a clip item
+  for marker in markers:
+    addMarkerFCP7(clipitem, marker, timebase)
+
+proc writeMarkersFCP7*(videoPath: string, markers: seq[Marker], outputPath: string) =
+  ## Write FCP7 XML file with markers only (no timeline edits)
+  ## Creates minimal structure: xmeml > sequence > media > video > track > clipitem with markers
+  let mi = initMediaInfo(videoPath)
+  let (width, height) = mi.getRes()
+  # Get framerate from video stream, default to 30fps if no video
+  let tb = if mi.v.len > 0: makeSaneTimebase(mi.v[0].avg_rate) else: AVRational(num: 30, den: 1)
+  let (timebase, ntsc) = setTbNtsc(tb)
+
+  let xmeml = <>xmeml(version = "5")
+  let sequence = newElement("sequence")
+
+  sequence.add elem("name", videoPath.splitFile.name & "_markers")
+  let rate1 = newElement("rate")
+  rate1.add elem("timebase", $timebase)
+  rate1.add elem("ntsc", ntsc)
+  sequence.add rate1
+
+  let media = newElement("media")
+  let video = newElement("video")
+  let vformat = newElement("format")
+  let vschar = newElement("samplecharacteristics")
+
+  vschar.add elem("width", $width)
+  vschar.add elem("height", $height)
+  vschar.add elem("pixelaspectratio", "square")
+
+  let rate2 = newElement("rate")
+  rate2.add elem("timebase", $timebase)
+  rate2.add elem("ntsc", ntsc)
+  vschar.add rate2
+  vformat.add vschar
+  video.add vformat
+
+  # Add video clip reference with markers
+  let videoTrack = newElement("track")
+  let duration = int(mi.duration * tb)
+  let clipitem = <>clipitem(id = "clipitem-1")
+  clipitem.add elem("name", videoPath.splitFile.name)
+  clipitem.add elem("enabled", "TRUE")
+  clipitem.add elem("start", "0")
+  clipitem.add elem("end", $duration)
+  clipitem.add elem("in", "0")
+  clipitem.add elem("out", $duration)
+
+  let filedef = <>file(id = "file-1")
+  filedef.add elem("name", videoPath.splitFile.name)
+  filedef.add elem("pathurl", handlePath(videoPath))
+  let fileRate = newElement("rate")
+  fileRate.add elem("timebase", $timebase)
+  fileRate.add elem("ntsc", ntsc)
+  filedef.add fileRate
+  clipitem.add filedef
+
+  # Add markers to clipitem
+  addMarkersFCP7(clipitem, markers, timebase)
+
+  videoTrack.add clipitem
+  video.add videoTrack
 
   media.add video
   sequence.add media
