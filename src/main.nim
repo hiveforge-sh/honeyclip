@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd]
+import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd, analyze]
 import util/[color, fun]
 import palet/edit
 import analyze/presets
@@ -21,6 +21,7 @@ setControlCHook(ctrlc)
 
 type Command = tuple[name: string, handler: proc(args: seq[string])]
 const cmdHandlers: seq[Command] = @[
+  ("analyze", analyze.main),
   ("cache", cache.main),
   ("caption", caption.main),
   ("clips", clipsCmd.main),
@@ -346,6 +347,7 @@ Usage:
   honeyclip <command> [args]           Run a subcommand
 
 Commands:
+  analyze     Analyze video and detect engaging clips (recommended)
   cache       Manage face detection cache
   caption     Generate captions/subtitles
   clips       Extract engaging clips from video

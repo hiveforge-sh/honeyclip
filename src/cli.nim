@@ -1,5 +1,6 @@
 
 const commands*: seq[tuple[name: string, help: string]] = @[
+  ("analyze", "Analyze video and detect engaging clips (convenience workflow)"),
   ("cache", ""),
   ("caption", "Generate and render captions from transcripts with styling and NLE export"),
   ("clips", "Detect and export engaging clips from video"),
