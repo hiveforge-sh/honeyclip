@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd]
+import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, export as exportCmd]
 import util/[color, fun]
 import palet/edit
 
@@ -25,6 +25,7 @@ const cmdHandlers: seq[Command] = @[
   ("clips", clipsCmd.main),
   ("desc", desc.main),
   ("engage", engagement.main),
+  ("export", exportCmd.main),
   ("info", info.main),
   ("levels", levels.main),
   ("reframe", reframeCmd.main),
@@ -344,6 +345,7 @@ Commands:
   clips       Extract engaging clips from video
   desc        Generate video descriptions
   engage      Analyze video engagement metrics
+  export      Export clips with multi-aspect and preview support
   info        Show media file information
   levels      Show audio levels
   reframe     Auto-reframe video for different aspect ratios
