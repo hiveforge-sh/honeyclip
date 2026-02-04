@@ -1,4 +1,4 @@
-import std/[os, osproc, parseutils, sequtils, strformat, strutils, terminal, uri]
+import std/[os, osproc, parseutils, sequtils, strformat, strutils, tables, terminal, uri]
 when not defined(windows):
   import std/posix_utils
 
@@ -10,6 +10,7 @@ import ffmpeg
 import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd]
 import util/[color, fun]
 import palet/edit
+import analyze/presets
 
 import tinyre
 
@@ -59,6 +60,11 @@ Options:
                                     varispeed (val: float)
                                       ; Change the speed by varying pitch.
                                       ;   val: between [0.2-100]
+    --engage [VALUE]              Filter by engagement score. VALUE can be:
+                                  - A number (0-100): threshold score
+                                  - A preset: viral, podcast, tutorial, interview,
+                                    tiktok, youtube, instagram
+                                  Default: 50 if no value specified
     -ex, --export EXPORT:ATTRS?   Choose the export mode.
     -o, --output FILE             Set the name/path of the new output file
     --cut-out, --cut [START,STOP ...]
@@ -465,7 +471,15 @@ For full options: honeyclip --help
         "--yt-dlp-location", "--download-format", "--output-format", "--yt-dlp-extras":
       expecting = key[2..^1]
     else:
-      if key.startsWith("--"):
+      if key == "--engage" or key.startsWith("--engage="):
+        args.engageEnabled = true
+        if key.contains("="):
+          let value = key.split("=")[1]
+          let parsed = parseEngageValue(value)
+          args.engageThreshold = parsed.threshold
+          args.engagePreset = (if value in Presets: value else: "")
+        # else use default threshold 50.0 already set in mainArgs
+      elif key.startsWith("--"):
         error(&"Unknown option: {key}")
 
       case expecting
