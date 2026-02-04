@@ -1,4 +1,4 @@
-import std/[strformat, strutils, os, json, tables, algorithm, times]
+import std/[strformat, strutils, os, json, tables, algorithm, times, terminal]
 import ../log
 import ../util/fun
 import ../util/bar
