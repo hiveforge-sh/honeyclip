@@ -9,8 +9,10 @@
 ## The multi-signal approach produces clips that feel like natural "moments"
 ## suitable for social media (TikTok, Reels, Shorts).
 
-import std/[algorithm, strformat, strutils, osproc, os]
+import std/[algorithm, strformat, strutils, osproc, os, math]
 import engagement_types
+import ../exports/presets
+import ../reframe/crop
 
 type
   BoundaryReason* = enum
@@ -71,6 +73,51 @@ type
     outputPath*: string
     success*: bool
     error*: string
+
+  AspectExportJob* = object
+    ## Single export job for aspect x clip combination
+    clip*: Clip
+    aspect*: AspectRatio
+    outputPath*: string
+    skipReframe*: bool      # True if source matches target aspect
+
+  MultiAspectExportParams* = object
+    ## Parameters for multi-aspect export
+    baseParams*: ClipExportParams    # Base encoding settings
+    aspects*: seq[AspectRatio]       # Ratios to export (default: all three)
+    sourceAspect*: float             # Source video aspect ratio
+    sourceWidth*, sourceHeight*: int # Source dimensions
+    preset*: string                  # Optional platform preset name
+
+# ===== Aspect ratio helpers =====
+
+proc calculateSourceAspect*(width, height: int): float =
+  ## Calculate aspect ratio as float (e.g., 1.777 for 16:9)
+  width.float / height.float
+
+proc aspectsMatch*(source, target: AspectRatio, tolerance: float = 0.01): bool =
+  ## Check if source aspect matches target within tolerance
+  ## Used to skip reframing when not needed
+  let sourceVal = aspectRatioValue(source)
+  let targetVal = aspectRatioValue(target)
+  abs(sourceVal - targetVal) < tolerance
+
+proc aspectFromFloat*(ratio: float, tolerance: float = 0.1): AspectRatio =
+  ## Determine aspect ratio enum from float value
+  if abs(ratio - 16.0/9.0) < tolerance:
+    return Landscape
+  elif abs(ratio - 9.0/16.0) < tolerance:
+    return Portrait
+  elif abs(ratio - 1.0) < tolerance:
+    return Square
+  else:
+    # Default to landscape for wider, portrait for taller
+    if ratio > 1.0: Landscape else: Portrait
+
+proc generateAspectSubfolder*(baseDir: string, aspect: AspectRatio): string =
+  ## Generate output subfolder path for aspect ratio
+  ## e.g., video_clips/16x9/, video_clips/9x16/, video_clips/1x1/
+  baseDir / aspectToString(aspect)
 
 # ===== Default parameters =====
 
