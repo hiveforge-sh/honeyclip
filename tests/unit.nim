@@ -1958,3 +1958,231 @@ suite "EDL Markers":
     # Should have marker section
     check content.contains("* --- MARKERS ---")
     check content.contains("ENGAGEMENT_PEAK")
+
+# Score Visualization Tests
+
+suite "Score Visualization":
+  test "defaultScoreVizParams returns expected defaults":
+    let params = defaultScoreVizParams()
+    check params.mode == svmBoth
+    check params.graphHeight == 100
+    check params.graphPosition == "bottom"
+    check params.graphColor == "#00FF00"
+    check params.graphOpacity == 0.5
+    check params.textInterval == 5
+    check params.textPosition == "top-right"
+    check params.fontSize == 24
+    check params.fontColor == "#FFFFFF"
+
+  test "writeScoreDataFile output format":
+    # Create test segments
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    # Write to temp file
+    let tempDir = createTempDir("tmp", "")
+    defer: removeDir(tempDir)
+    let outputPath = tempDir / "scores.txt"
+
+    # Write data for 1 second at 30fps = 30 frames
+    writeScoreDataFile(segments, outputPath, fps = 30.0, durationMs = 1000)
+
+    # Read and verify
+    let content = readFile(outputPath)
+    let lines = content.strip().splitLines()
+
+    # Should have 30 lines (30 frames)
+    check lines.len == 30
+
+    # Each line should be a value between 0 and 1
+    for line in lines:
+      let value = parseFloat(line)
+      check value >= 0.0 and value <= 1.0
+
+    # Score of 50/100 should produce 0.500
+    check lines[0] == "0.500"
+
+  test "writeScoreDataFile handles multiple segments":
+    var segments: seq[EngagementSegment] = @[]
+
+    var seg1 = newEngagementSegment(0, 500)
+    seg1.score = 25.0f
+    segments.add(seg1)
+
+    var seg2 = newEngagementSegment(500, 1000)
+    seg2.score = 75.0f
+    segments.add(seg2)
+
+    let tempDir = createTempDir("tmp", "")
+    defer: removeDir(tempDir)
+    let outputPath = tempDir / "scores.txt"
+
+    # Write data for 1 second at 10fps = 10 frames
+    writeScoreDataFile(segments, outputPath, fps = 10.0, durationMs = 1000)
+
+    let content = readFile(outputPath)
+    let lines = content.strip().splitLines()
+
+    check lines.len == 10
+
+    # First 5 frames (0-500ms) should be 0.250
+    check lines[0] == "0.250"
+    check lines[4] == "0.250"
+
+    # Last 5 frames (500-1000ms) should be 0.750
+    check lines[5] == "0.750"
+    check lines[9] == "0.750"
+
+  test "generateGraphFilter produces valid filter":
+    let params = defaultScoreVizParams()
+    let filter = generateGraphFilter(params, "scores.txt", 1920, 1080)
+
+    # Should produce drawbox filter
+    check filter.contains("drawbox")
+    # Should reference graph height
+    check filter.contains("h=100")
+    # Should have width
+    check filter.contains("w=1920")
+    # Should position at bottom (1080 - 100 = 980)
+    check filter.contains("y=980")
+    # Should have opacity
+    check filter.contains("@0.5")
+
+  test "generateGraphFilter respects top position":
+    var params = defaultScoreVizParams()
+    params.graphPosition = "top"
+    let filter = generateGraphFilter(params, "scores.txt", 1920, 1080)
+
+    # Should position at top (y=0)
+    check filter.contains("y=0")
+
+  test "generateTextFilter produces drawtext with enable":
+    var segments: seq[EngagementSegment] = @[]
+
+    var seg1 = newEngagementSegment(0, 5000)
+    seg1.score = 75.0f
+    segments.add(seg1)
+
+    var seg2 = newEngagementSegment(5000, 10000)
+    seg2.score = 85.0f
+    segments.add(seg2)
+
+    let params = defaultScoreVizParams()
+    let filter = generateTextFilter(params, segments)
+
+    # Should contain drawtext
+    check filter.contains("drawtext=")
+    # Should contain enable expression
+    check filter.contains("enable='between(t,")
+    # Should contain score text
+    check filter.contains("Score\\: 75/100")
+    check filter.contains("Score\\: 85/100")
+    # Should have two drawtext filters (comma-separated)
+    check filter.count("drawtext=") == 2
+
+  test "generateTextFilter respects position":
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    # Test top-left
+    var params = defaultScoreVizParams()
+    params.textPosition = "top-left"
+    let filterTL = generateTextFilter(params, segments)
+    check filterTL.contains("x=10")
+    check filterTL.contains("y=10")
+
+    # Test bottom-right
+    params.textPosition = "bottom-right"
+    let filterBR = generateTextFilter(params, segments)
+    check filterBR.contains("x=w-text_w-10")
+    check filterBR.contains("y=h-text_h-10")
+
+  test "generateTextFilter respects font settings":
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    var params = defaultScoreVizParams()
+    params.fontSize = 32
+    params.fontColor = "#FF0000"
+    let filter = generateTextFilter(params, segments)
+
+    check filter.contains("fontsize=32")
+    check filter.contains("fontcolor=#FF0000")
+
+  test "generateScoreOverlayFilter graph only":
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    var params = defaultScoreVizParams()
+    params.mode = svmGraph
+    let filter = generateScoreOverlayFilter(params, segments, 1920, 1080)
+
+    # Should have graph filter
+    check filter.contains("drawbox")
+    # Should NOT have text filter
+    check not filter.contains("drawtext")
+
+  test "generateScoreOverlayFilter text only":
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    var params = defaultScoreVizParams()
+    params.mode = svmText
+    let filter = generateScoreOverlayFilter(params, segments, 1920, 1080)
+
+    # Should NOT have graph filter
+    check not filter.contains("drawbox")
+    # Should have text filter
+    check filter.contains("drawtext")
+
+  test "generateScoreOverlayFilter both modes":
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    var params = defaultScoreVizParams()
+    params.mode = svmBoth
+    let filter = generateScoreOverlayFilter(params, segments, 1920, 1080)
+
+    # Should have both filters
+    check filter.contains("drawbox")
+    check filter.contains("drawtext")
+    # Should be comma-separated
+    check filter.contains(",")
+
+  test "renderScoreGraph helper":
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    let filter = renderScoreGraph(segments, 1920, 1080)
+    check filter.contains("drawbox")
+
+  test "renderScoreText helper":
+    var segments: seq[EngagementSegment] = @[]
+    var seg = newEngagementSegment(0, 1000)
+    seg.score = 50.0f
+    segments.add(seg)
+
+    let filter = renderScoreText(segments)
+    check filter.contains("drawtext")
+
+  test "generateTextFilter empty segments":
+    let segments: seq[EngagementSegment] = @[]
+    let params = defaultScoreVizParams()
+    let filter = generateTextFilter(params, segments)
+
+    # Should produce empty filter for no segments
+    check filter.len == 0
