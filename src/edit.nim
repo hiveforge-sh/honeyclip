@@ -28,7 +28,13 @@ proc loadEngagementMask(inputPath: string, tb: AVRational,
   ## Load cached engagement and create boolean mask for edit workflow
   let engagePath = inputPath.changeFileExt(".engage.json")
   if not fileExists(engagePath):
-    error &"Engagement data not found. Run 'honeyclip engage {inputPath} model' first, or remove --engage flag."
+    error &"""Engagement data required for --engage flag.
+
+Run engagement analysis first:
+  honeyclip engage "{inputPath}" model
+
+Then retry your command:
+  honeyclip "{inputPath}" --engage"""
 
   let jsonData = parseFile(engagePath)
   # Parse segments and create mask
