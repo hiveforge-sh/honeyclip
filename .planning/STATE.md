@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 8 of 10 (Multi-Aspect Export & Workflow)
-Plan: 2 of 4 in phase
-Status: In progress
-Last activity: 2026-02-04 — Completed 08-02-PLAN.md
+Plan: 4 of 4 in phase
+Status: Phase complete
+Last activity: 2026-02-04 — Completed 08-04-PLAN.md
 
-Progress: [██████████████████████████████████████░░] 82.5%
+Progress: [█████████████████████████████████████████] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 34
-- Average duration: 3.3 min
-- Total execution time: 1.9 hours
+- Total plans completed: 36
+- Average duration: 3.2 min
+- Total execution time: 2.0 hours
 
 **By Phase:**
 
@@ -35,11 +35,11 @@ Progress: [███████████████████████
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
-| 08-multi-aspect-export-workflow | 2 | 3.6min | 1.8min |
+| 08-multi-aspect-export-workflow | 4 | 7.1min | 1.8min |
 
 **Recent Trend:**
-- Last 5 plans: 07-04 (5min), 07-05 (5min), 07-06 (15min), 08-01 (1.6min), 08-02 (2min)
-- Trend: Phase 8 continuing with quick plans (FFmpeg filter module)
+- Last 5 plans: 07-06 (15min), 08-01 (1.6min), 08-02 (2min), 08-03 (2min), 08-04 (1.5min)
+- Trend: Phase 8 complete with rapid execution (all plans under 2min)
 
 *Updated after each plan completion*
 
@@ -183,6 +183,9 @@ Recent decisions affecting current work:
 - Metadata burned into previews via drawtext filter (clip rank + time range) (08-02)
 - Side-by-side uses hstack filter with scale=iw/2:-1 for equal width (08-02)
 - Overview video uses concat demuxer with generated list file (08-02)
+- Validation errors include clip rank and millisecond timestamps for easy identification (08-04)
+- Version numbering is continuous (.v1, .v2, .v3...) not overwriting (08-04)
+- adjustClipBoundary validates all clips after modification to catch created overlaps (08-04)
 
 ### Pending Todos
 
@@ -231,6 +234,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 08-02-PLAN.md
+Stopped at: Completed 08-04-PLAN.md (Phase 8 complete)
 Resume file: None
-Next: 08-03-PLAN.md (boundary adjustment)
+Next: Phase 9 (TBD)
