@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, export as exportCmd]
+import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, `export` as exportCmd]
 import util/[color, fun]
 import palet/edit
 
