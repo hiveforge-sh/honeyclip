@@ -192,13 +192,17 @@ Plans:
 **Depends on**: Phase 9
 **Requirements**: CLI-01, CLI-02, CLI-03
 **Success Criteria** (what must be TRUE):
-  1. User can invoke engagement analysis workflow via new subcommand (e.g., `honeyclip engage`)
+  1. User can invoke engagement analysis workflow via new subcommand (e.g., `honeyclip analyze`)
   2. User can integrate engagement analysis with existing honeyclip edit workflow via flags
   3. User sees real-time progress reporting during analysis (transcript extraction, face detection, scoring)
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 10-01-PLAN.md: TBD during phase planning
+- [ ] 10-01-PLAN.md — Named presets and engagement expression functions
+- [ ] 10-02-PLAN.md — --engage flag integration with edit workflow
+- [ ] 10-03-PLAN.md — analyze convenience command
+- [ ] 10-04-PLAN.md — Per-step progress reporting
+- [ ] 10-05-PLAN.md — TTY-aware behavior and polish
 
 ## Progress
 
@@ -216,4 +220,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Speaker Tracking & Reframing | 6/6 | Complete | 2026-02-03 |
 | 8. Multi-Aspect Export & Workflow | 5/5 | Complete | 2026-02-03 |
 | 9. NLE Integration & Markers | 7/7 | Complete | 2026-02-03 |
-| 10. CLI Integration | 0/TBD | Not started | - |
+| 10. CLI Integration | 0/5 | Not started | - |
