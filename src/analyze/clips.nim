@@ -9,7 +9,7 @@
 ## The multi-signal approach produces clips that feel like natural "moments"
 ## suitable for social media (TikTok, Reels, Shorts).
 
-import std/[algorithm, strformat, strutils, osproc, os, math]
+import std/[algorithm, strformat, strutils, osproc, os]
 import engagement_types
 import ../exports/presets
 import ../reframe/crop
@@ -657,3 +657,180 @@ proc batchExportClips*(inputPath: string, clips: seq[Clip],
 
   # Sort results by clip rank
   result.sort(proc(a, b: ExportResult): int = cmp(a.clip.rank, b.clip.rank))
+
+# ===== Multi-aspect export =====
+
+proc buildReframeArgs*(inputPath: string, clip: Clip, outputPath: string,
+                       params: MultiAspectExportParams, aspect: AspectRatio,
+                       skipReframe: bool): seq[string] =
+  ## Build FFmpeg arguments for clip extraction with optional reframe
+  ##
+  ## Args:
+  ##   inputPath: Source video path
+  ##   clip: Clip to extract
+  ##   outputPath: Output file path
+  ##   params: Multi-aspect export parameters
+  ##   aspect: Target aspect ratio
+  ##   skipReframe: If true, skip crop filter (source matches target)
+  ##
+  ## Returns:
+  ##   FFmpeg argument sequence
+  let startSec = clip.startMs.float64 / 1000.0
+  let duration = (clip.endMs - clip.startMs).float64 / 1000.0
+
+  result = @[
+    "-ss", $startSec,
+    "-t", $duration,
+    "-i", inputPath
+  ]
+
+  if not skipReframe:
+    # Calculate target dimensions based on aspect ratio
+    var targetW, targetH: int
+    case aspect
+    of Portrait:
+      # 9:16 - fit to source height
+      targetH = params.sourceHeight
+      targetW = targetH * 9 div 16
+    of Landscape:
+      # 16:9 - fit to source width
+      targetW = params.sourceWidth
+      targetH = targetW * 9 div 16
+    of Square:
+      # 1:1 - use smaller dimension
+      let size = min(params.sourceWidth, params.sourceHeight)
+      targetW = size
+      targetH = size
+
+    # Center crop + scale filter
+    let cropX = (params.sourceWidth - targetW) div 2
+    let cropY = (params.sourceHeight - targetH) div 2
+    result.add(@["-vf", &"crop={targetW}:{targetH}:{cropX}:{cropY}"])
+
+  # Encoding settings from base params
+  result.add(@[
+    "-c:v", params.baseParams.codec,
+    "-preset", params.baseParams.preset,
+    "-crf", $params.baseParams.crf
+  ])
+
+  if params.baseParams.includeAudio:
+    result.add(@["-c:a", "aac", "-b:a", "128k"])
+  else:
+    result.add("-an")
+
+  result.add(@["-movflags", "+faststart", "-y", outputPath])
+
+proc batchExportMultiAspect*(inputPath: string, clips: seq[Clip],
+                              params: MultiAspectExportParams,
+                              onProgress: proc(completed, total: int) = nil): seq[ExportResult] =
+  ## Export clips in multiple aspect ratios using process pool
+  ##
+  ## Per CONTEXT.md:
+  ## - Parallel rendering: all ratios render concurrently
+  ## - Output structure: subfolders by ratio (video_clips/16x9/, etc.)
+  ## - Skip reframing when source matches target ratio
+  ##
+  ## Args:
+  ##   inputPath: Source video path
+  ##   clips: Clips to export
+  ##   params: Multi-aspect export parameters
+  ##   onProgress: Optional callback for progress updates
+  ##
+  ## Returns:
+  ##   Export results with success/error status per job
+
+  result = @[]
+  if clips.len == 0 or params.aspects.len == 0:
+    return result
+
+  # Determine source aspect
+  let sourceAspect = aspectFromFloat(params.sourceAspect)
+
+  # Build all jobs
+  var jobs: seq[AspectExportJob] = @[]
+  for aspect in params.aspects:
+    let aspectDir = generateAspectSubfolder(params.baseParams.outputDir, aspect)
+    if not dirExists(aspectDir):
+      createDir(aspectDir)
+
+    for clip in clips:
+      let skipReframe = aspectsMatch(sourceAspect, aspect)
+      let outputPath = aspectDir / generateClipFilename(inputPath, clip)
+      jobs.add(AspectExportJob(
+        clip: clip,
+        aspect: aspect,
+        outputPath: outputPath,
+        skipReframe: skipReframe
+      ))
+
+  # Execute with concurrency limit (reuse pattern from batchExportClips)
+  type ProcessInfo = tuple[process: Process, jobIndex: int]
+  var activeProcesses: seq[ProcessInfo] = @[]
+  var completed = 0
+  let totalJobs = jobs.len
+
+  let ffmpegPath = findExe("ffmpeg")
+  if ffmpegPath == "":
+    for job in jobs:
+      result.add(ExportResult(
+        clip: job.clip,
+        outputPath: job.outputPath,
+        success: false,
+        error: "ffmpeg not found in PATH"
+      ))
+    return result
+
+  for i, job in jobs:
+    let args = buildReframeArgs(inputPath, job.clip, job.outputPath, params, job.aspect, job.skipReframe)
+
+    # Wait for available slot
+    while activeProcesses.len >= params.baseParams.maxConcurrent:
+      var stillRunning: seq[ProcessInfo] = @[]
+      for info in activeProcesses:
+        if info.process.running():
+          stillRunning.add(info)
+        else:
+          let exitCode = info.process.waitForExit()
+          completed += 1
+          let completedJob = jobs[info.jobIndex]
+          result.add(ExportResult(
+            clip: completedJob.clip,
+            outputPath: completedJob.outputPath,
+            success: exitCode == 0,
+            error: if exitCode != 0: &"FFmpeg exited with code {exitCode}" else: ""
+          ))
+          info.process.close()
+          if onProgress != nil:
+            onProgress(completed, totalJobs)
+      activeProcesses = stillRunning
+      if activeProcesses.len >= params.baseParams.maxConcurrent:
+        sleep(100)
+
+    # Start new process
+    try:
+      let process = startProcess(ffmpegPath, args = args,
+                                  options = {poUsePath, poStdErrToStdOut})
+      activeProcesses.add((process, i))
+    except OSError as e:
+      result.add(ExportResult(
+        clip: job.clip,
+        outputPath: job.outputPath,
+        success: false,
+        error: e.msg
+      ))
+
+  # Wait for remaining processes
+  for info in activeProcesses:
+    let exitCode = info.process.waitForExit()
+    completed += 1
+    let completedJob = jobs[info.jobIndex]
+    result.add(ExportResult(
+      clip: completedJob.clip,
+      outputPath: completedJob.outputPath,
+      success: exitCode == 0,
+      error: if exitCode != 0: &"FFmpeg exited with code {exitCode}" else: ""
+    ))
+    info.process.close()
+    if onProgress != nil:
+      onProgress(completed, totalJobs)
