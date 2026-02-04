@@ -38,11 +38,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Export & Workflow
 
-- [ ] **EXPRT-01**: Export in multiple aspect ratios (16:9, 9:16, 1:1)
+- [x] **EXPRT-01**: Export in multiple aspect ratios (16:9, 9:16, 1:1)
 - [x] **EXPRT-02**: Batch export multiple clips from single video
-- [ ] **EXPRT-03**: Generate preview thumbnails before full render
-- [ ] **EXPRT-04**: Allow clip boundary adjustments after detection
-- [ ] **EXPRT-05**: Analysis-only mode (export project, skip video render)
+- [x] **EXPRT-03**: Generate preview thumbnails before full render
+- [x] **EXPRT-04**: Allow clip boundary adjustments after detection
+- [x] **EXPRT-05**: Analysis-only mode (export project, skip video render)
 
 ### NLE Integration
 
@@ -114,11 +114,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SPKR-02 | Phase 7 | Complete |
 | SPKR-03 | Phase 7 | Complete |
 | SPKR-04 | Phase 7 | Complete |
-| EXPRT-01 | Phase 8 | Pending |
+| EXPRT-01 | Phase 8 | Complete |
 | EXPRT-02 | Phase 6 | Complete |
-| EXPRT-03 | Phase 8 | Pending |
-| EXPRT-04 | Phase 8 | Pending |
-| EXPRT-05 | Phase 8 | Pending |
+| EXPRT-03 | Phase 8 | Complete |
+| EXPRT-04 | Phase 8 | Complete |
+| EXPRT-05 | Phase 8 | Complete |
 | NLE-01 | Phase 9 | Pending |
 | NLE-02 | Phase 9 | Pending |
 | NLE-03 | Phase 9 | Pending |
@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-03 after Phase 7 completion*
+*Last updated: 2026-02-03 after Phase 8 completion*

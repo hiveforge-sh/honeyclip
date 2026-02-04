@@ -6,16 +6,16 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 8 - Multi-Aspect Export & Workflow
+**Current focus:** Phase 9 - NLE Integration & Markers
 
 ## Current Position
 
-Phase: 8 of 10 (Multi-Aspect Export & Workflow)
+Phase: 8 of 10 (Multi-Aspect Export & Workflow) — Complete
 Plan: 5 of 5 in phase
-Status: Phase complete
-Last activity: 2026-02-04 — Completed 08-05-PLAN.md
+Status: Phase verified
+Last activity: 2026-02-03 — Completed Phase 8, verified and committed
 
-Progress: [██████████████████████████████████████████] 92.5%
+Progress: [██████████████████████████████████████████] 85%
 
 ## Performance Metrics
 
@@ -246,7 +246,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-04
-Stopped at: Completed 08-05-PLAN.md (Phase 8 complete)
+Last session: 2026-02-03
+Stopped at: Phase 8 verified and complete
 Resume file: None
-Next: Phase 9 (TBD)
+Next: Phase 9 - NLE Integration & Markers

@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Engagement Scoring Foundation** - Audio/motion/speech analysis, scoring algorithm
 - [x] **Phase 6: Engagement Clip Detection** - Scene boundaries, ranking, batch export
 - [x] **Phase 7: Speaker Tracking & Reframing** - Face tracking, ROI smoothing, vertical output
-- [ ] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
+- [x] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
 - [ ] **Phase 9: NLE Integration & Markers** - Engagement markers, speaker markers, multi-format export
 - [ ] **Phase 10: CLI Integration** - New subcommand, existing workflow integration, progress reporting
 
@@ -158,11 +158,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 08-01-PLAN.md: Platform presets and project file infrastructure
-- [ ] 08-02-PLAN.md: Preview generation (thumbnails and video snippets)
-- [ ] 08-03-PLAN.md: Multi-aspect parallel export
-- [ ] 08-04-PLAN.md: Clip boundary adjustment with version history
-- [ ] 08-05-PLAN.md: CLI `export` command integration
+- [x] 08-01-PLAN.md: Platform presets and project file infrastructure
+- [x] 08-02-PLAN.md: Preview generation (thumbnails and video snippets)
+- [x] 08-03-PLAN.md: Multi-aspect parallel export
+- [x] 08-04-PLAN.md: Clip boundary adjustment with version history
+- [x] 08-05-PLAN.md: CLI `export` command integration
 
 ### Phase 9: NLE Integration & Markers
 **Goal**: Export to NLE formats with engagement and speaker markers
@@ -208,6 +208,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Engagement Scoring Foundation | 4/4 | Complete | 2026-02-02 |
 | 6. Engagement Clip Detection | 4/4 | Complete | 2026-02-02 |
 | 7. Speaker Tracking & Reframing | 6/6 | Complete | 2026-02-03 |
-| 8. Multi-Aspect Export & Workflow | 0/TBD | Not started | - |
+| 8. Multi-Aspect Export & Workflow | 5/5 | Complete | 2026-02-03 |
 | 9. NLE Integration & Markers | 0/TBD | Not started | - |
 | 10. CLI Integration | 0/TBD | Not started | - |
