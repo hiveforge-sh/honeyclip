@@ -2343,3 +2343,40 @@ suite "Engagement Presets":
       let (_, config) = parseEngageValue(preset)
       let sum = config.audioWeight + config.motionWeight + config.speechWeight
       check abs(sum - 1.0) < 0.01  # Allow small floating point error
+
+# CLI Integration Tests (manual verification required):
+#
+# TTY Behavior:
+#   1. honeyclip analyze --help
+#      Expected: Shows all options including --quiet and --verbose
+#
+#   2. honeyclip analyze video.mp4 model --quiet
+#      Expected: No progress bars or prompts, minimal output
+#
+#   3. echo | honeyclip analyze video.mp4 model
+#      Expected: No interactive prompts (piped input = not TTY)
+#
+#   4. honeyclip analyze video.mp4 model --verbose | cat
+#      Expected: Shows progress despite being piped
+#
+#   5. honeyclip engage video.mp4 model --quiet
+#      Expected: No progress output, silent operation
+#
+# Error Messages:
+#   6. honeyclip video.mp4 --engage
+#      (without .engage.json file present)
+#      Expected: Error with instructions to run "honeyclip engage" first
+#
+#   7. honeyclip engage video.mp4 nonexistent-model.bin
+#      Expected: Error with download URL and example curl command
+#
+#   8. honeyclip analyze video.mp4 model --no-transcript
+#      (on video with transcript extraction issues)
+#      Expected: Error with troubleshooting steps
+#
+# Preset Integration:
+#   9. honeyclip analyze video.mp4 model --preset viral
+#      Expected: Uses viral preset (motion-heavy weighting)
+#
+#   10. honeyclip video.mp4 --engage=podcast
+#       Expected: Uses podcast preset threshold and weights
