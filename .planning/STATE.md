@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 10 of 10 (CLI Integration) — In progress
-Plan: 2 of 3 in phase
-Status: In progress
-Last activity: 2026-02-03 — Completed 10-02-PLAN.md
+Phase: 10 of 10 (CLI Integration) — Complete
+Plan: 3 of 3 in phase
+Status: Phase complete
+Last activity: 2026-02-03 — Completed 10-03-PLAN.md
 
-Progress: [████████████████████████████████████████████████] 97%
+Progress: [████████████████████████████████████████████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 45
-- Average duration: 3.0 min
+- Total plans completed: 46
+- Average duration: 3.2 min
 - Total execution time: 2.5 hours
 
 **By Phase:**
@@ -37,11 +37,11 @@ Progress: [███████████████████████
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
 | 09-nle-integration-markers | 7 | 27.8min | 4.0min |
-| 10-cli-integration | 2 | 11min | 5.5min |
+| 10-cli-integration | 3 | 15min | 5.0min |
 
 **Recent Trend:**
-- Last 5 plans: 09-06 (3.0min), 09-07 (14min), 10-01 (4min), 10-02 (7min)
-- Trend: Phase 10 in progress
+- Last 5 plans: 09-07 (14min), 10-01 (4min), 10-02 (7min), 10-03 (4min)
+- Trend: Phase 10 complete, all phases delivered
 
 *Updated after each plan completion*
 
@@ -219,6 +219,9 @@ Recent decisions affecting current work:
 - AND logic for combining --edit and --engage (both must be true to keep frames) (10-02)
 - Engagement filter applied after interpretEdit but before margins (10-02)
 - Default threshold 50.0 when --engage used without value (10-02)
+- analyze command is primary recommended workflow (combines engage + clips) (10-03)
+- TTY-aware prompting via stdin.isatty() for interactive vs scriptable workflows (10-03)
+- Cache-first with --fresh override for engagement analysis (10-03)
 
 ### Pending Todos
 
@@ -284,17 +287,18 @@ None yet.
 - Export command --nle flag integrates all marker formats
 
 **Phase 10 (CLI Integration):**
-- IN PROGRESS: Plans 10-01 and 10-02 complete
+- COMPLETE: All 3 plans delivered
 - Named engagement presets (viral, podcast, tutorial, interview, tiktok, youtube, instagram) (10-01)
 - Expression functions (score, face_count, is_hook, speaking_rate) for --edit (10-01)
 - --engage CLI flag with numeric thresholds and preset names (10-02)
 - AND logic combining engagement filter with edit expressions (10-02)
-- JSON loading for cached engagement data (10-01)
-- Ready for Plan 10-03 (clips command integration)
+- analyze convenience command combining engage + clips workflow (10-03)
+- TTY-aware interactive prompting for next action (10-03)
+- Cache-first workflow with --fresh override (10-03)
 
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 10-02-PLAN.md
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None
-Next: Plan 10-03 (Clips Command Integration)
+Next: All phases complete - project ready for final integration testing
