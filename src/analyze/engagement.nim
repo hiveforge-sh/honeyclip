@@ -280,15 +280,18 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
 
   # 1. Get audio signal
   let audioSignal = audio(bar, container, path, tb, 0)
+  bar.`end`()
 
   # 2. Get motion signal
   let motionSignal = motion(bar, container, path, tb, 0, 160, 1)
+  bar.`end`()
 
   # 3. Get face frames (if enabled)
   var faceFrames: seq[FrameFaces] = @[]
   if useFaceDetection:
     # Use default FaceAnalysisParams
     faceFrames = faces(bar, container, path, tb)
+    bar.`end`()
 
   # 4. Compute normalization bounds for audio and motion
   let audioNormBounds = computePercentileBounds(audioSignal,
@@ -307,9 +310,11 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
     avgAudioEnergy = sum / audioSignal.len.float32
 
   # 6. Build segments from transcript
+  bar.start(float(transcript.segments.len + 1), "Calculating engagement scores")
   var segments: seq[EngagementSegment] = @[]
 
   # Score transcript segments (speech)
+  var segmentIndex: float = 0
   for tseg in transcript.segments:
     let seg = scoreSegment(
       tseg.startMs, tseg.endMs, tseg.text, tseg.words,
@@ -319,6 +324,8 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
       tb, params
     )
     segments.add(seg)
+    segmentIndex += 1
+    bar.tick(segmentIndex)
 
   # Score non-speech segments
   let nonSpeechGaps = createNonSpeechSegments(transcript, transcript.duration, 2000)
@@ -331,6 +338,8 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
       tb, params
     )
     segments.add(seg)
+
+  bar.`end`()
 
   # Sort segments by start time
   segments.sort(proc(a, b: EngagementSegment): int = cmp(a.startMs, b.startMs))
