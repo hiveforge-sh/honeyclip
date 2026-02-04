@@ -155,10 +155,14 @@ Plans:
   2. User can generate preview thumbnails before committing to full render
   3. User can adjust detected clip boundaries before final export
   4. User can run analysis-only mode that exports project file without rendering video
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 08-01-PLAN.md: TBD during phase planning
+- [ ] 08-01-PLAN.md: Platform presets and project file infrastructure
+- [ ] 08-02-PLAN.md: Preview generation (thumbnails and video snippets)
+- [ ] 08-03-PLAN.md: Multi-aspect parallel export
+- [ ] 08-04-PLAN.md: Clip boundary adjustment with version history
+- [ ] 08-05-PLAN.md: CLI `export` command integration
 
 ### Phase 9: NLE Integration & Markers
 **Goal**: Export to NLE formats with engagement and speaker markers
