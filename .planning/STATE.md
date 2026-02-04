@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 9 of 10 (NLE Integration & Markers)
-Plan: 5 of 6 in phase
-Status: In progress
-Last activity: 2026-02-04 — Completed 09-05-PLAN.md
+Plan: 6 of 6 in phase
+Status: Phase complete
+Last activity: 2026-02-03 — Completed 09-06-PLAN.md
 
-Progress: [█████████████████████████████████████████████░] 93%
+Progress: [██████████████████████████████████████████████] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 41
+- Total plans completed: 42
 - Average duration: 3.0 min
-- Total execution time: 2.12 hours
+- Total execution time: 2.15 hours
 
 **By Phase:**
 
@@ -36,11 +36,11 @@ Progress: [███████████████████████
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
-| 09-nle-integration-markers | 5 | 10.8min | 2.2min |
+| 09-nle-integration-markers | 6 | 13.8min | 2.3min |
 
 **Recent Trend:**
-- Last 5 plans: 08-05 (2.2min), 09-01 (3.4min), 09-02 (3.0min), 09-03 (2.4min), 09-05 (2.0min)
-- Trend: Phase 9 progressing well, 5 of 6 plans complete
+- Last 5 plans: 09-01 (3.4min), 09-02 (3.0min), 09-03 (2.4min), 09-05 (2.0min), 09-06 (3.0min)
+- Trend: Phase 9 COMPLETE, all 6 plans executed
 
 *Updated after each plan completion*
 
@@ -201,6 +201,10 @@ Recent decisions affecting current work:
 - Python subprocess delegation for AAF (pyaaf2 too complex for FFI) (09-05)
 - Optional pyaaf2 dependency with clear install instructions (09-05)
 - JSON intermediate format for Nim-Python data passing (09-05)
+- drawbox for graph baseline (simpler than drawgraph for basic visualization) (09-06)
+- enable='between()' for time-gated text visibility (09-06)
+- Score normalization 0-100 to 0-1 for FFmpeg compatibility (09-06)
+- Comma-separated filter chain for segment-based display (09-06)
 
 ### Pending Todos
 
@@ -255,9 +259,18 @@ None yet.
 - Clip boundary adjustment with validation and version history
 - Unified export CLI command integrating all Phase 8 features
 
+**Phase 9 (NLE Integration & Markers):**
+- PHASE COMPLETE: All 6 plans implemented
+- Marker types for engagement peaks, scene boundaries, speaker changes
+- FCP7 XML marker export with color support
+- FCPXML marker export with rational time format
+- EDL marker export with CMX3600 comment format
+- AAF marker export via Python subprocess (optional pyaaf2)
+- Score visualization filters for engagement overlay rendering
+
 ## Session Continuity
 
-Last session: 2026-02-04
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-02-03
+Stopped at: Completed 09-06-PLAN.md
 Resume file: None
-Next: 09-06-PLAN.md (CLI integration)
+Next: Phase 10
