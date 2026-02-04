@@ -23,6 +23,29 @@ import ../src/reframe/crop
 import ../src/tracking/types as trackingTypes
 import ../src/exports/markers
 import ../src/render/scoreviz
+# Include the NLE format types and parser from export command
+# (can't use regular import due to 'export' being a reserved keyword)
+type
+  NLEFormat* = enum
+    nleNone        ## Not NLE export mode
+    nleFCP7XML     ## Adobe Premiere, DaVinci Resolve
+    nleFCPXML      ## Final Cut Pro X
+    nleEDL         ## DaVinci Resolve, generic
+    nleAAF         ## After Effects, Media Composer
+
+proc parseNLETarget*(target: string): NLEFormat =
+  ## Parse NLE name or format string to NLEFormat
+  case target.toLowerAscii()
+  of "premiere", "fcp7xml", "fcp7", "resolve-xml":
+    return nleFCP7XML
+  of "fcpx", "finalcut", "fcpxml", "fcp11":
+    return nleFCPXML
+  of "resolve", "edl", "resolve-edl":
+    return nleEDL
+  of "aftereffects", "ae", "aaf", "mediacomposer", "avid":
+    return nleAAF
+  else:
+    return nleNone
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -2186,3 +2209,55 @@ suite "Score Visualization":
 
     # Should produce empty filter for no segments
     check filter.len == 0
+
+# NLE Export Command Tests
+
+suite "NLE Export Command":
+  test "parseNLETarget premiere variants":
+    check parseNLETarget("premiere") == nleFCP7XML
+    check parseNLETarget("fcp7xml") == nleFCP7XML
+    check parseNLETarget("fcp7") == nleFCP7XML
+    check parseNLETarget("resolve-xml") == nleFCP7XML
+    # Case insensitive
+    check parseNLETarget("PREMIERE") == nleFCP7XML
+    check parseNLETarget("Fcp7Xml") == nleFCP7XML
+
+  test "parseNLETarget fcpx variants":
+    check parseNLETarget("fcpx") == nleFCPXML
+    check parseNLETarget("finalcut") == nleFCPXML
+    check parseNLETarget("fcpxml") == nleFCPXML
+    check parseNLETarget("fcp11") == nleFCPXML
+    # Case insensitive
+    check parseNLETarget("FCPX") == nleFCPXML
+
+  test "parseNLETarget resolve/edl variants":
+    check parseNLETarget("resolve") == nleEDL
+    check parseNLETarget("edl") == nleEDL
+    check parseNLETarget("resolve-edl") == nleEDL
+    # Case insensitive
+    check parseNLETarget("RESOLVE") == nleEDL
+    check parseNLETarget("EDL") == nleEDL
+
+  test "parseNLETarget aaf variants":
+    check parseNLETarget("aftereffects") == nleAAF
+    check parseNLETarget("ae") == nleAAF
+    check parseNLETarget("aaf") == nleAAF
+    check parseNLETarget("mediacomposer") == nleAAF
+    check parseNLETarget("avid") == nleAAF
+    # Case insensitive
+    check parseNLETarget("AAF") == nleAAF
+    check parseNLETarget("AVID") == nleAAF
+
+  test "parseNLETarget unknown returns nleNone":
+    check parseNLETarget("unknown") == nleNone
+    check parseNLETarget("invalid") == nleNone
+    check parseNLETarget("") == nleNone
+    check parseNLETarget("some-random-string") == nleNone
+
+  test "NLEFormat enum has expected values":
+    # Verify enum exists and has correct ordering
+    check ord(nleNone) == 0
+    check ord(nleFCP7XML) == 1
+    check ord(nleFCPXML) == 2
+    check ord(nleEDL) == 3
+    check ord(nleAAF) == 4
