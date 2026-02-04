@@ -56,9 +56,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### CLI & Interface
 
-- [ ] **CLI-01**: New subcommand for engagement analysis workflow
-- [ ] **CLI-02**: Integration with existing honeyclip edit workflow
-- [ ] **CLI-03**: Progress reporting during analysis
+- [x] **CLI-01**: New subcommand for engagement analysis workflow
+- [x] **CLI-02**: Integration with existing honeyclip edit workflow
+- [x] **CLI-03**: Progress reporting during analysis
 
 ## v2 Requirements
 
@@ -126,9 +126,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NLE-05 | Phase 9 | Complete |
 | NLE-06 | Phase 9 | Complete |
 | NLE-07 | Phase 9 | Complete |
-| CLI-01 | Phase 10 | Pending |
-| CLI-02 | Phase 10 | Pending |
-| CLI-03 | Phase 10 | Pending |
+| CLI-01 | Phase 10 | Complete |
+| CLI-02 | Phase 10 | Complete |
+| CLI-03 | Phase 10 | Complete |
 
 **Coverage:**
 - v1 requirements: 32 total
@@ -137,4 +137,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-03 after Phase 9 completion*
+*Last updated: 2026-02-04 after Phase 10 completion*

@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Speaker Tracking & Reframing** - Face tracking, ROI smoothing, vertical output
 - [x] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
 - [x] **Phase 9: NLE Integration & Markers** - Engagement markers, speaker markers, multi-format export
-- [ ] **Phase 10: CLI Integration** - New subcommand, existing workflow integration, progress reporting
+- [x] **Phase 10: CLI Integration** - New subcommand, existing workflow integration, progress reporting
 
 ## Phase Details
 
@@ -198,11 +198,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Named presets and engagement expression functions
-- [ ] 10-02-PLAN.md — --engage flag integration with edit workflow
-- [ ] 10-03-PLAN.md — analyze convenience command
-- [ ] 10-04-PLAN.md — Per-step progress reporting
-- [ ] 10-05-PLAN.md — TTY-aware behavior and polish
+- [x] 10-01-PLAN.md — Named presets and engagement expression functions
+- [x] 10-02-PLAN.md — --engage flag integration with edit workflow
+- [x] 10-03-PLAN.md — analyze convenience command
+- [x] 10-04-PLAN.md — Per-step progress reporting
+- [x] 10-05-PLAN.md — TTY-aware behavior and polish
 
 ## Progress
 
@@ -220,4 +220,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Speaker Tracking & Reframing | 6/6 | Complete | 2026-02-03 |
 | 8. Multi-Aspect Export & Workflow | 5/5 | Complete | 2026-02-03 |
 | 9. NLE Integration & Markers | 7/7 | Complete | 2026-02-03 |
-| 10. CLI Integration | 0/5 | Not started | - |
+| 10. CLI Integration | 5/5 | Complete | 2026-02-04 |
