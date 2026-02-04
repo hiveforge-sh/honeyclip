@@ -8,15 +8,38 @@
 ##
 ## Platform presets provide quick encoding configurations for social media.
 
-import std/[strformat, strutils, os, json, tables, algorithm, times, options]
+import std/[strformat, strutils, os, json, tables, algorithm, times, options, osproc]
 import ../log
 import ../util/fun
 import ../util/bar
 import ../av
 import ../analyze/clips
-import ../exports/[edl, presets, project, fcp11]
-import ../render/previews
+import ../analyze/engagement_types
+import ../exports/[edl, presets, project, fcp7, fcp11, markers, aaf]
+import ../render/[previews, scoreviz]
 import ../reframe/crop
+
+type
+  NLEFormat* = enum
+    nleNone        ## Not NLE export mode
+    nleFCP7XML     ## Adobe Premiere, DaVinci Resolve
+    nleFCPXML      ## Final Cut Pro X
+    nleEDL         ## DaVinci Resolve, generic
+    nleAAF         ## After Effects, Media Composer
+
+proc parseNLETarget*(target: string): NLEFormat =
+  ## Parse NLE name or format string to NLEFormat
+  case target.toLowerAscii()
+  of "premiere", "fcp7xml", "fcp7", "resolve-xml":
+    return nleFCP7XML
+  of "fcpx", "finalcut", "fcpxml", "fcp11":
+    return nleFCPXML
+  of "resolve", "edl", "resolve-edl":
+    return nleEDL
+  of "aftereffects", "ae", "aaf", "mediacomposer", "avid":
+    return nleAAF
+  else:
+    return nleNone
 
 proc main*(cArgs: seq[string]) =
   var inputPath: string = ""
@@ -43,6 +66,13 @@ proc main*(cArgs: seq[string]) =
   var dryRun: bool = false
   var freshAnalysis: bool = false
   var verifyHash: bool = false
+
+  # NLE export options
+  var nleTarget: string = ""
+  var nleFormat: NLEFormat = nleNone
+  var includeScoreViz: bool = true
+  var scoreVizMode: ScoreVizMode = svmBoth
+  var noMarkers: bool = false
 
   # Parse arguments
   var expecting: string = ""
@@ -78,6 +108,13 @@ Output:
   -n, --top N           Number of top clips (default: 5)
   --concurrent N        Max parallel renders (default: 4)
 
+NLE Export:
+  --nle TARGET          Export for NLE: premiere, fcpx, resolve, aftereffects
+                        Or format: fcp7xml, fcpxml, edl, aaf
+  --no-markers          Skip timeline markers (engagement/scene/speaker)
+  --no-graph            Skip score graph overlay track
+  --no-text             Skip score text overlay track
+
 Control:
   --dry-run             Show planned actions without executing
   --fresh               Force re-analysis (ignore cached data)
@@ -89,6 +126,7 @@ Examples:
   honeyclip export video.mp4 --project clips.json --preview
   honeyclip export video.mp4 --project clips.json --aspect 9:16 --preset tiktok
   honeyclip export --project clips.json --adjust 2 --start 5000 --end 15000
+  honeyclip export video.mp4 --project clips.json --nle premiere
 """
       quit(0)
     of "--analyze-only":
@@ -121,6 +159,20 @@ Examples:
       freshAnalysis = true
     of "--verify":
       verifyHash = true
+    of "--nle":
+      expecting = "nle"
+    of "--no-markers":
+      noMarkers = true
+    of "--no-graph":
+      if scoreVizMode == svmBoth:
+        scoreVizMode = svmText
+      elif scoreVizMode == svmGraph:
+        includeScoreViz = false
+    of "--no-text":
+      if scoreVizMode == svmBoth:
+        scoreVizMode = svmGraph
+      elif scoreVizMode == svmText:
+        includeScoreViz = false
     else:
       if key.startsWith("--"):
         error &"Unknown option: {key}"
@@ -169,6 +221,12 @@ Examples:
         of "thumbnails": previewMode = PreviewThumbnails
         of "snippets": previewMode = PreviewSnippets
         else: error &"Unknown preview mode: {key}"
+        expecting = ""
+      of "nle":
+        nleTarget = key
+        nleFormat = parseNLETarget(key)
+        if nleFormat == nleNone:
+          error &"Unknown NLE target: {key}. Use: premiere, fcpx, resolve, aftereffects, or format names (fcp7xml, fcpxml, edl, aaf)"
         expecting = ""
 
   # Check for incomplete argument
@@ -239,6 +297,107 @@ Examples:
 
   if clips.len == 0:
     error "No clips found. Run 'honeyclip clips' first to detect clips, then use --project to load them."
+
+  # NLE export mode
+  if nleFormat != nleNone:
+    echo &"Exporting to {nleTarget} format..."
+
+    let effectiveOutputDir = if outputDir != "":
+      outputDir
+    else:
+      let (dir, name, _) = splitFile(inputPath)
+      dir / name & "_nle"
+
+    if not dirExists(effectiveOutputDir):
+      createDir(effectiveOutputDir)
+
+    # Generate markers from engagement data and clip boundaries
+    var nleMarkers: seq[Marker] = @[]
+
+    if not noMarkers:
+      # 1. Engagement markers: from top clips by engagement score
+      var rankedClips = clips.sortedByIt(-it.engagementScore)
+      for rank, clip in rankedClips[0 ..< min(10, rankedClips.len)]:
+        nleMarkers.add(createEngagementMarker(
+          clip.startMs,
+          int(clip.engagementScore),  # Score is already 0-100
+          rank + 1  # 1-indexed rank
+        ))
+
+      # 2. Scene boundary markers: from clip start points (transitions between clips)
+      for i, clip in clips:
+        if i > 0:  # Skip first clip (no boundary before it)
+          nleMarkers.add(createSceneMarker(clip.startMs))
+
+    let outputExt = case nleFormat
+      of nleFCP7XML: ".xml"
+      of nleFCPXML: ".fcpxml"
+      of nleEDL: ".edl"
+      of nleAAF: ".aaf"
+      else: ".xml"
+
+    let outputFile = effectiveOutputDir / &"markers{outputExt}"
+
+    if dryRun:
+      echo &"[Dry run] Would create: {outputFile}"
+      if includeScoreViz:
+        echo &"[Dry run] Would create: {effectiveOutputDir}/score_overlay.mp4"
+      quit(0)
+
+    case nleFormat
+    of nleFCP7XML:
+      writeMarkersFCP7(inputPath, nleMarkers, outputFile)
+    of nleFCPXML:
+      writeMarkersFCPXML(inputPath, nleMarkers, outputFile)
+    of nleEDL:
+      exportMarkersEDL(nleMarkers, outputFile, extractFilename(inputPath))
+    of nleAAF:
+      try:
+        exportAAF(inputPath, nleMarkers, outputFile)
+      except AAFExportError as e:
+        echo &"AAF export failed: {e.msg}"
+        echo "Falling back to FCP7 XML..."
+        writeMarkersFCP7(inputPath, nleMarkers, outputFile.replace(".aaf", ".xml"))
+    else:
+      discard
+
+    echo &"Created: {outputFile}"
+
+    # Generate score visualization if requested
+    if includeScoreViz and clips.len > 0:
+      # Convert clips to engagement segments for visualization
+      var segments: seq[EngagementSegment] = @[]
+      for clip in clips:
+        var seg = newEngagementSegment(clip.startMs, clip.endMs)
+        seg.score = clip.engagementScore  # Score is already 0-100
+        segments.add(seg)
+
+      # Setup visualization parameters
+      var vizParams = defaultScoreVizParams()
+      vizParams.mode = scoreVizMode
+
+      # Get video dimensions for filter generation
+      var container = av.open(inputPath)
+      defer: container.close()
+
+      if container.video.len > 0:
+        let videoStream = container.video[0]
+        let width = videoStream.codecpar.width
+        let height = videoStream.codecpar.height
+
+        # Generate filter command
+        let filter = generateScoreOverlayFilter(vizParams, segments, width, height)
+
+        if filter.len > 0:
+          let vizOutputPath = effectiveOutputDir / "score_overlay.mp4"
+          # Use FFmpeg to render visualization overlay
+          let (output, exitCode) = execCmdEx(&"ffmpeg -y -i \"{inputPath}\" -vf \"{filter}\" -c:v libx264 -preset fast -crf 23 -c:a copy \"{vizOutputPath}\"")
+          if exitCode == 0:
+            echo &"Created: {vizOutputPath}"
+          else:
+            echo &"Score visualization failed: {output}"
+
+    quit(0)
 
   # Analysis-only mode (EXPRT-05)
   if analyzeOnly:
