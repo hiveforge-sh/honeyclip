@@ -1,4 +1,4 @@
-import std/[json, os, strformat, strutils]
+import std/[algorithm, json, os, strformat, strutils]
 
 #[
 Export clips as CMX3600 EDL (Edit Decision List) format for NLE import.
@@ -19,6 +19,9 @@ EDL format spec (SMPTE 258M):
 ]#
 
 type
+  ClipValidationError* = object of CatchableError
+    ## Raised when clip boundaries are invalid
+
   EDLClip* = object
     ## Data transfer object for EDL/JSON export
     ## CLI converts Clip -> EDLClip before calling export functions
@@ -171,3 +174,65 @@ proc exportClipsJSON*(clips: seq[EDLClip], outputPath: string,
     root["clips"].add(clipJson)
 
   writeFile(outputPath, root.pretty())
+
+proc loadClipsFromJson*(jsonPath: string): tuple[clips: seq[EDLClip], source: string] =
+  ## Load clips from JSON project file
+  ##
+  ## Returns clips sorted by rank and source video path.
+  ## Raises ClipValidationError if JSON is malformed or file not found.
+
+  if not fileExists(jsonPath):
+    raise newException(ClipValidationError, &"File not found: {jsonPath}")
+
+  let jsonData = parseFile(jsonPath)
+
+  let source = jsonData["source"].getStr()
+
+  var clips: seq[EDLClip] = @[]
+  for clipJson in jsonData["clips"]:
+    let clip = EDLClip(
+      startMs: clipJson["start_ms"].getBiggestInt(),
+      endMs: clipJson["end_ms"].getBiggestInt(),
+      engagementScore: clipJson["engagement_score"].getFloat().float32,
+      text: clipJson.getOrDefault("text").getStr(""),
+      rank: clipJson["rank"].getInt()
+    )
+    clips.add(clip)
+
+  # Sort by rank
+  clips.sort(proc(a, b: EDLClip): int = cmp(a.rank, b.rank))
+
+  return (clips, source)
+
+proc validateClipBoundaries*(clips: seq[EDLClip], videoDurationMs: int64 = int64.high): seq[string] =
+  ## Validate clip boundaries, return list of errors
+  ##
+  ## Checks:
+  ## - start < end for each clip
+  ## - start >= 0 and end <= videoDuration
+  ## - No overlapping clips
+
+  var errors: seq[string] = @[]
+
+  # Sort by start time for overlap checking
+  var sorted = clips
+  sorted.sort(proc(a, b: EDLClip): int = cmp(a.startMs, b.startMs))
+
+  for i, clip in sorted:
+    # Check start < end
+    if clip.startMs >= clip.endMs:
+      errors.add(&"Clip #{clip.rank}: start ({clip.startMs}ms) must be less than end ({clip.endMs}ms)")
+
+    # Check bounds
+    if clip.startMs < 0:
+      errors.add(&"Clip #{clip.rank}: start ({clip.startMs}ms) cannot be negative")
+    if clip.endMs > videoDurationMs:
+      errors.add(&"Clip #{clip.rank}: end ({clip.endMs}ms) exceeds video duration ({videoDurationMs}ms)")
+
+    # Check overlap with next clip
+    if i < sorted.len - 1:
+      let nextClip = sorted[i + 1]
+      if clip.endMs > nextClip.startMs:
+        errors.add(&"Clip #{clip.rank} ({clip.startMs}-{clip.endMs}ms) overlaps with Clip #{nextClip.rank} ({nextClip.startMs}-{nextClip.endMs}ms)")
+
+  return errors
