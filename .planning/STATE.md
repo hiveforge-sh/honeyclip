@@ -10,19 +10,19 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 7 of 10 (Speaker Tracking & Reframing) — Complete
-Plan: 6 of 6 in phase
-Status: Complete
-Last activity: 2026-02-03 — Completed Phase 7
+Phase: 8 of 10 (Multi-Aspect Export & Workflow)
+Plan: 1 of 4 in phase
+Status: In progress
+Last activity: 2026-02-04 — Completed 08-01-PLAN.md
 
-Progress: [████████████████████████████████████░░░░] 77.5%
+Progress: [█████████████████████████████████████░░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 32
-- Average duration: 3.4 min
-- Total execution time: 1.85 hours
+- Total plans completed: 33
+- Average duration: 3.3 min
+- Total execution time: 1.87 hours
 
 **By Phase:**
 
@@ -35,10 +35,11 @@ Progress: [███████████████████████
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
+| 08-multi-aspect-export-workflow | 1 | 1.6min | 1.6min |
 
 **Recent Trend:**
-- Last 5 plans: 07-02 (5.3min), 07-03 (5min), 07-04 (5min), 07-05 (5min), 07-06 (15min)
-- Trend: Phase 7 complete, final plan took longer due to bug fixes during verification
+- Last 5 plans: 07-03 (5min), 07-04 (5min), 07-05 (5min), 07-06 (15min), 08-01 (1.6min)
+- Trend: Phase 8 started, first plan quick (foundation types only)
 
 *Updated after each plan completion*
 
@@ -172,6 +173,10 @@ Recent decisions affecting current work:
 - FFmpeg enable= expressions for time-based crop segments (07-05)
 - Fallback percentage tracking to warn if >50% of frames lack face detection (07-05)
 - libx264 fast preset + CRF 23 for reframed output encoding (07-05)
+- Import and re-export AspectRatio from reframe/crop.nim (avoid duplication) (08-01)
+- SHA256 hash verification optional via verifyHash parameter (mtime default for speed) (08-01)
+- Project schema version 1 for future migration support (08-01)
+- Table-based preset lookup pattern for platform configs (08-01)
 
 ### Pending Todos
 
@@ -219,7 +224,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-03
-Stopped at: Completed Phase 7
+Last session: 2026-02-04
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
-Next: Phase 8 - Multi-Aspect Export & Workflow
+Next: 08-02-PLAN.md (multi-aspect export CLI)
