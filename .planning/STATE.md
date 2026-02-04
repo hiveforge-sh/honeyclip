@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 9 of 10 (NLE Integration & Markers)
-Plan: 3 of 4 in phase
+Plan: 5 of 6 in phase
 Status: In progress
-Last activity: 2026-02-04 — Completed 09-03-PLAN.md
+Last activity: 2026-02-04 — Completed 09-05-PLAN.md
 
-Progress: [████████████████████████████████████████████░] 90%
+Progress: [█████████████████████████████████████████████░] 93%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 40
-- Average duration: 3.1 min
-- Total execution time: 2.1 hours
+- Total plans completed: 41
+- Average duration: 3.0 min
+- Total execution time: 2.12 hours
 
 **By Phase:**
 
@@ -36,11 +36,11 @@ Progress: [███████████████████████
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
-| 09-nle-integration-markers | 3 | 8.8min | 2.9min |
+| 09-nle-integration-markers | 5 | 10.8min | 2.2min |
 
 **Recent Trend:**
-- Last 5 plans: 08-04 (1.5min), 08-05 (2.2min), 09-01 (3.4min), 09-02 (3.0min), 09-03 (2.4min)
-- Trend: Phase 9 progressing well, 3 of 4 plans complete
+- Last 5 plans: 08-05 (2.2min), 09-01 (3.4min), 09-02 (3.0min), 09-03 (2.4min), 09-05 (2.0min)
+- Trend: Phase 9 progressing well, 5 of 6 plans complete
 
 *Updated after each plan completion*
 
@@ -198,6 +198,9 @@ Recent decisions affecting current work:
 - Markers attach to asset-clip element in FCPXML (09-03)
 - Rational time format (frames*den/num)s for FCPXML timing (09-03)
 - FCPXML markers use note attribute for comments, no color support in XML (09-03)
+- Python subprocess delegation for AAF (pyaaf2 too complex for FFI) (09-05)
+- Optional pyaaf2 dependency with clear install instructions (09-05)
+- JSON intermediate format for Nim-Python data passing (09-05)
 
 ### Pending Todos
 
@@ -255,6 +258,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 09-03-PLAN.md
+Stopped at: Completed 09-05-PLAN.md
 Resume file: None
-Next: 09-04-PLAN.md (EDL marker export)
+Next: 09-06-PLAN.md (CLI integration)
