@@ -42,6 +42,7 @@ proc parseCaptionStyle*(args: seq[string]): CaptionStyle =
   var fontSize = 60
   var color = "#ffffff"
   var position = cpBottomCenter
+  var positionSet = false  # Track if position was explicitly set
   var outline = -1  # -1 = use preset default, 0 = disabled, 1 = enabled
   var shadow = false
   var box = false
@@ -94,6 +95,7 @@ proc parseCaptionStyle*(args: seq[string]): CaptionStyle =
           of "top": position = cpTopCenter
           else:
             error &"Invalid position: {key}. Choices: bottom, center, top"
+          positionSet = true
         of "box-color":
           boxColor = key
         of "font":
@@ -108,7 +110,8 @@ proc parseCaptionStyle*(args: seq[string]): CaptionStyle =
     result.fontSize = fontSize
   if color != "#ffffff":
     result.color = color
-  result.position = position
+  if positionSet:
+    result.position = position
   if outline >= 0:
     result.outline = (outline == 1)
   if shadow:

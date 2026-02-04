@@ -69,12 +69,12 @@ proc hexToFCPXMLColor*(hex: string): string =
   let g = parseHexInt(color[2..3])
   let b = parseHexInt(color[4..5])
 
-  # Normalize to 0.0-1.0
-  let rNorm = r.float / 255.0
-  let gNorm = g.float / 255.0
-  let bNorm = b.float / 255.0
+  # Normalize to 0.0-1.0 and round to integers for FCPXML
+  let rNorm = int(r.float / 255.0 + 0.5)
+  let gNorm = int(g.float / 255.0 + 0.5)
+  let bNorm = int(b.float / 255.0 + 0.5)
 
-  result = &"{rNorm:.0f} {gNorm:.0f} {bNorm:.0f} 1"
+  result = &"{rNorm} {gNorm} {bNorm} 1"
 
 proc addCaptionTrackFCPXML*(spine: XmlNode, captions: seq[Caption], style: CaptionStyle, tb: AVRational) =
   ## Add caption titles to FCPXML spine
