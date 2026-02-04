@@ -1616,3 +1616,231 @@ suite "NLE Markers":
     check getMarkerColor(mtEngagementPeak) == "#00FF00"
     check getMarkerColor(mtSceneBoundary) == "#0066FF"
     check getMarkerColor(mtSpeakerChange) == "#FFCC00"
+
+# FCP7 Marker Export Tests
+
+suite "FCP7 Markers":
+  test "markerColorToFCP7 parses hex correctly":
+    # Green (engagement peak color)
+    let green = markerColorToFCP7("#00FF00")
+    check green.r == 0
+    check green.g == 255
+    check green.b == 0
+
+    # Blue (scene boundary color)
+    let blue = markerColorToFCP7("#0066FF")
+    check blue.r == 0
+    check blue.g == 102
+    check blue.b == 255
+
+    # Yellow (speaker change color)
+    let yellow = markerColorToFCP7("#FFCC00")
+    check yellow.r == 255
+    check yellow.g == 204
+    check yellow.b == 0
+
+    # Black
+    let black = markerColorToFCP7("#000000")
+    check black.r == 0
+    check black.g == 0
+    check black.b == 0
+
+    # White
+    let white = markerColorToFCP7("#FFFFFF")
+    check white.r == 255
+    check white.g == 255
+    check white.b == 255
+
+  test "addMarkerFCP7 creates correct XML structure":
+    let marker = createEngagementMarker(2000, 85, 1)
+    let parent = newElement("clipitem")
+    addMarkerFCP7(parent, marker, 30)
+
+    # Parent should have one child (the marker)
+    check parent.len == 1
+    let markerNode = parent[0]
+    check markerNode.tag == "marker"
+
+    # Check marker children exist
+    var hasName, hasComment, hasIn, hasOut, hasColor = false
+    for child in markerNode:
+      case child.tag
+      of "name":
+        hasName = true
+        check child.innerText == "Peak #1"
+      of "comment":
+        hasComment = true
+        check child.innerText.contains("85/100")
+      of "in":
+        hasIn = true
+        check child.innerText == "60"  # 2000ms at 30fps = 60 frames
+      of "out":
+        hasOut = true
+        check child.innerText == "90"  # 2000ms + 1000ms at 30fps = 90 frames
+      of "color":
+        hasColor = true
+        # Verify color structure
+        var hasRed, hasGreen, hasBlue, hasAlpha = false
+        for colorChild in child:
+          case colorChild.tag
+          of "red": hasRed = true; check colorChild.innerText == "0"
+          of "green": hasGreen = true; check colorChild.innerText == "255"
+          of "blue": hasBlue = true; check colorChild.innerText == "0"
+          of "alpha": hasAlpha = true; check colorChild.innerText == "255"
+          else: discard
+        check hasRed and hasGreen and hasBlue and hasAlpha
+      else: discard
+
+    check hasName and hasComment and hasIn and hasOut and hasColor
+
+  test "addMarkerFCP7 frame calculation":
+    # Test frame calculation at different timebases
+    # 2000ms at 30fps = 60 frames
+    let marker30 = createEngagementMarker(2000, 50, 1)
+    let parent30 = newElement("clipitem")
+    addMarkerFCP7(parent30, marker30, 30)
+    var inFrame30, outFrame30: string
+    for child in parent30[0]:
+      if child.tag == "in": inFrame30 = child.innerText
+      if child.tag == "out": outFrame30 = child.innerText
+    check inFrame30 == "60"
+    check outFrame30 == "90"  # 60 + 30 (1000ms duration)
+
+    # 2000ms at 24fps = 48 frames
+    let marker24 = createEngagementMarker(2000, 50, 1)
+    let parent24 = newElement("clipitem")
+    addMarkerFCP7(parent24, marker24, 24)
+    var inFrame24, outFrame24: string
+    for child in parent24[0]:
+      if child.tag == "in": inFrame24 = child.innerText
+      if child.tag == "out": outFrame24 = child.innerText
+    check inFrame24 == "48"
+    check outFrame24 == "72"  # 48 + 24 (1000ms duration)
+
+    # 2000ms at 60fps = 120 frames
+    let marker60 = createEngagementMarker(2000, 50, 1)
+    let parent60 = newElement("clipitem")
+    addMarkerFCP7(parent60, marker60, 60)
+    var inFrame60, outFrame60: string
+    for child in parent60[0]:
+      if child.tag == "in": inFrame60 = child.innerText
+      if child.tag == "out": outFrame60 = child.innerText
+    check inFrame60 == "120"
+    check outFrame60 == "180"  # 120 + 60 (1000ms duration)
+
+  test "addMarkersFCP7 adds multiple markers":
+    let markers = @[
+      createEngagementMarker(1000, 90, 1),
+      createSceneMarker(3000),
+      createSpeakerMarker(5000, 0, "John")
+    ]
+    let parent = newElement("clipitem")
+    addMarkersFCP7(parent, markers, 30)
+
+    # Should have 3 marker children
+    check parent.len == 3
+    for child in parent:
+      check child.tag == "marker"
+
+# FCPXML Marker Export Tests
+
+suite "FCPXML Markers":
+  test "addMarkerFCPXML creates correct XML structure":
+    let marker = createEngagementMarker(1500, 85, 1)
+    let parent = newElement("asset-clip")
+    let tb = AVRational(num: 30000, den: 1001)  # 29.97fps NTSC
+    addMarkerFCPXML(parent, marker, tb)
+
+    # Parent should have one child (the marker)
+    check parent.len == 1
+    let markerNode = parent[0]
+    check markerNode.tag == "marker"
+
+    # Check marker has required attributes
+    check markerNode.attr("value") == "Peak #1"
+    check markerNode.attr("note").contains("85/100")
+    check markerNode.attr("start").len > 0
+    check markerNode.attr("duration").len > 0
+
+  test "addMarkerFCPXML rational time format":
+    # Test rational time format: marker at 1500ms with tb=30000/1001 produces correct rational string
+    # 1500ms -> frames: (1500 * 30000) / (1001 * 1000) = 45000000 / 1001000 = ~44.96 frames
+    # Rational: 44 * 1001 / 30000 = 44044/30000
+    let marker = createEngagementMarker(1500, 50, 1)
+    let parent = newElement("asset-clip")
+    let tb = AVRational(num: 30000, den: 1001)
+    addMarkerFCPXML(parent, marker, tb)
+
+    let markerNode = parent[0]
+    let startAttr = markerNode.attr("start")
+
+    # Should end with 's' for seconds
+    check startAttr.endsWith("s")
+    # Should contain rational format (num/den)
+    check startAttr.contains("/")
+
+  test "addMarkerFCPXML simple 30fps timebase":
+    # Test with simple 30fps (integer framerate)
+    # 2000ms at 30fps = 60 frames
+    # Rational: 60 * 1 / 30 = 60/30 = "2s" simplified, but our format gives 60*1/30s = 60/30s
+    let marker = createEngagementMarker(2000, 50, 1)
+    let parent = newElement("asset-clip")
+    let tb = AVRational(num: 30, den: 1)
+    addMarkerFCPXML(parent, marker, tb)
+
+    let markerNode = parent[0]
+    let startAttr = markerNode.attr("start")
+
+    # Should be "60/30s" format (frame * den / num)
+    check startAttr == "60/30s"
+
+  test "addMarkerFCPXML note contains marker comment":
+    let marker = createEngagementMarker(5000, 92, 3)
+    let parent = newElement("asset-clip")
+    let tb = AVRational(num: 30, den: 1)
+    addMarkerFCPXML(parent, marker, tb)
+
+    let markerNode = parent[0]
+    let noteAttr = markerNode.attr("note")
+
+    # Note should contain the full engagement marker comment
+    check noteAttr.contains("92/100")
+    check noteAttr.contains("#3")
+    check noteAttr.contains("High engagement")
+
+  test "addMarkersFCPXML adds multiple markers":
+    let markers = @[
+      createEngagementMarker(1000, 90, 1),
+      createSceneMarker(3000),
+      createSpeakerMarker(5000, 0, "John")
+    ]
+    let parent = newElement("asset-clip")
+    let tb = AVRational(num: 30, den: 1)
+    addMarkersFCPXML(parent, markers, tb)
+
+    # Should have 3 marker children
+    check parent.len == 3
+    for child in parent:
+      check child.tag == "marker"
+
+  test "addMarkerFCPXML zero timestamp":
+    let marker = createEngagementMarker(0, 75, 1)
+    let parent = newElement("asset-clip")
+    let tb = AVRational(num: 30, den: 1)
+    addMarkerFCPXML(parent, marker, tb)
+
+    let markerNode = parent[0]
+    # Zero should produce "0s"
+    check markerNode.attr("start") == "0s"
+
+  test "addMarkerFCPXML duration calculation":
+    # Default marker duration is 1000ms
+    # At 30fps: 1000ms = 30 frames
+    let marker = createEngagementMarker(0, 50, 1)
+    let parent = newElement("asset-clip")
+    let tb = AVRational(num: 30, den: 1)
+    addMarkerFCPXML(parent, marker, tb)
+
+    let markerNode = parent[0]
+    # Duration should be 30 frames = "30/30s"
+    check markerNode.attr("duration") == "30/30s"
