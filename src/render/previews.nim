@@ -402,3 +402,238 @@ proc generatePreviews*(inputPath: string, clips: seq[ClipPreviewInfo],
 
   if not result.success and result.error == "":
     result.error = "Failed to generate any previews"
+
+# ===== Side-by-side comparison =====
+
+proc generateSideBySidePreview*(inputPath: string, outputPath: string,
+                                 cropFilter: string, timestampMs: int64): bool =
+  ## Create side-by-side comparison: original | reframed
+  ##
+  ## Args:
+  ##   inputPath: Source video path
+  ##   outputPath: Output image path (jpg/png)
+  ##   cropFilter: FFmpeg crop filter string (e.g., "crop=w=607:h=1080:x=656:y=0")
+  ##   timestampMs: Timestamp to capture in milliseconds
+  ##
+  ## Returns:
+  ##   true if generation succeeded, false otherwise
+  ##
+  ## Useful for verifying crop accuracy before full render.
+  ## Per RESEARCH.md Pattern 7: uses hstack filter.
+  ##
+  ## Filter chain:
+  ##   [0:v]split[orig][crop];
+  ##   [crop]{cropFilter}[reframed];
+  ##   [orig]scale=iw/2:-1[left];
+  ##   [reframed]scale=iw/2:-1[right];
+  ##   [left][right]hstack
+
+  let ffmpegPath = findFFmpegPath()
+  if ffmpegPath == "":
+    return false
+
+  let timestampSec = timestampMs.msToSeconds()
+
+  # Build filter complex for side-by-side comparison
+  let filterComplex = &"""[0:v]split[orig][tocrop];[tocrop]{cropFilter}[reframed];[orig]scale=iw/2:-1[left];[reframed]scale=iw/2:-1[right];[left][right]hstack"""
+
+  var args = @[
+    "-y",
+    "-ss", &"{timestampSec:.3f}",
+    "-i", inputPath,
+    "-filter_complex", filterComplex,
+    "-frames:v", "1",
+    "-q:v", "2",  # High quality JPEG
+    outputPath
+  ]
+
+  # Execute FFmpeg
+  let exitCode = execCmd(&"\"{ffmpegPath}\" " & args.join(" "))
+  return exitCode == 0
+
+proc generateSideBySideVideo*(inputPath: string, outputPath: string,
+                               cropFilter: string,
+                               startMs, endMs: int64): bool =
+  ## Create side-by-side video comparison: original | reframed
+  ##
+  ## Args:
+  ##   inputPath: Source video path
+  ##   outputPath: Output video path (mp4)
+  ##   cropFilter: FFmpeg crop filter string
+  ##   startMs: Start timestamp in milliseconds
+  ##   endMs: End timestamp in milliseconds
+  ##
+  ## Returns:
+  ##   true if generation succeeded, false otherwise
+  ##
+  ## Like generateSideBySidePreview but produces video instead of image.
+
+  let ffmpegPath = findFFmpegPath()
+  if ffmpegPath == "":
+    return false
+
+  let startSec = startMs.msToSeconds()
+  let duration = (endMs - startMs).msToSeconds()
+
+  # Build filter complex for side-by-side comparison
+  let filterComplex = &"""[0:v]split[orig][tocrop];[tocrop]{cropFilter}[reframed];[orig]scale=iw/2:-1[left];[reframed]scale=iw/2:-1[right];[left][right]hstack"""
+
+  var args = @[
+    "-y",
+    "-ss", &"{startSec:.3f}",
+    "-t", &"{duration:.3f}",
+    "-i", inputPath,
+    "-filter_complex", filterComplex,
+    "-c:v", "libx264",
+    "-preset", "fast",
+    "-crf", "28",
+    "-an",  # No audio for comparison video
+    outputPath
+  ]
+
+  # Execute FFmpeg
+  let exitCode = execCmd(&"\"{ffmpegPath}\" " & args.join(" "))
+  return exitCode == 0
+
+# ===== Overview video =====
+
+proc generateOverviewVideo*(inputPath: string, outputPath: string,
+                            clips: seq[ClipPreviewInfo],
+                            previewDir: string = ""): bool =
+  ## Concatenate all 9-second snippets into single overview video
+  ##
+  ## Args:
+  ##   inputPath: Source video path
+  ##   outputPath: Output video path for combined overview
+  ##   clips: Clip information with timestamps and ranks
+  ##   previewDir: Directory containing snippet files (auto-detected if empty)
+  ##
+  ## Returns:
+  ##   true if generation succeeded, false otherwise
+  ##
+  ## Uses FFmpeg concat demuxer with intermediate text file listing all snippets.
+  ## Assumes snippets were already generated via generateVideoSnippets.
+
+  let ffmpegPath = findFFmpegPath()
+  if ffmpegPath == "":
+    return false
+
+  if clips.len == 0:
+    return false
+
+  # Determine preview directory
+  let snippetDir = if previewDir != "":
+    previewDir
+  else:
+    createPreviewDir(inputPath)
+
+  # Build concat file listing all snippets
+  var concatLines: seq[string] = @[]
+  for clip in clips:
+    # Check for each snippet type
+    for snippetType in ["start", "middle", "end"]:
+      let snippetPath = snippetDir / &"clip_{clip.rank:02}_{snippetType}.mp4"
+      if fileExists(snippetPath):
+        # Use forward slashes and escape for concat file format
+        concatLines.add(&"file '{snippetPath.replace(\"'\", \"'\\''\")}'")
+
+  if concatLines.len == 0:
+    return false  # No snippets found
+
+  # Write concat file
+  let concatFilePath = snippetDir / "concat_list.txt"
+  writeFile(concatFilePath, concatLines.join("\n"))
+
+  # Run FFmpeg concat
+  var args = @[
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", concatFilePath,
+    "-c:v", "libx264",
+    "-preset", "fast",
+    "-crf", "23",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-movflags", "+faststart",
+    outputPath
+  ]
+
+  let exitCode = execCmd(&"\"{ffmpegPath}\" " & args.join(" "))
+
+  # Cleanup concat file
+  if fileExists(concatFilePath):
+    removeFile(concatFilePath)
+
+  return exitCode == 0
+
+# ===== Preview directory cleanup =====
+
+proc cleanupOldPreviews*(previewDir: string): bool =
+  ## Remove existing preview files before generating new ones
+  ##
+  ## Args:
+  ##   previewDir: Path to preview directory
+  ##
+  ## Returns:
+  ##   true if cleanup succeeded, false otherwise
+  ##
+  ## Removes:
+  ##   - contact_sheet.jpg
+  ##   - clip_*_thumb.jpg
+  ##   - clip_*_start.mp4, clip_*_middle.mp4, clip_*_end.mp4
+  ##   - overview.mp4
+  ##   - concat_list.txt
+  ##
+  ## Warns user if directory exists and contains files.
+
+  if not dirExists(previewDir):
+    return true  # Nothing to clean
+
+  var cleaned = 0
+
+  # Remove known preview file patterns
+  for kind, path in walkDir(previewDir):
+    if kind == pcFile:
+      let filename = extractFilename(path)
+      # Match preview file patterns
+      if filename == "contact_sheet.jpg" or
+         filename == "overview.mp4" or
+         filename == "concat_list.txt" or
+         filename.startsWith("clip_") and (filename.endsWith("_thumb.jpg") or
+                                           filename.endsWith("_start.mp4") or
+                                           filename.endsWith("_middle.mp4") or
+                                           filename.endsWith("_end.mp4")):
+        try:
+          removeFile(path)
+          cleaned += 1
+        except OSError:
+          discard  # Best effort cleanup
+
+  return true
+
+proc listPreviews*(previewDir: string): seq[string] =
+  ## List all preview files in directory
+  ##
+  ## Args:
+  ##   previewDir: Path to preview directory
+  ##
+  ## Returns:
+  ##   Sequence of preview file paths
+
+  result = @[]
+
+  if not dirExists(previewDir):
+    return result
+
+  for kind, path in walkDir(previewDir):
+    if kind == pcFile:
+      let filename = extractFilename(path)
+      # Match preview file patterns
+      if filename == "contact_sheet.jpg" or
+         filename == "overview.mp4" or
+         filename.startsWith("clip_") and (filename.endsWith("_thumb.jpg") or
+                                           filename.endsWith("_start.mp4") or
+                                           filename.endsWith("_middle.mp4") or
+                                           filename.endsWith("_end.mp4")):
+        result.add(path)
