@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 9 of 10 (NLE Integration & Markers)
-Plan: 6 of 6 in phase
+Plan: 7 of 7 in phase
 Status: Phase complete
-Last activity: 2026-02-03 — Completed 09-06-PLAN.md
+Last activity: 2026-02-04 — Completed 09-07-PLAN.md
 
-Progress: [██████████████████████████████████████████████] 95%
+Progress: [██████████████████████████████████████████████] 97%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 42
-- Average duration: 3.0 min
-- Total execution time: 2.15 hours
+- Total plans completed: 43
+- Average duration: 3.1 min
+- Total execution time: 2.38 hours
 
 **By Phase:**
 
@@ -36,11 +36,11 @@ Progress: [███████████████████████
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
-| 09-nle-integration-markers | 6 | 13.8min | 2.3min |
+| 09-nle-integration-markers | 7 | 27.8min | 4.0min |
 
 **Recent Trend:**
-- Last 5 plans: 09-01 (3.4min), 09-02 (3.0min), 09-03 (2.4min), 09-05 (2.0min), 09-06 (3.0min)
-- Trend: Phase 9 COMPLETE, all 6 plans executed
+- Last 5 plans: 09-03 (2.4min), 09-05 (2.0min), 09-06 (3.0min), 09-07 (14min)
+- Trend: Phase 9 COMPLETE, all 7 plans executed
 
 *Updated after each plan completion*
 
@@ -207,6 +207,10 @@ Recent decisions affecting current work:
 - enable='between()' for time-gated text visibility (09-06)
 - Score normalization 0-100 to 0-1 for FFmpeg compatibility (09-06)
 - Comma-separated filter chain for segment-based display (09-06)
+- Module rename export.nim to exportcmd.nim to avoid Nim 2.2 reserved keyword issue (09-07)
+- NLE target parsing supports both NLE names and format names (09-07)
+- Case-insensitive NLE target matching (09-07)
+- Score visualization via FFmpeg subprocess (09-07)
 
 ### Pending Todos
 
@@ -262,17 +266,18 @@ None yet.
 - Unified export CLI command integrating all Phase 8 features
 
 **Phase 9 (NLE Integration & Markers):**
-- PHASE COMPLETE: All 6 plans implemented
+- PHASE COMPLETE: All 7 plans implemented
 - Marker types for engagement peaks, scene boundaries, speaker changes
 - FCP7 XML marker export with color support
 - FCPXML marker export with rational time format
 - EDL marker export with CMX3600 comment format
 - AAF marker export via Python subprocess (optional pyaaf2)
 - Score visualization filters for engagement overlay rendering
+- Export command --nle flag integrates all marker formats
 
 ## Session Continuity
 
-Last session: 2026-02-03
-Stopped at: Completed 09-06-PLAN.md
+Last session: 2026-02-04
+Stopped at: Completed 09-07-PLAN.md
 Resume file: None
 Next: Phase 10
