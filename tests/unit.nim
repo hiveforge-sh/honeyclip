@@ -2367,6 +2367,346 @@ suite "Engagement Presets":
 #   6. honeyclip video.mp4 --engage
 #      (without .engage.json file present)
 #      Expected: Error with instructions to run "honeyclip engage" first
+
+# Expression Parser Tests (palet/lexer.nim)
+
+import ../src/palet/lexer
+
+suite "Expression Lexer":
+  test "parser parses empty input":
+    var lexer = initLexer("test", "")
+    var parser = initParser(lexer)
+    let exprs = parser.parse()
+    check exprs.len == 0
+
+  test "parser returns expression for simple input":
+    var lexer = initLexer("test", "(audio)")
+    var parser = initParser(lexer)
+    let exprs = parser.parse()
+    check exprs.len >= 1
+
+  test "parser returns expression for function with arg":
+    var lexer = initLexer("test", "(audio 0.04)")
+    var parser = initParser(lexer)
+    let exprs = parser.parse()
+    check exprs.len >= 1
+
+  test "printExpr contains function name":
+    var lexer = initLexer("test", "(audio 0.04)")
+    var parser = initParser(lexer)
+    let exprs = parser.parse()
+    let text = "(audio 0.04)"
+    let output = printExpr(exprs[0], text)
+    check output.contains("audio")
+
+  test "parser handles comments":
+    var lexer = initLexer("test", "; comment\n(audio)")
+    var parser = initParser(lexer)
+    let exprs = parser.parse()
+    check exprs.len >= 1
+
+  test "parser handles whitespace":
+    var lexer = initLexer("test", "  ( audio   0.04  )  ")
+    var parser = initParser(lexer)
+    let exprs = parser.parse()
+    check exprs.len >= 1
+
+  test "parser handles colon syntax":
+    var lexer = initLexer("test", "audio:0.04")
+    var parser = initParser(lexer)
+    let exprs = parser.parse()
+    check exprs.len >= 1
+
+# Expression Edit Tests (palet/edit.nim)
+# Note: Most functions in edit.nim are not exported, so we can only test parseEditString2
+
+import ../src/palet/edit
+
+suite "Expression Edit":
+  test "parseEditString2 simple kind":
+    let (kind, threshold, stream, width, blur, pattern) = parseEditString2("audio")
+    check kind == "audio"
+    check abs(threshold - 0.04) < 0.001
+    check stream == 0
+
+  test "parseEditString2 with threshold":
+    let (kind, threshold, stream, width, blur, pattern) = parseEditString2("audio:threshold=0.1")
+    check kind == "audio"
+    check abs(threshold - 0.1) < 0.001
+
+  test "parseEditString2 with stream":
+    let (kind, threshold, stream, width, blur, pattern) = parseEditString2("audio:stream=1")
+    check kind == "audio"
+    check stream == 1
+
+  test "parseEditString2 multiple params":
+    let (kind, threshold, stream, width, blur, pattern) = parseEditString2("audio:threshold=0.1,stream=1")
+    check kind == "audio"
+    check abs(threshold - 0.1) < 0.001
+    check stream == 1
+
+  test "parseEditString2 motion with width":
+    let (kind, threshold, stream, width, blur, pattern) = parseEditString2("motion:width=800,blur=11")
+    check kind == "motion"
+    check width == 800
+    check blur == 11
+
+  test "parseEditString2 motion defaults":
+    let (kind, threshold, stream, width, blur, pattern) = parseEditString2("motion")
+    check kind == "motion"
+    check width == 400  # default
+    check blur == 9     # default
+
+# Kalman Filter Tests (tracking/kalman.nim)
+
+import ../src/tracking/kalman
+import ../src/tracking/types
+
+suite "Kalman Filter":
+  test "newKalmanFilter initializes state":
+    let bbox = FaceRect(x: 100, y: 200, width: 50, height: 60, confidence: 0.9, angle: 0)
+    let kf = newKalmanFilter(bbox)
+    check kf.state[0] == 100.0  # x
+    check kf.state[1] == 200.0  # y
+    check kf.state[2] == 50.0   # width
+    check kf.state[3] == 60.0   # height
+    check kf.state[4] == 0.0    # vx (zero initial velocity)
+    check kf.state[5] == 0.0    # vy
+
+  test "newKalmanFilter sets noise parameters":
+    let bbox = FaceRect(x: 0, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    let kf = newKalmanFilter(bbox, processNoise = 0.05, measurementNoise = 0.2)
+    check kf.processNoise == 0.05
+    check kf.measurementNoise == 0.2
+
+  test "predict applies velocity":
+    let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 1.0, angle: 0)
+    var kf = newKalmanFilter(bbox)
+    # Set velocity manually
+    kf.state[4] = 5.0   # vx = 5
+    kf.state[5] = -3.0  # vy = -3
+
+    let predicted = kf.predict()
+    check predicted.x == 105  # x + vx
+    check predicted.y == 97   # y + vy
+    check predicted.confidence == 0.5  # Predicted = 0.5 confidence
+
+  test "predict increases uncertainty":
+    let bbox = FaceRect(x: 0, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    var kf = newKalmanFilter(bbox, processNoise = 0.1)
+    let covBefore = kf.covariance[0][0]
+    discard kf.predict()
+    check kf.covariance[0][0] > covBefore
+
+  test "update reduces uncertainty":
+    let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 1.0, angle: 0)
+    var kf = newKalmanFilter(bbox)
+    discard kf.predict()  # Increases uncertainty
+    let covBefore = kf.covariance[0][0]
+
+    let detection = FaceRect(x: 102, y: 98, width: 50, height: 50, confidence: 0.9, angle: 0)
+    kf.update(detection)
+    check kf.covariance[0][0] < covBefore
+
+  test "update moves state toward detection":
+    let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 1.0, angle: 0)
+    var kf = newKalmanFilter(bbox)
+
+    let detection = FaceRect(x: 110, y: 120, width: 50, height: 50, confidence: 0.9, angle: 0)
+    kf.update(detection)
+
+    # State should move toward detection
+    check kf.state[0] > 100.0 and kf.state[0] <= 110.0
+    check kf.state[1] > 100.0 and kf.state[1] <= 120.0
+
+  test "getBbox returns current state":
+    let bbox = FaceRect(x: 100, y: 200, width: 50, height: 60, confidence: 0.9, angle: 0)
+    let kf = newKalmanFilter(bbox)
+    let (x, y, w, h) = kf.getBbox()
+    check x == 100
+    check y == 200
+    check w == 50
+    check h == 60
+
+# Hungarian Assignment Tests (tracking/assignment.nim)
+
+import ../src/tracking/assignment
+
+suite "Hungarian Assignment":
+  test "iou no overlap":
+    let a = FaceRect(x: 0, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    let b = FaceRect(x: 20, y: 20, width: 10, height: 10, confidence: 1.0, angle: 0)
+    check iou(a, b) == 0.0
+
+  test "iou full overlap":
+    let a = FaceRect(x: 0, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    let b = FaceRect(x: 0, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    check iou(a, b) == 1.0
+
+  test "iou partial overlap":
+    let a = FaceRect(x: 0, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    let b = FaceRect(x: 5, y: 5, width: 10, height: 10, confidence: 1.0, angle: 0)
+    # Intersection: 5x5 = 25, Union: 100 + 100 - 25 = 175
+    let result = iou(a, b)
+    check abs(result - 25.0/175.0) < 0.001
+
+  test "iou edge touching":
+    let a = FaceRect(x: 0, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    let b = FaceRect(x: 10, y: 0, width: 10, height: 10, confidence: 1.0, angle: 0)
+    check iou(a, b) == 0.0  # Edge touching = no overlap
+
+  test "hungarianAssignment empty matrix":
+    let costMatrix: seq[seq[float]] = @[]
+    let assignments = hungarianAssignment(costMatrix)
+    check assignments.len == 0
+
+  test "hungarianAssignment single element":
+    let costMatrix = @[@[0.5]]
+    let assignments = hungarianAssignment(costMatrix)
+    check assignments.len == 1
+    check assignments[0].trackIdx == 0
+    check assignments[0].detIdx == 0
+
+  test "hungarianAssignment respects threshold":
+    let costMatrix = @[@[1e6]]  # Cost above threshold
+    let assignments = hungarianAssignment(costMatrix, threshold = 1e5)
+    check assignments.len == 0
+
+  test "hungarianAssignment optimal assignment":
+    # 2x2 matrix where optimal is diagonal
+    let costMatrix = @[
+      @[0.1, 0.9],
+      @[0.9, 0.1]
+    ]
+    let assignments = hungarianAssignment(costMatrix)
+    check assignments.len == 2
+    # Should assign (0,0) and (1,1) for minimum cost
+    var foundDiagonal = false
+    for a in assignments:
+      if a.trackIdx == a.detIdx:
+        foundDiagonal = true
+    check foundDiagonal
+
+# Utility Function Tests (util/fun.nim)
+
+import ../src/util/fun
+
+suite "Utility Functions":
+  test "handleKey converts underscores":
+    check handleKey("--my_option") == "--my-option"
+    check handleKey("--simple") == "--simple"
+    check handleKey("-v") == "-v"
+
+  test "splitext separates path and extension":
+    let (base, ext) = splitext("/path/to/file.mp4")
+    check ext == ".mp4"
+    check base.endsWith("file")
+
+  test "splitNumStr parses number with unit":
+    let (num, unit) = splitNumStr("100k")
+    check num == 100.0
+    check unit == "k"
+
+  test "splitNumStr parses negative number":
+    let (num, unit) = splitNumStr("-20dB")
+    check num == -20.0
+    check unit == "dB"
+
+  test "splitNumStr parses decimal":
+    let (num, unit) = splitNumStr("0.5s")
+    check num == 0.5
+    check unit == "s"
+
+  test "parseBitrate with k suffix":
+    check parseBitrate("128k") == 128000
+
+  test "parseBitrate with M suffix":
+    check parseBitrate("2M") == 2000000
+
+  test "parseBitrate auto":
+    check parseBitrate("auto") == -1
+
+  test "parseBitrate plain number":
+    check parseBitrate("5000") == 5000
+
+  test "aspectRatio 16:9":
+    let (w, h) = aspectRatio(1920, 1080)
+    check w == 16
+    check h == 9
+
+  test "aspectRatio 4:3":
+    let (w, h) = aspectRatio(640, 480)
+    check w == 4
+    check h == 3
+
+  test "aspectRatio 1:1":
+    let (w, h) = aspectRatio(500, 500)
+    check w == 1
+    check h == 1
+
+  test "aspectRatio handles zero height":
+    let (w, h) = aspectRatio(100, 0)
+    check w == 0
+    check h == 0
+
+  test "mutRemoveSmall removes short segments":
+    var arr = @[false, true, false, false, false]  # Single true
+    mutRemoveSmall(arr, 2, true, false)  # Replace isolated trues with false
+    check arr == @[false, false, false, false, false]
+
+  test "mutRemoveSmall keeps long segments":
+    var arr = @[false, true, true, true, false]  # Three trues
+    mutRemoveSmall(arr, 2, true, false)  # Only remove if < 2
+    check arr == @[false, true, true, true, false]
+
+  test "mutMargin extends start":
+    var arr = @[false, false, true, true, false]
+    mutMargin(arr, startM = 1, endM = 0)
+    check arr[1] == true  # Extended by 1
+
+  test "mutMargin extends end":
+    var arr = @[false, true, true, false, false]
+    mutMargin(arr, startM = 0, endM = 1)
+    check arr[3] == true  # Extended by 1
+
+# Timeline Tests (timeline.nim)
+
+import ../src/timeline
+
+suite "Timeline":
+  test "makeSaneTimebase NTSC 30fps":
+    # 29.97fps should normalize to 30000/1001
+    let tb = AVRational(num: 2997, den: 100)
+    let sane = makeSaneTimebase(tb)
+    check sane.num == 30000
+    check sane.den == 1001
+
+  test "makeSaneTimebase NTSC 60fps":
+    # 59.94fps should normalize to 60000/1001
+    let tb = AVRational(num: 5994, den: 100)
+    let sane = makeSaneTimebase(tb)
+    check sane.num == 60000
+    check sane.den == 1001
+
+  test "makeSaneTimebase film NTSC 24fps":
+    # 23.976fps should normalize to 24000/1001
+    let tb = AVRational(num: 23976, den: 1000)
+    let sane = makeSaneTimebase(tb)
+    check sane.num == 24000
+    check sane.den == 1001
+
+  test "makeSaneTimebase standard 30fps":
+    # Exact 30fps stays as-is
+    let tb = AVRational(num: 30, den: 1)
+    let sane = makeSaneTimebase(tb)
+    check sane.num == 30
+    check sane.den == 1
+
+  test "makeSaneTimebase standard 25fps":
+    let tb = AVRational(num: 25, den: 1)
+    let sane = makeSaneTimebase(tb)
+    check sane.num == 25
+    check sane.den == 1
 #
 #   7. honeyclip engage video.mp4 nonexistent-model.bin
 #      Expected: Error with download URL and example curl command
