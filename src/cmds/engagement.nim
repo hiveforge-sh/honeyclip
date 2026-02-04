@@ -134,6 +134,8 @@ proc main*(cArgs: seq[string]) =
   var compact: bool = false
   var noFaces: bool = false
   var isDebug: bool = false
+  var quietMode: bool = false
+  var verboseMode: bool = false
 
   var expecting: string = ""
   for rawKey in cArgs:
@@ -155,12 +157,19 @@ Options:
   --no-faces              Skip face detection (faster)
   --hooks PATH            Custom hook patterns JSON file
   --compact               Minified JSON output
+  -q, --quiet             Suppress progress output
+  --verbose               Show detailed progress even when piped
   --debug                 Show debug information
   --help                  Show this help
 """
       quit(0)
     of "--debug":
       isDebug = true
+    of "-q", "--quiet":
+      quietMode = true
+      quiet = true  # Set global quiet flag for log.nim
+    of "--verbose":
+      verboseMode = true
     of "--summary":
       showSummary = true
     of "--stdout":
@@ -200,7 +209,13 @@ Options:
     error &"Input file not found: {inputPath}"
 
   if not fileExists(model):
-    error &"Model not found: {model}\nDownload from: https://huggingface.co/ggerganov/whisper.cpp"
+    error &"""Model not found: {model}
+
+Download whisper models from:
+  https://huggingface.co/ggerganov/whisper.cpp/tree/main
+
+Example:
+  curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"""
 
   if hooksPath != "" and not fileExists(hooksPath):
     error &"Hooks file not found: {hooksPath}"
@@ -218,18 +233,24 @@ Options:
     # For now, use default hooks
     # TODO: Implement hook JSON loading
 
-  var bar = initBar(BarType.modern)
+  # Determine effective verbosity
+  let isTTY = stdin.isatty()
+  let showProgress = (isTTY or verboseMode) and not quietMode
+
+  var bar = initBar(if showProgress: BarType.modern else: BarType.none)
   defer: bar.destroy()
 
   # Step 1: Extract transcript with progress
   let transcriptStart = epochTime()
-  bar.start(100.0, "Extracting transcript")
+  if showProgress:
+    bar.start(100.0, "Extracting transcript")
   var transcript: Transcript
   try:
     transcript = extractTranscript(inputPath, model, "", "")
   except IOError as e:
     error &"Failed to extract transcript: {e.msg}"
-  bar.`end`()
+  if showProgress:
+    bar.`end`()
   let transcriptTime = epochTime() - transcriptStart
 
   if transcript.words.len == 0:
@@ -265,7 +286,7 @@ Options:
   let analyzeTime = epochTime() - analyzeStart
 
   # Print timing summary if not quiet and not outputting to stdout/summary
-  if not quiet and not showSummary and not useStdout:
+  if showProgress and not showSummary and not useStdout:
     echo ""
     echo "Analysis complete"
     echo &"  Transcript: {transcriptTime:.1f}s ({transcript.words.len} words)"
@@ -283,7 +304,8 @@ Options:
     let jsonStr = timelineToJson(timeline, compact)
     try:
       writeFile(outputPath, jsonStr)
-      conwrite("")
-      echo &"Created: {outputPath}"
+      if showProgress:
+        conwrite("")
+        echo &"Created: {outputPath}"
     except IOError as e:
       error &"Failed to write output file: {e.msg}"
