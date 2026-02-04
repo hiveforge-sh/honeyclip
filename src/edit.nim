@@ -2,7 +2,7 @@ import std/[os, times, terminal, browsers]
 import std/[strutils, strformat]
 import std/sequtils
 import std/[random, sets]
-from std/math import round
+import std/[math, json]
 
 import av
 import log
@@ -22,6 +22,32 @@ proc stopTimer() =
   let minuteLen = toTimecode(secondLen, display)
 
   echo &"Finished. took {secondLen} seconds ({minuteLen})"
+
+proc loadEngagementMask(inputPath: string, tb: AVRational,
+                        threshold: float32, totalLength: int): seq[bool] =
+  ## Load cached engagement and create boolean mask for edit workflow
+  let engagePath = inputPath.changeFileExt(".engage.json")
+  if not fileExists(engagePath):
+    error &"Engagement data not found. Run 'honeyclip engage {inputPath} model' first, or remove --engage flag."
+
+  let jsonData = parseFile(engagePath)
+  # Parse segments and create mask
+  var segments: seq[tuple[startMs, endMs: int64, score: float32]] = @[]
+  for seg in jsonData["segments"]:
+    segments.add((
+      startMs: seg["start_ms"].getBiggestInt(),
+      endMs: seg["end_ms"].getBiggestInt(),
+      score: seg["score"].getFloat().float32
+    ))
+
+  result = newSeq[bool](totalLength)
+  let tbFloat = tb.float64
+  for seg in segments:
+    if seg.score >= threshold:
+      let startFrame = int((seg.startMs.float64 / 1000.0) * tbFloat)
+      let endFrame = int((seg.endMs.float64 / 1000.0) * tbFloat)
+      for i in startFrame ..< min(endFrame, totalLength):
+        result[i] = true
 
 
 proc parseExportString*(exportStr: string): (string, string, string) =
@@ -241,6 +267,17 @@ proc editMedia*(args: var mainArgs) =
         tb = makeSaneTimebase(container.video[0].avg_frame_rate)
 
       var hasLoud = interpretEdit(args, container, tb, bar)
+
+      # Apply engagement filter if enabled (AND logic with edit expression)
+      if args.engageEnabled:
+        let presetStr = if args.engagePreset != "": &" ({args.engagePreset})" else: ""
+        conwrite(&"Applying engagement filter: threshold {args.engageThreshold:.0f}{presetStr}")
+        let engageMask = loadEngagementMask(args.input, tb, args.engageThreshold, hasLoud.len)
+        # AND logic: both --edit and --engage must be true
+        for i in 0 ..< hasLoud.len:
+          if i < engageMask.len:
+            hasLoud[i] = hasLoud[i] and engageMask[i]
+
       let startMargin = toTb(args.margin[0], tb.float64)
       let endMargin = toTb(args.margin[1], tb.float64)
       mutMargin(hasLoud, startMargin, endMargin)
