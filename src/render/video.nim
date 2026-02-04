@@ -46,7 +46,7 @@ proc reformat*(frame: ptr AVFrame, format: AVPixelFormat, width: cint = 0,
 
   # Allocate buffer for new frame
   if av_frame_get_buffer(newFrame, 32) < 0:
-    error "Failed to allocate buffer for new frame"
+    error &"Failed to allocate buffer for new frame: format={newFrame.format}, width={newFrame.width}, height={newFrame.height}"
 
   # Create swscale context
   let swsContext = sws_getCachedContext(
@@ -89,7 +89,7 @@ proc makeSolid(width: cint, height: cint, color: RGBColor): ptr AVFrame =
   frame.height = height
 
   if av_frame_get_buffer(frame, 32) < 0:
-    error "Bad buffer"
+    error &"Failed to allocate solid frame buffer: width={width}, height={height}"
 
   if av_frame_make_writable(frame) < 0:
     error "Can't make frame writable"
@@ -162,6 +162,11 @@ proc makeNewVideoFrames*(output: var OutputContainer, tl: v3, args: mainArgs):
   var targetHeight: cint = cint(tl.res[1])
   var scaleGraph: Graph = nil
   var needsScaling = false
+
+  debug &"Timeline resolution: {tl.res[0]}x{tl.res[1]}, target: {targetWidth}x{targetHeight}"
+
+  if targetWidth <= 0 or targetHeight <= 0:
+    error &"Invalid timeline resolution: {targetWidth}x{targetHeight}"
 
   if args.scale != 1.0:
     targetWidth = max(cint(round(tl.res[0].float64 * args.scale)), 2)
@@ -405,6 +410,13 @@ proc makeNewVideoFrames*(output: var OutputContainer, tl: v3, args: mainArgs):
         frame = scaleGraph.pull()
         if oldFrame != nil and oldFrame != nullFrame:
           av_frame_free(addr oldFrame)
+
+      # Validate frame dimensions before reformat - use nullFrame as fallback
+      if frame.width <= 0 or frame.height <= 0:
+        debug &"Invalid frame dimensions ({frame.width}x{frame.height}) at index {index}, using fallback"
+        if frame != nil and frame != nullFrame:
+          av_frame_free(addr frame)
+        frame = av_frame_clone(nullFrame)
 
       let reformattedFrame = frame.reformat(pix_fmt)
       if reformattedFrame != nil and reformattedFrame != frame:
