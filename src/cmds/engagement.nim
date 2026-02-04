@@ -1,4 +1,4 @@
-import std/[strformat, strutils, os, json, tables, algorithm]
+import std/[strformat, strutils, os, json, tables, algorithm, times]
 import ../log
 import ../util/fun
 import ../util/bar
@@ -218,21 +218,22 @@ Options:
     # For now, use default hooks
     # TODO: Implement hook JSON loading
 
-  # Step 1: Extract transcript
-  if not showSummary:
-    conwrite(&"Extracting transcript from {inputPath}...")
+  var bar = initBar(BarType.modern)
+  defer: bar.destroy()
 
+  # Step 1: Extract transcript with progress
+  let transcriptStart = epochTime()
+  bar.start(100.0, "Extracting transcript")
   var transcript: Transcript
   try:
     transcript = extractTranscript(inputPath, model, "", "")
   except IOError as e:
     error &"Failed to extract transcript: {e.msg}"
+  bar.`end`()
+  let transcriptTime = epochTime() - transcriptStart
 
   if transcript.words.len == 0:
     error "No transcript content extracted"
-
-  if isDebug:
-    debug &"Extracted {transcript.words.len} words"
 
   # Step 2: Open container for analysis
   var container: InputContainer
@@ -251,26 +252,26 @@ Options:
   else:
     error "No video or audio stream found"
 
-  if isDebug:
-    debug &"Using timebase: {tb.num}/{tb.den}"
-
-  # Step 3: Analyze engagement
-  if not showSummary:
-    conwrite("Analyzing engagement...")
-
+  # Step 3: Analyze engagement (uses internal per-step progress)
+  let analyzeStart = epochTime()
   var timeline: EngagementTimeline
   try:
     let params = defaultEngagementParams()
     let patterns = loadBuiltinPatterns()
-    var bar = initBar(BarType.modern)
     timeline = analyzeEngagement(bar, container, inputPath, transcript, tb,
                                   params, patterns, not noFaces)
   except Exception as e:
     error &"Failed to analyze engagement: {e.msg}"
+  let analyzeTime = epochTime() - analyzeStart
 
-  if isDebug:
-    debug &"Generated {timeline.segments.len} segments"
-    debug &"Average score: {timeline.avgScore:.1f}"
+  # Print timing summary if not quiet and not outputting to stdout/summary
+  if not quiet and not showSummary and not useStdout:
+    echo ""
+    echo "Analysis complete"
+    echo &"  Transcript: {transcriptTime:.1f}s ({transcript.words.len} words)"
+    echo &"  Analysis: {analyzeTime:.1f}s ({timeline.segments.len} segments)"
+    if timeline.hookCount > 0:
+      echo &"  Hooks detected: {timeline.hookCount}"
 
   # Step 3: Output results
   if showSummary:
