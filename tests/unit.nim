@@ -21,6 +21,7 @@ import ../src/exports/edl
 import ../src/reframe/compositor
 import ../src/reframe/crop
 import ../src/tracking/types as trackingTypes
+import ../src/exports/markers
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -1546,3 +1547,72 @@ suite "Reframe Compositor":
     let comp = newCompositor()
     let success = renderReframe("input.mp4", "output.mp4", comp, 607, 1080)
     check success == false
+
+# NLE Marker Tests
+
+suite "NLE Markers":
+  test "createEngagementMarker format":
+    let marker = createEngagementMarker(61500, 85, 2)
+    check marker.name == "Peak #2"
+    check marker.comment.contains("85/100")
+    check marker.comment.contains("#2")
+    check marker.comment.contains("High engagement")
+    check marker.color == "#00FF00"
+    check marker.markerType == mtEngagementPeak
+    check marker.timestampMs == 61500
+    check marker.durationMs == 1000
+
+  test "createEngagementMarker score labels":
+    # High engagement (80+)
+    let high = createEngagementMarker(0, 80, 1)
+    check high.comment.contains("High engagement")
+
+    # Medium engagement (50-79)
+    let medium = createEngagementMarker(0, 65, 2)
+    check medium.comment.contains("Medium engagement")
+
+    # Low engagement (<50)
+    let low = createEngagementMarker(0, 40, 3)
+    check low.comment.contains("Low engagement")
+
+  test "createSceneMarker format":
+    let marker = createSceneMarker(61500)
+    check marker.name == "Scene"
+    check marker.color == "#0066FF"
+    check marker.markerType == mtSceneBoundary
+    check marker.comment.contains("Scene boundary at")
+    check marker.timestampMs == 61500
+
+  test "createSpeakerMarker with name":
+    let marker = createSpeakerMarker(5000, 0, "John")
+    check marker.name == "Speaker: John"
+    check marker.comment.contains("John")
+    check marker.color == "#FFCC00"
+    check marker.markerType == mtSpeakerChange
+
+  test "createSpeakerMarker without name":
+    let marker = createSpeakerMarker(5000, 1)
+    check marker.name == "Speaker 1"
+    check marker.comment.contains("1")
+    check marker.color == "#FFCC00"
+
+  test "labelForScore thresholds":
+    check labelForScore(100.0f) == "High engagement"
+    check labelForScore(80.0f) == "High engagement"
+    check labelForScore(79.9f) == "Medium engagement"
+    check labelForScore(50.0f) == "Medium engagement"
+    check labelForScore(49.9f) == "Low engagement"
+    check labelForScore(0.0f) == "Low engagement"
+
+  test "msToTimecode calculation":
+    # 1 minute, 1 second, 15 frames at 30fps
+    # = 61000ms + 500ms = 61500ms
+    check msToTimecode(61500, 30.0) == "00:01:01:15"
+    check msToTimecode(0, 30.0) == "00:00:00:00"
+    check msToTimecode(3600000, 30.0) == "01:00:00:00"  # 1 hour
+    check msToTimecode(1000, 30.0) == "00:00:01:00"     # 1 second
+
+  test "getMarkerColor returns correct colors":
+    check getMarkerColor(mtEngagementPeak) == "#00FF00"
+    check getMarkerColor(mtSceneBoundary) == "#0066FF"
+    check getMarkerColor(mtSpeakerChange) == "#FFCC00"
