@@ -1,4 +1,5 @@
 import std/[algorithm, json, os, strformat, strutils]
+import markers
 
 #[
 Export clips as CMX3600 EDL (Edit Decision List) format for NLE import.
@@ -326,3 +327,126 @@ proc adjustClipBoundaryAndSave*(jsonPath: string, clipRank: int,
 
   let version = saveClipsWithVersion(clips, jsonPath, source)
   return (true, @[], version)
+
+# --- Marker Support for EDL ---
+
+proc markerTypeToString*(mt: MarkerType): string =
+  ## Convert marker type enum to EDL-friendly string
+  case mt
+  of mtEngagementPeak: "ENGAGEMENT_PEAK"
+  of mtSceneBoundary: "SCENE_BOUNDARY"
+  of mtSpeakerChange: "SPEAKER_CHANGE"
+
+proc addMarkerEDL*(lines: var seq[string], marker: Marker, fps: float = 30.0) =
+  ## Add marker as comment lines to EDL
+  ##
+  ## EDL markers via comment lines (CMX3600):
+  ## * MARKER 00:01:30:15 TYPE: ENGAGEMENT_PEAK
+  ## * MARKER_NAME: Peak #1
+  ## * MARKER_COMMENT: Score: 85/100 (#1) - High engagement
+  ##
+  ## Some NLEs parse these as metadata, others show as comments.
+  let timecode = formatTimecode(marker.timestampMs, fps)
+  let typeStr = markerTypeToString(marker.markerType)
+
+  lines.add(&"* MARKER {timecode} TYPE: {typeStr}")
+  lines.add(&"* MARKER_NAME: {marker.name}")
+  lines.add(&"* MARKER_COMMENT: {marker.comment}")
+
+proc addMarkersEDL*(lines: var seq[string], markers: seq[Marker], fps: float = 30.0) =
+  ## Add multiple markers as comment blocks
+  for marker in markers:
+    addMarkerEDL(lines, marker, fps)
+    lines.add("")  # Blank line between markers
+
+proc exportCMX3600EDLWithMarkers*(clips: seq[EDLClip], markers: seq[Marker],
+                                   outputPath: string, sourceName: string,
+                                   fps: float = 30.0) =
+  ## Export clips as CMX3600 EDL with marker comments
+  ##
+  ## Warning: CMX3600 has 999 event limit. This function:
+  ## - Counts clips + marker blocks toward limit
+  ## - Emits warning if approaching limit (>900 events)
+  ## - Prioritizes clips over markers if limit exceeded
+
+  var lines: seq[string] = @[]
+
+  # Header
+  lines.add("TITLE: Engagement Clips")
+  lines.add("")
+
+  # Track record timeline position
+  var recordPosition: int64 = 0
+
+  for i, clip in clips:
+    let eventNum = $(i + 1)
+    let paddedEvent = eventNum.align(3, '0')  # 001, 002, etc.
+
+    # Reel name: max 8 chars, uppercase, alphanumeric
+    var reelName = sourceName
+    if reelName.len > 8:
+      reelName = reelName[0..7]
+    reelName = reelName.toUpperAscii()
+    for c in reelName:
+      if not (c.isAlphaNumeric() or c == '_'):
+        reelName = reelName.replace($c, "_")
+
+    # Timecodes
+    let sourceIn = formatTimecode(clip.startMs, fps)
+    let sourceOut = formatTimecode(clip.endMs, fps)
+    let recordIn = formatTimecode(recordPosition, fps)
+    let clipDuration = clip.endMs - clip.startMs
+    let recordOut = formatTimecode(recordPosition + clipDuration, fps)
+
+    # Event line: EVENT REEL EDIT_TYPE TRANSITION SOURCE_IN SOURCE_OUT RECORD_IN RECORD_OUT
+    # V = video only, C = cut transition
+    lines.add(&"{paddedEvent}  {reelName.align(8)}  V     C        {sourceIn} {sourceOut} {recordIn} {recordOut}")
+
+    # Comment lines with metadata (asterisk prefix)
+    lines.add(&"* ENGAGEMENT_SCORE: {clip.engagementScore:.1f}")
+    lines.add(&"* RANK: {clip.rank}")
+
+    # Truncate text for comment (max 60 chars)
+    if clip.text.len > 0:
+      var text = clip.text.replace("\n", " ").strip()
+      if text.len > 60:
+        text = text[0..57] & "..."
+      lines.add(&"* TRANSCRIPT: {text}")
+
+    lines.add("")  # Blank line between events
+
+    recordPosition += clipDuration
+
+  # Add marker section if markers present
+  if markers.len > 0:
+    lines.add("* --- MARKERS ---")
+    lines.add("")
+    addMarkersEDL(lines, markers, fps)
+
+  # Check event limit (clips + marker blocks)
+  let totalEvents = clips.len + markers.len
+  if totalEvents > 900:
+    stderr.writeLine(&"Warning: EDL has {totalEvents} events (clips + markers). CMX3600 limit is 999.")
+  if totalEvents > 999:
+    stderr.writeLine(&"Warning: EDL event limit exceeded. Some markers may not appear in NLE.")
+
+  # Write file
+  writeFile(outputPath, lines.join("\n"))
+
+proc exportMarkersEDL*(markers: seq[Marker], outputPath: string,
+                       sourceName: string, fps: float = 30.0) =
+  ## Export markers only as EDL file (no clips)
+  ## Useful for overlaying markers on existing timeline
+
+  var lines: seq[string] = @[]
+
+  # Header
+  lines.add(&"TITLE: {sourceName} Markers")
+  lines.add("")
+
+  # Add markers as comment blocks
+  if markers.len > 0:
+    addMarkersEDL(lines, markers, fps)
+
+  # Write file
+  writeFile(outputPath, lines.join("\n"))
