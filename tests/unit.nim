@@ -22,6 +22,7 @@ import ../src/reframe/compositor
 import ../src/reframe/crop
 import ../src/tracking/types as trackingTypes
 import ../src/exports/markers
+import ../src/render/scoreviz
 
 func `$`*(layout: AVChannelLayout): string =
   const bufSize: csize_t = 256
@@ -1844,3 +1845,116 @@ suite "FCPXML Markers":
     let markerNode = parent[0]
     # Duration should be 30 frames = "30/30s"
     check markerNode.attr("duration") == "30/30s"
+
+# EDL Marker Export Tests
+
+suite "EDL Markers":
+  test "markerTypeToString conversion":
+    check markerTypeToString(mtEngagementPeak) == "ENGAGEMENT_PEAK"
+    check markerTypeToString(mtSceneBoundary) == "SCENE_BOUNDARY"
+    check markerTypeToString(mtSpeakerChange) == "SPEAKER_CHANGE"
+
+  test "addMarkerEDL generates correct comment lines":
+    let marker = createEngagementMarker(90000, 85, 1)  # 1:30 at 30fps
+    var lines: seq[string] = @[]
+    addMarkerEDL(lines, marker, 30.0)
+
+    check lines.len == 3
+    check lines[0].startsWith("* MARKER ")
+    check lines[0].contains("00:01:30:00")  # 90000ms = 1min 30sec
+    check lines[0].contains("TYPE: ENGAGEMENT_PEAK")
+    check lines[1] == "* MARKER_NAME: Peak #1"
+    check lines[2].contains("* MARKER_COMMENT:")
+    check lines[2].contains("85/100")
+
+  test "addMarkerEDL scene boundary format":
+    let marker = createSceneMarker(5000)
+    var lines: seq[string] = @[]
+    addMarkerEDL(lines, marker, 30.0)
+
+    check lines.len == 3
+    check lines[0].contains("TYPE: SCENE_BOUNDARY")
+    check lines[1] == "* MARKER_NAME: Scene"
+    check lines[2].contains("Scene boundary")
+
+  test "addMarkerEDL speaker change format":
+    let marker = createSpeakerMarker(10000, 2, "Alice")
+    var lines: seq[string] = @[]
+    addMarkerEDL(lines, marker, 30.0)
+
+    check lines.len == 3
+    check lines[0].contains("TYPE: SPEAKER_CHANGE")
+    check lines[1] == "* MARKER_NAME: Speaker: Alice"
+    check lines[2].contains("Alice")
+
+  test "addMarkersEDL multiple markers":
+    let markers = @[
+      createEngagementMarker(0, 90, 1),
+      createSceneMarker(30000),
+      createSpeakerMarker(60000, 1)
+    ]
+    var lines: seq[string] = @[]
+    addMarkersEDL(lines, markers, 30.0)
+
+    # Each marker is 3 lines + 1 blank = 4 lines each, 3 markers = 12 lines
+    check lines.len == 12
+
+  test "EDL timecode calculation at 30fps":
+    # 90000ms at 30fps = 90 seconds = 1:30:00
+    let marker = createEngagementMarker(90000, 50, 1)
+    var lines: seq[string] = @[]
+    addMarkerEDL(lines, marker, 30.0)
+
+    check lines[0].contains("00:01:30:00")
+
+  test "EDL timecode calculation with frames":
+    # 90500ms at 30fps = 90.5 seconds = 1:30 + 15 frames
+    let marker = createEngagementMarker(90500, 50, 1)
+    var lines: seq[string] = @[]
+    addMarkerEDL(lines, marker, 30.0)
+
+    check lines[0].contains("00:01:30:15")
+
+  test "exportMarkersEDL creates valid file":
+    let tempDir = createTempDir("tmp", "")
+    defer: removeDir(tempDir)
+
+    let markers = @[
+      createEngagementMarker(5000, 85, 1),
+      createSceneMarker(10000)
+    ]
+
+    let edlPath = tempDir / "markers.edl"
+    exportMarkersEDL(markers, edlPath, "TestVideo", 30.0)
+
+    check fileExists(edlPath)
+    let content = readFile(edlPath)
+    check content.contains("TITLE: TestVideo Markers")
+    check content.contains("* MARKER ")
+    check content.contains("ENGAGEMENT_PEAK")
+    check content.contains("SCENE_BOUNDARY")
+
+  test "exportCMX3600EDLWithMarkers integrates clips and markers":
+    let tempDir = createTempDir("tmp", "")
+    defer: removeDir(tempDir)
+
+    let clips = @[
+      EDLClip(startMs: 0, endMs: 10000, engagementScore: 80.0, text: "Test clip", rank: 1)
+    ]
+    let markers = @[
+      createEngagementMarker(5000, 80, 1)
+    ]
+
+    let edlPath = tempDir / "combined.edl"
+    exportCMX3600EDLWithMarkers(clips, markers, edlPath, "TestSrc", 30.0)
+
+    check fileExists(edlPath)
+    let content = readFile(edlPath)
+
+    # Should have clip event
+    check content.contains("001  ")
+    check content.contains("ENGAGEMENT_SCORE: 80.0")
+
+    # Should have marker section
+    check content.contains("* --- MARKERS ---")
+    check content.contains("ENGAGEMENT_PEAK")
