@@ -10,19 +10,19 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 9 of 10 (NLE Integration & Markers) — Complete
-Plan: 7 of 7 in phase
-Status: Phase verified
-Last activity: 2026-02-03 — Completed Phase 9, verified and committed
+Phase: 10 of 10 (CLI Integration) — In progress
+Plan: 1 of 3 in phase
+Status: In progress
+Last activity: 2026-02-04 — Completed 10-01-PLAN.md
 
-Progress: [██████████████████████████████████████████████] 95%
+Progress: [███████████████████████████████████████████████] 96%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 44
+- Total plans completed: 45
 - Average duration: 3.0 min
-- Total execution time: 2.4 hours
+- Total execution time: 2.5 hours
 
 **By Phase:**
 
@@ -37,10 +37,11 @@ Progress: [███████████████████████
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
 | 09-nle-integration-markers | 7 | 27.8min | 4.0min |
+| 10-cli-integration | 1 | 4min | 4.0min |
 
 **Recent Trend:**
-- Last 5 plans: 09-03 (2.4min), 09-05 (2.0min), 09-06 (3.0min), 09-07 (14min)
-- Trend: Phase 9 COMPLETE, all 7 plans executed
+- Last 5 plans: 09-05 (2.0min), 09-06 (3.0min), 09-07 (14min), 10-01 (4min)
+- Trend: Phase 10 started
 
 *Updated after each plan completion*
 
@@ -211,6 +212,10 @@ Recent decisions affecting current work:
 - NLE target parsing supports both NLE names and format names (09-07)
 - Case-insensitive NLE target matching (09-07)
 - Score visualization via FFmpeg subprocess (09-07)
+- Number parsing takes precedence over preset lookup for --engage flag (10-01)
+- Presets include both threshold and signal weights for complete configuration (10-01)
+- Expression functions load from cached .engage.json with error if missing (10-01)
+- Predicate-based segmentsToBoolArray for flexible engagement filtering (10-01)
 
 ### Pending Todos
 
@@ -275,9 +280,16 @@ None yet.
 - Score visualization filters for engagement overlay rendering
 - Export command --nle flag integrates all marker formats
 
+**Phase 10 (CLI Integration):**
+- IN PROGRESS: Plan 10-01 complete (presets & expressions)
+- Named engagement presets (viral, podcast, tutorial, interview, tiktok, youtube, instagram)
+- Expression functions (score, face_count, is_hook, speaking_rate) for --edit
+- JSON loading for cached engagement data
+- Ready for Plan 10-02 (CLI flags) and 10-03 (workflow integration)
+
 ## Session Continuity
 
-Last session: 2026-02-03
-Stopped at: Phase 9 verified and complete
+Last session: 2026-02-04
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None
-Next: Phase 10 - CLI Integration
+Next: Plan 10-02 (CLI Flags for Engagement)
