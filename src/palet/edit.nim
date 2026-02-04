@@ -1,13 +1,15 @@
 import std/[strformat, strutils]
 import std/sequtils
 import std/math
+import std/json
+import std/os
 
 import lexer
 import ../av
 import ../log
 import ../ffmpeg
 import ../util/bar
-import ../analyze/[audio, motion, subtitle]
+import ../analyze/[audio, motion, subtitle, engagement_types]
 import ../util/fun
 
 import tinyre
@@ -88,6 +90,58 @@ proc parseColFunc(argPos: var int, isKey: var bool, argOrder: seq[string], expr:
       error "Positional arguments must never come after keyword arguments"
     return text[expr.`from` ..< expr.to]
 
+
+proc loadCachedEngagement(inputPath: string): EngagementTimeline =
+  ## Load engagement timeline from cached .engage.json file
+  ## Raises error if file doesn't exist or can't be parsed
+  let engagePath = inputPath.changeFileExt(".engage.json")
+  if not fileExists(engagePath):
+    error &"Engagement data not found at {engagePath}. Run 'honeyclip engage {inputPath} <model>' first."
+
+  let jsonData = parseFile(engagePath)
+
+  # Parse JSON into EngagementTimeline
+  result.duration = jsonData["duration_ms"].getInt()
+  result.avgScore = jsonData["avg_score"].getFloat().float32
+  result.hookCount = jsonData["hook_count"].getInt()
+
+  # Parse segments
+  result.segments = @[]
+  for segJson in jsonData["segments"]:
+    var seg: EngagementSegment
+    seg.startMs = segJson["start_ms"].getInt()
+    seg.endMs = segJson["end_ms"].getInt()
+    seg.text = segJson["text"].getStr()
+    seg.score = segJson["score"].getFloat().float32
+    seg.scoreRelative = segJson["score_relative"].getFloat().float32
+    seg.scoreAbsolute = segJson["score_absolute"].getFloat().float32
+    seg.audioScore = segJson["audio_score"].getFloat().float32
+    seg.motionScore = segJson["motion_score"].getFloat().float32
+    seg.speechScore = segJson["speech_score"].getFloat().float32
+    seg.hasHook = segJson["has_hook"].getBool()
+    seg.faceCount = segJson["face_count"].getInt()
+    seg.speaker = segJson["speaker"].getInt()
+    result.segments.add(seg)
+
+proc segmentsToBoolArray(segments: seq[EngagementSegment], tb: AVRational,
+                         predicate: proc(seg: EngagementSegment): bool,
+                         totalMs: int64): seq[bool] =
+  ## Convert engagement segments to boolean array at timebase
+  ## Each frame is true if the predicate matches for the segment at that time
+  let tbFloat = float64(tb)
+  let length = int((totalMs.float64 / 1000.0) * tbFloat)
+  result = newSeq[bool](length)
+
+  # For each segment, set frames to true if predicate matches
+  for seg in segments:
+    if predicate(seg):
+      # Convert millisecond timestamps to timebase units
+      let startFrame = int((seg.startMs.float64 / 1000.0) * tbFloat)
+      let endFrame = int((seg.endMs.float64 / 1000.0) * tbFloat)
+
+      # Set frames in this range to true
+      for i in startFrame ..< min(endFrame, length):
+        result[i] = true
 
 proc parseNorm*(norm: string): Norm =
   if norm == "#f" or norm == "false":
@@ -291,6 +345,74 @@ proc interpretEdit*(args: mainArgs, container: InputContainer, tb: AVRational, b
         if ignoreCase:
           flags.incl reIgnoreCase
         return subtitle(container, tb, re(pattern, flags), stream)
+
+      of "score":
+        var scoreThreshold: float32 = 50.0
+        let argOrder = @["threshold"]
+        for expr in node[1 ..< node.len]:
+          let val = parseColFunc(argPos, isKey, argOrder, expr, text)
+          case argPos:
+          of 0: scoreThreshold = parseFloat(val).float32
+          else: error "Too many args"
+          if not isKey:
+            argPos += 1
+
+        let timeline = loadCachedEngagement(args.input)
+        return segmentsToBoolArray(timeline.segments, tb,
+          proc(seg: EngagementSegment): bool = seg.score >= scoreThreshold,
+          timeline.duration)
+
+      of "face_count":
+        var minFaces: int = 1
+        let argOrder = @["min"]
+        for expr in node[1 ..< node.len]:
+          let val = parseColFunc(argPos, isKey, argOrder, expr, text)
+          case argPos:
+          of 0: minFaces = parseInt(val)
+          else: error "Too many args"
+          if not isKey:
+            argPos += 1
+
+        let timeline = loadCachedEngagement(args.input)
+        return segmentsToBoolArray(timeline.segments, tb,
+          proc(seg: EngagementSegment): bool = seg.faceCount >= minFaces,
+          timeline.duration)
+
+      of "is_hook":
+        if node.len > 1:
+          error "is_hook takes no arguments"
+
+        let timeline = loadCachedEngagement(args.input)
+        return segmentsToBoolArray(timeline.segments, tb,
+          proc(seg: EngagementSegment): bool = seg.hasHook,
+          timeline.duration)
+
+      of "speaking_rate":
+        var minRate: float32 = 120.0
+        var maxRate: float32 = 180.0
+        let argOrder = @["min", "max"]
+        for expr in node[1 ..< node.len]:
+          let val = parseColFunc(argPos, isKey, argOrder, expr, text)
+          case argPos:
+          of 0: minRate = parseFloat(val).float32
+          of 1: maxRate = parseFloat(val).float32
+          else: error "Too many args"
+          if not isKey:
+            argPos += 1
+
+        let timeline = loadCachedEngagement(args.input)
+        return segmentsToBoolArray(timeline.segments, tb,
+          proc(seg: EngagementSegment): bool =
+            # Calculate speaking rate (words per minute)
+            if seg.text.len == 0:
+              return false
+            let durationMin = (seg.endMs - seg.startMs).float32 / 60000.0
+            if durationMin == 0:
+              return false
+            let wordCount = seg.text.split().len.float32
+            let rate = wordCount / durationMin
+            rate >= minRate and rate <= maxRate,
+          timeline.duration)
 
       of "none":
         let length = mediaLength(container)
