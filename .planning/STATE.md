@@ -11,18 +11,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 8 of 10 (Multi-Aspect Export & Workflow)
-Plan: 1 of 4 in phase
+Plan: 2 of 4 in phase
 Status: In progress
-Last activity: 2026-02-04 — Completed 08-01-PLAN.md
+Last activity: 2026-02-04 — Completed 08-02-PLAN.md
 
-Progress: [█████████████████████████████████████░░░] 80%
+Progress: [██████████████████████████████████████░░] 82.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 33
+- Total plans completed: 34
 - Average duration: 3.3 min
-- Total execution time: 1.87 hours
+- Total execution time: 1.9 hours
 
 **By Phase:**
 
@@ -35,11 +35,11 @@ Progress: [███████████████████████
 | 05-engagement-scoring-foundation | 4 | 21min | 5.25min |
 | 06-engagement-clip-detection | 4 | 10.75min | 2.7min |
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
-| 08-multi-aspect-export-workflow | 1 | 1.6min | 1.6min |
+| 08-multi-aspect-export-workflow | 2 | 3.6min | 1.8min |
 
 **Recent Trend:**
-- Last 5 plans: 07-03 (5min), 07-04 (5min), 07-05 (5min), 07-06 (15min), 08-01 (1.6min)
-- Trend: Phase 8 started, first plan quick (foundation types only)
+- Last 5 plans: 07-04 (5min), 07-05 (5min), 07-06 (15min), 08-01 (1.6min), 08-02 (2min)
+- Trend: Phase 8 continuing with quick plans (FFmpeg filter module)
 
 *Updated after each plan completion*
 
@@ -177,6 +177,12 @@ Recent decisions affecting current work:
 - SHA256 hash verification optional via verifyHash parameter (mtime default for speed) (08-01)
 - Project schema version 1 for future migration support (08-01)
 - Table-based preset lookup pattern for platform configs (08-01)
+- FFmpeg thumbnail filter batch size 100 for best-frame selection (08-02)
+- Contact sheet uses concat+tile approach for reliable multi-input handling (08-02)
+- Video snippets use fast preset + CRF 28 for preview quality (08-02)
+- Metadata burned into previews via drawtext filter (clip rank + time range) (08-02)
+- Side-by-side uses hstack filter with scale=iw/2:-1 for equal width (08-02)
+- Overview video uses concat demuxer with generated list file (08-02)
 
 ### Pending Todos
 
@@ -225,6 +231,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 08-01-PLAN.md
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
-Next: 08-02-PLAN.md (multi-aspect export CLI)
+Next: 08-03-PLAN.md (boundary adjustment)
