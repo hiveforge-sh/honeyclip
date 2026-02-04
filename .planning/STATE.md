@@ -195,6 +195,8 @@ Recent decisions affecting current work:
 - Blue (#0066FF) for scene boundary markers (09-01)
 - Yellow (#FFCC00) for speaker change markers (09-01)
 - 30fps default for marker timecode calculation (09-01)
+- FCP7 markers use 0-255 RGB format (not normalized like caption colors) (09-02)
+- Frame calculation: (timestampMs * timebase) div 1000 for FCP7 in/out (09-02)
 - Markers attach to asset-clip element in FCPXML (09-03)
 - Rational time format (frames*den/num)s for FCPXML timing (09-03)
 - FCPXML markers use note attribute for comments, no color support in XML (09-03)
