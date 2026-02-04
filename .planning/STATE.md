@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 10 of 10 (CLI Integration) — In progress
-Plan: 1 of 3 in phase
+Plan: 2 of 3 in phase
 Status: In progress
-Last activity: 2026-02-04 — Completed 10-01-PLAN.md
+Last activity: 2026-02-03 — Completed 10-02-PLAN.md
 
-Progress: [███████████████████████████████████████████████] 96%
+Progress: [████████████████████████████████████████████████] 97%
 
 ## Performance Metrics
 
@@ -37,11 +37,11 @@ Progress: [███████████████████████
 | 07-speaker-tracking-reframing | 6 | 28.3min | 4.7min |
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
 | 09-nle-integration-markers | 7 | 27.8min | 4.0min |
-| 10-cli-integration | 1 | 4min | 4.0min |
+| 10-cli-integration | 2 | 11min | 5.5min |
 
 **Recent Trend:**
-- Last 5 plans: 09-05 (2.0min), 09-06 (3.0min), 09-07 (14min), 10-01 (4min)
-- Trend: Phase 10 started
+- Last 5 plans: 09-06 (3.0min), 09-07 (14min), 10-01 (4min), 10-02 (7min)
+- Trend: Phase 10 in progress
 
 *Updated after each plan completion*
 
@@ -216,6 +216,9 @@ Recent decisions affecting current work:
 - Presets include both threshold and signal weights for complete configuration (10-01)
 - Expression functions load from cached .engage.json with error if missing (10-01)
 - Predicate-based segmentsToBoolArray for flexible engagement filtering (10-01)
+- AND logic for combining --edit and --engage (both must be true to keep frames) (10-02)
+- Engagement filter applied after interpretEdit but before margins (10-02)
+- Default threshold 50.0 when --engage used without value (10-02)
 
 ### Pending Todos
 
@@ -281,15 +284,17 @@ None yet.
 - Export command --nle flag integrates all marker formats
 
 **Phase 10 (CLI Integration):**
-- IN PROGRESS: Plan 10-01 complete (presets & expressions)
-- Named engagement presets (viral, podcast, tutorial, interview, tiktok, youtube, instagram)
-- Expression functions (score, face_count, is_hook, speaking_rate) for --edit
-- JSON loading for cached engagement data
-- Ready for Plan 10-02 (CLI flags) and 10-03 (workflow integration)
+- IN PROGRESS: Plans 10-01 and 10-02 complete
+- Named engagement presets (viral, podcast, tutorial, interview, tiktok, youtube, instagram) (10-01)
+- Expression functions (score, face_count, is_hook, speaking_rate) for --edit (10-01)
+- --engage CLI flag with numeric thresholds and preset names (10-02)
+- AND logic combining engagement filter with edit expressions (10-02)
+- JSON loading for cached engagement data (10-01)
+- Ready for Plan 10-03 (clips command integration)
 
 ## Session Continuity
 
-Last session: 2026-02-04
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-02-03
+Stopped at: Completed 10-02-PLAN.md
 Resume file: None
-Next: Plan 10-02 (CLI Flags for Engagement)
+Next: Plan 10-03 (Clips Command Integration)
