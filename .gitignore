@@ -44,3 +44,6 @@ tests/*
 # Misc generated
 *_ALTERED*
 *.srt
+*.bak
+*.mp4
+help.txt
