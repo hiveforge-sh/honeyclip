@@ -57,6 +57,8 @@ proc main*(cArgs: seq[string]) =
   var dryRun: bool = false
   var presetName: string = ""
   var isDebug: bool = false
+  var quietMode: bool = false
+  var verboseMode: bool = false
 
   var expecting: string = ""
   for rawKey in cArgs:
@@ -80,6 +82,8 @@ Options:
   --no-transcript         Skip transcript extraction (audio/motion only)
   --fresh                 Ignore cache, re-run analysis
   --dry-run               Show what would be analyzed without running
+  -q, --quiet             Suppress progress output
+  --verbose               Show detailed progress even when piped
   --debug                 Show debug information
   --help                  Show this help
 
@@ -93,6 +97,11 @@ Workflow:
       quit(0)
     of "--debug":
       isDebug = true
+    of "-q", "--quiet":
+      quietMode = true
+      quiet = true  # Set global quiet flag for log.nim
+    of "--verbose":
+      verboseMode = true
     of "--no-faces":
       noFaces = true
     of "--no-transcript":
@@ -163,13 +172,18 @@ Workflow:
     echo &"  6. Save: {projectPath}"
     quit(0)
 
-  var bar = initBar(BarType.modern)
+  # Determine effective verbosity
+  let isTTY = stdin.isatty()
+  let showProgress = (isTTY or verboseMode) and not quietMode
+  let showPrompts = isTTY and not quietMode
+
+  var bar = initBar(if showProgress: BarType.modern else: BarType.none)
   defer: bar.destroy()
 
   # Check cache
   var timeline: EngagementTimeline
   if not fresh and fileExists(engagePath):
-    if stdin.isatty():
+    if showProgress:
       echo &"Using cached engagement data: {engagePath}"
       echo "(Use --fresh to re-analyze)"
     # Load cached engagement data
@@ -198,12 +212,19 @@ Workflow:
     # Step 1: Extract transcript
     var transcript: Transcript
     if not noTranscript:
-      bar.start(100.0, "Extracting transcript")
+      if showProgress:
+        bar.start(100.0, "Extracting transcript")
       try:
         transcript = extractTranscript(inputPath, model, "", "")
       except IOError as e:
-        error &"Failed to extract transcript: {e.msg}"
-      bar.`end`()
+        error &"""Failed to extract transcript: {e.msg}
+
+Try:
+  - Check that the video has an audio track
+  - Use --no-transcript to skip transcript (audio/motion only)
+  - Run whisper directly: honeyclip whisper "{inputPath}" model"""
+      if showProgress:
+        bar.`end`()
 
     # Step 2: Open container
     var container: InputContainer
@@ -238,27 +259,33 @@ Workflow:
     # Save engagement JSON
     let jsonStr = engagementModule.timelineToJson(timeline)
     writeFile(engagePath, jsonStr)
-    if stdin.isatty():
+    if showProgress:
       echo &"Created: {engagePath}"
 
   # Step 4: Detect scene changes
-  bar.start(100.0, "Detecting scene changes")
+  if showProgress:
+    bar.start(100.0, "Detecting scene changes")
   let sceneChanges = extractSceneChanges(inputPath)
-  bar.`end`()
+  if showProgress:
+    bar.`end`()
 
   # Step 5: Detect clip boundaries
-  bar.start(100.0, "Detecting clip boundaries")
+  if showProgress:
+    bar.start(100.0, "Detecting clip boundaries")
   var detectionParams = defaultClipDetectionParams()
   let boundaries = detectBoundaries(timeline, sceneChanges, detectionParams)
   var detectedClips = detectClips(timeline, boundaries, detectionParams)
-  bar.`end`()
+  if showProgress:
+    bar.`end`()
 
   # Step 6: Rank clips
-  bar.start(float(detectedClips.len), "Ranking clips")
+  if showProgress:
+    bar.start(float(detectedClips.len), "Ranking clips")
   var rankingParams = defaultClipRankingParams()
   rankingParams.topN = topN
   let rankedClips = rankClips(detectedClips, rankingParams)
-  bar.`end`()
+  if showProgress:
+    bar.`end`()
 
   # Step 7: Create/update project file
   var project = newProject(inputPath)
@@ -272,17 +299,21 @@ Workflow:
       rank: clip.rank
     ))
   saveProject(project, projectPath)
-  if stdin.isatty():
+  if showProgress:
     echo &"Created: {projectPath}"
 
   # Step 8: Print results and prompt
-  printTopClips(rankedClips, topN)
+  if not quietMode:
+    printTopClips(rankedClips, topN)
 
-  let action = promptNextAction()
-  case action:
-  of "export":
-    echo "Run: honeyclip export --project \"" & projectPath & "\" --render"
-  of "nle":
-    echo "Run: honeyclip export --project \"" & projectPath & "\" --nle premiere"
-  else:
+  if showPrompts:
+    let action = promptNextAction()
+    case action:
+    of "export":
+      echo "Run: honeyclip export --project \"" & projectPath & "\" --render"
+    of "nle":
+      echo "Run: honeyclip export --project \"" & projectPath & "\" --nle premiere"
+    else:
+      echo "Analysis complete."
+  elif not quietMode:
     echo "Analysis complete."
