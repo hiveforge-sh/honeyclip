@@ -3,7 +3,7 @@
 ## Presets provide sensible defaults for engagement analysis based on
 ## content type (viral, podcast, tutorial) and platform (tiktok, youtube).
 
-import std/[strformat, tables]
+import std/[strformat, strutils, tables]
 import ../log
 
 type
@@ -96,5 +96,3 @@ proc parseEngageValue*(value: string): tuple[threshold: float32, config: PresetC
       for name in Presets.keys:
         availablePresets.add(name)
       error &"Unknown engagement preset: '{value}'. Available presets: {availablePresets.join(\", \")}"
-      # Unreachable due to error() call, but satisfy return type
-      return (threshold: 50.0, config: defaultPresetConfig())

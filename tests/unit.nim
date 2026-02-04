@@ -2261,3 +2261,85 @@ suite "NLE Export Command":
     check ord(nleFCPXML) == 2
     check ord(nleEDL) == 3
     check ord(nleAAF) == 4
+
+# Engagement Presets Tests
+
+import ../src/analyze/presets
+
+suite "Engagement Presets":
+  test "parseEngageValue with numeric input":
+    let (threshold, config) = parseEngageValue("70")
+    check threshold == 70.0
+    check config.audioWeight == 0.333
+    check config.motionWeight == 0.333
+    check config.speechWeight == 0.333
+
+  test "parseEngageValue with float input":
+    let (threshold, config) = parseEngageValue("75.5")
+    check abs(threshold - 75.5) < 0.01
+
+  test "parseEngageValue viral preset":
+    let (threshold, config) = parseEngageValue("viral")
+    check threshold == 75.0
+    check config.motionWeight == 0.4
+    check config.audioWeight == 0.3
+    check config.speechWeight == 0.3
+
+  test "parseEngageValue podcast preset":
+    let (threshold, config) = parseEngageValue("podcast")
+    check threshold == 50.0
+    check config.speechWeight == 0.8
+    check config.audioWeight == 0.1
+    check config.motionWeight == 0.1
+
+  test "parseEngageValue tutorial preset":
+    let (threshold, config) = parseEngageValue("tutorial")
+    check threshold == 40.0
+    check config.motionWeight == 0.4
+    check config.speechWeight == 0.4
+    check config.audioWeight == 0.2
+
+  test "parseEngageValue interview preset":
+    let (threshold, config) = parseEngageValue("interview")
+    check threshold == 45.0
+    check config.speechWeight == 0.6
+    check config.audioWeight == 0.2
+    check config.motionWeight == 0.2
+
+  test "parseEngageValue tiktok preset":
+    let (threshold, config) = parseEngageValue("tiktok")
+    check threshold == 80.0
+    check config.motionWeight == 0.5
+    check config.audioWeight == 0.3
+    check config.speechWeight == 0.2
+
+  test "parseEngageValue youtube preset":
+    let (threshold, config) = parseEngageValue("youtube")
+    check threshold == 60.0
+    check config.audioWeight == 0.4
+    check config.motionWeight == 0.3
+    check config.speechWeight == 0.3
+
+  test "parseEngageValue instagram preset":
+    let (threshold, config) = parseEngageValue("instagram")
+    check threshold == 70.0
+    check config.motionWeight == 0.4
+    check config.audioWeight == 0.3
+    check config.speechWeight == 0.3
+
+  test "parseEngageValue unknown preset throws error":
+    expect CatchableError:
+      discard parseEngageValue("unknown_preset")
+
+  test "defaultPresetConfig returns equal weights":
+    let config = defaultPresetConfig()
+    check config.threshold == 50.0
+    check abs(config.audioWeight - 0.333) < 0.01
+    check abs(config.motionWeight - 0.333) < 0.01
+    check abs(config.speechWeight - 0.333) < 0.01
+
+  test "preset weights sum approximately to 1.0":
+    for preset in ["viral", "podcast", "tutorial", "interview", "tiktok", "youtube", "instagram"]:
+      let (_, config) = parseEngageValue(preset)
+      let sum = config.audioWeight + config.motionWeight + config.speechWeight
+      check abs(sum - 1.0) < 0.01  # Allow small floating point error
