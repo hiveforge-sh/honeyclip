@@ -236,3 +236,93 @@ proc validateClipBoundaries*(clips: seq[EDLClip], videoDurationMs: int64 = int64
         errors.add(&"Clip #{clip.rank} ({clip.startMs}-{clip.endMs}ms) overlaps with Clip #{nextClip.rank} ({nextClip.startMs}-{nextClip.endMs}ms)")
 
   return errors
+
+proc saveClipsWithVersion*(clips: seq[EDLClip], jsonPath: string,
+                           sourcePath: string, params: JsonNode = nil): int =
+  ## Save clips JSON with automatic version history
+  ##
+  ## If file exists, renames to .v{N} before writing new version.
+  ## Returns version number of new file.
+
+  var version = 1
+
+  # Check for existing file and version history
+  if fileExists(jsonPath):
+    # Find next available version number
+    while fileExists(&"{jsonPath}.v{version}"):
+      version += 1
+
+    # Rename current file to version
+    moveFile(jsonPath, &"{jsonPath}.v{version}")
+    version += 1  # New file is version+1
+
+  # Write new file using existing exportClipsJSON
+  exportClipsJSON(clips, jsonPath, sourcePath, params)
+
+  return version
+
+proc getVersionHistory*(jsonPath: string): seq[string] =
+  ## Get list of version history files
+  ## Returns sorted list of .v1, .v2, etc. files
+
+  result = @[]
+  var version = 1
+  while fileExists(&"{jsonPath}.v{version}"):
+    result.add(&"{jsonPath}.v{version}")
+    version += 1
+
+proc adjustClipBoundary*(clips: var seq[EDLClip], clipRank: int,
+                         newStartMs, newEndMs: int64,
+                         videoDurationMs: int64 = int64.high): seq[string] =
+  ## Adjust boundaries of a single clip by rank
+  ##
+  ## Args:
+  ##   clips: Mutable seq of clips to modify
+  ##   clipRank: Rank of clip to adjust (1-based)
+  ##   newStartMs: New start time in milliseconds
+  ##   newEndMs: New end time in milliseconds
+  ##   videoDurationMs: Video duration for bounds checking
+  ##
+  ## Returns:
+  ##   Empty seq on success, or list of validation errors
+
+  # Find clip by rank
+  var found = false
+  for i, clip in clips.mpairs:
+    if clip.rank == clipRank:
+      # Create modified clip for validation
+      var modified = clips
+      modified[i].startMs = newStartMs
+      modified[i].endMs = newEndMs
+
+      # Validate all boundaries
+      let errors = validateClipBoundaries(modified, videoDurationMs)
+      if errors.len > 0:
+        return errors
+
+      # Apply changes
+      clips[i].startMs = newStartMs
+      clips[i].endMs = newEndMs
+      found = true
+      break
+
+  if not found:
+    return @[&"Clip #{clipRank} not found"]
+
+  return @[]
+
+proc adjustClipBoundaryAndSave*(jsonPath: string, clipRank: int,
+                                 newStartMs, newEndMs: int64,
+                                 videoDurationMs: int64 = int64.high): tuple[success: bool, errors: seq[string], version: int] =
+  ## Load clips, adjust boundary, validate, and save with version history
+  ##
+  ## Convenience function for CLI usage.
+
+  var (clips, source) = loadClipsFromJson(jsonPath)
+
+  let errors = adjustClipBoundary(clips, clipRank, newStartMs, newEndMs, videoDurationMs)
+  if errors.len > 0:
+    return (false, errors, 0)
+
+  let version = saveClipsWithVersion(clips, jsonPath, source)
+  return (true, @[], version)
