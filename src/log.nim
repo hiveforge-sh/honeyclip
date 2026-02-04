@@ -94,6 +94,11 @@ type mainArgs* = object
   progress*: BarType = modern
   preview*: bool = false
 
+  # Engagement Options
+  engageEnabled*: bool = false
+  engageThreshold*: float32 = 50.0
+  engagePreset*: string = ""
+
   # Container Settings
   vn*: bool = false
   an*: bool = false
