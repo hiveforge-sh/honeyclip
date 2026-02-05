@@ -1,5 +1,5 @@
 import unittest
-import std/[os, tempfiles, strutils, xmltree, json]
+import std/[os, tempfiles, strutils, xmltree, json, tables]
 
 import ../src/[av, edit, ffmpeg, timeline]
 import ../src/util/[color, fun, lang]
@@ -23,6 +23,8 @@ import ../src/reframe/crop
 import ../src/tracking/types as trackingTypes
 import ../src/exports/markers
 import ../src/render/scoreviz
+import ../src/metadata/types as metadataTypes
+import ../src/metadata/apply
 # Include the NLE format types and parser from export command
 # (can't use regular import due to 'export' being a reserved keyword)
 type
@@ -2950,3 +2952,60 @@ suite "Crop Region Calculation":
 #
 #   10. honeyclip video.mp4 --engage=podcast
 #       Expected: Uses podcast preset threshold and weights
+
+suite "metadata":
+  test "escapeMetadataValue handles special characters":
+    check escapeMetadataValue("normal text") == "normal text"
+    check escapeMetadataValue("has=equals") == "has\\=equals"
+    check escapeMetadataValue("has;semi") == "has\\;semi"
+    check escapeMetadataValue("has#hash") == "has\\#hash"
+    check escapeMetadataValue("has\\backslash") == "has\\\\backslash"
+    check escapeMetadataValue("has\nnewline") == "has\\nnewline"
+
+  test "generateFFMetadata produces valid format":
+    var tmpl = newMetadataTemplate()
+    tmpl.global["title"] = "Test Video"
+    tmpl.global["artist"] = "Test Author"
+
+    let output = generateFFMetadata(tmpl)
+    check output.startsWith(";FFMETADATA1\n")
+    check "title=Test Video" in output
+    check "artist=Test Author" in output
+
+  test "generateFFMetadata includes chapters":
+    var tmpl = newMetadataTemplate()
+    tmpl.chapters.add ChapterMarker(
+      startMs: 0,
+      endMs: 30000,
+      title: "Introduction"
+    )
+    tmpl.chapters.add ChapterMarker(
+      startMs: 30000,
+      endMs: 90000,
+      title: "Main Content"
+    )
+
+    let output = generateFFMetadata(tmpl)
+    check "[CHAPTER]" in output
+    check "TIMEBASE=1/1000" in output
+    check "START=0" in output
+    check "END=30000" in output
+    check "title=Introduction" in output
+
+  test "merge applies overrides":
+    var base = newMetadataTemplate()
+    base.global["title"] = "Original"
+    base.global["artist"] = "Original Author"
+
+    let overrides = {"title": "Overridden"}.toTable
+
+    let merged = merge(base, overrides)
+    check merged.global["title"] == "Overridden"
+    check merged.global["artist"] == "Original Author"  # Not overridden
+
+  test "defaultTemplate has expected fields":
+    let tmpl = defaultTemplate()
+    check "title" in tmpl.global
+    check "artist" in tmpl.global
+    check "copyright" in tmpl.global
+    check "date" in tmpl.global
