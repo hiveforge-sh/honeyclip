@@ -10,20 +10,20 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 14 of 14 (Media Metadata Management) — Complete
-Plan: 3 of 3 in phase
-Status: Phase complete (foundation, meta command, export integration)
-Last activity: 2026-02-05 — Completed 14-03-PLAN.md (export integration)
+Phase: 11 of 14 (ML Library Size Optimization) — In Progress
+Plan: 1 of 2 in phase
+Status: Plan 11-01 complete (build configuration optimizations)
+Last activity: 2026-02-05 — Completed 11-01-PLAN.md (build configuration)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
-Progress v1.1: [████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 16%
+Progress v1.1: [██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 51
+- Total plans completed: 52
 - Average duration: 3.3 min
-- Total execution time: 2.8 hours
+- Total execution time: 2.83 hours
 
 **By Phase:**
 
@@ -40,10 +40,11 @@ Progress v1.1: [████████░░░░░░░░░░░░░�
 | 09-nle-integration-markers | 7 | 27.8min | 4.0min |
 | 10-cli-integration | 5 | 29min | 5.8min |
 | 14-media-metadata-management | 3 | 13.5min | 4.5min |
+| 11-ml-library-size-optimization | 1 | 2min | 2min |
 
 **Recent Trend:**
-- Last 5 plans: 10-05 (7min), 14-01 (4min), 14-02 (5.5min), 14-03 (3.5min)
-- Trend: Phase 14 complete, v1.1 Polish 16% done
+- Last 5 plans: 14-01 (4min), 14-02 (5.5min), 14-03 (3.5min), 11-01 (2min)
+- Trend: Phase 11 started, v1.1 Polish 20% done
 
 *Updated after each plan completion*
 
@@ -249,6 +250,11 @@ Recent decisions affecting current work:
 - Use source video path for variable substitution, not individual clip paths (14-03)
 - FFmpeg -map_metadata pattern for embedding metadata during export (14-03)
 - effectiveParams pattern for propagating optional parameters through export pipeline (14-03)
+- MinSizeRel build type for OpenCV and libfacedetection (15-25% size reduction expected) (11-01)
+- Explicitly disable 10 OpenCV modules even with BUILD_LIST (belt-and-suspenders approach) (11-01)
+- Keep opencv_photo module for future image preprocessing (11-01)
+- Disable 5 unused 3rdparty dependencies: CAROTENE, EIGEN, ADE, FLATBUFFERS, ITT (11-01)
+- Package-specified CMAKE_BUILD_TYPE overrides cmakeBuild default (11-01)
 
 ### Pending Todos
 
@@ -336,13 +342,13 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-05T13:28:19Z
-Stopped at: Completed 14-03-PLAN.md (export integration)
+Last session: 2026-02-05T15:25:00Z
+Stopped at: Completed 11-01-PLAN.md (build configuration)
 Resume file: None
-Next: Phase 11, 12, or 13 (remaining v1.1 Polish phases)
+Next: 11-02-PLAN.md (dead code elimination)
 
 **Project Status: v1.0 COMPLETE, v1.1 IN PROGRESS**
-v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 14 complete (3/3 plans), 3 phases remaining.
+v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 11 started (1/2 plans), 2 phases remaining after 11.
 
 ### Roadmap Evolution
 
