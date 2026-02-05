@@ -227,7 +227,11 @@ Plans:
   2. OpenCV builds only core, imgproc, objdetect modules (no calib3d, features2d, flann)
   3. All libraries have debug symbols stripped
   4. Build uses -Os optimization for size
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — OpenCV and libfacedetection MinSizeRel build configuration
+- [ ] 11-02-PLAN.md — Post-build stripping and size validation
 
 ### Phase 12: Custom Hook Patterns
 **Goal**: Enable users to define custom hook detection patterns via JSON file
@@ -278,6 +282,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 11. ML Library Size Optimization | 0/? | Not started | - |
+| 11. ML Library Size Optimization | 0/2 | Planned | - |
 | 12. Custom Hook Patterns | 0/? | Not started | - |
 | 13. Tracker Test Coverage | 0/? | Not started | - |
