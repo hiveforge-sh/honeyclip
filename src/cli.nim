@@ -9,6 +9,7 @@ const commands*: seq[tuple[name: string, help: string]] = @[
   ("export", "Export clips with multi-aspect support, NLE markers, and score visualization"),
   ("info", "Retrieve information and properties about media files"),
   ("levels", "Display loudness over time"),
+  ("meta", "Apply metadata from template to video/audio files"),
   ("reframe", "Auto-reframe video to center active speaker"),
   ("subdump", "Dump text-based subtitles to stdout with formatting stripped out"),
   ("transcript", "Extract transcript with word timestamps, speaker diarization, export to SRT/VTT/JSON"),
