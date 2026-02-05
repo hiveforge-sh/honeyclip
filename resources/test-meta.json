@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "global": {
+    "title": "Test Video - ${VIDEO_TITLE}",
+    "artist": "Test Author",
+    "copyright": "Copyright ${YEAR}",
+    "date": "${ISO_DATE}"
+  },
+  "chapters": [
+    {
+      "start_ms": 0,
+      "end_ms": 5000,
+      "title": "Test Chapter"
+    }
+  ]
+}
