@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### v1.1 Polish (Tech Debt Closure)
 
-- [ ] **Phase 11: ML Library Size Optimization** - Strip symbols, -Os optimization, remove unused OpenCV modules
+- [x] **Phase 11: ML Library Size Optimization** - Strip symbols, -Os optimization, remove unused OpenCV modules
 - [ ] **Phase 12: Custom Hook Patterns** - JSON schema for user-defined hook patterns, CLI flag
 - [ ] **Phase 13: Tracker Test Coverage** - Unit tests for Kalman filter, assignment algorithm, tracker
 - [x] **Phase 14: Media Metadata Management** - JSON templates for copyright, author, custom tags, chapter markers; standalone `meta` command + export integration
@@ -231,8 +231,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — OpenCV and libfacedetection MinSizeRel build configuration
-- [ ] 11-02-PLAN.md — Post-build stripping and size validation
+- [x] 11-01-PLAN.md — OpenCV and libfacedetection MinSizeRel build configuration
+- [x] 11-02-PLAN.md — Post-build stripping and size validation
 
 ### Phase 12: Custom Hook Patterns
 **Goal**: Enable users to define custom hook detection patterns via JSON file
@@ -300,7 +300,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 11. ML Library Size Optimization | 0/2 | Planned | - |
+| 11. ML Library Size Optimization | 2/2 | Complete | 2026-02-05 |
 | 12. Custom Hook Patterns | 0/? | Not started | - |
 | 13. Tracker Test Coverage | 0/? | Not started | - |
 | 14. Media Metadata Management | 3/3 | Complete | 2026-02-05 |
