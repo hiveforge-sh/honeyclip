@@ -46,23 +46,32 @@ Surface the most engaging moments from any video with a single command — trans
 
 ### Active
 
-<!-- v1.2 Workflow & Performance -->
+<!-- v2.0 Workflow, Performance & AI Features -->
 
 - [ ] Template-based batch processing (process folder with same settings)
 - [ ] Automatic chapter markers from transcript structure
 - [ ] Preview generation (quick low-res before full render)
 - [ ] GPU acceleration for face detection (CUDA on Linux, Metal on macOS)
 - [ ] Memory optimization for 4K+ content
+- [ ] Virality score exposure with component breakdown
+- [ ] Clip ranking/sorting by engagement score
+- [ ] Brand templates (logo, intro/outro, caption presets)
+- [ ] AI B-Roll generation (ComfyUI local or API)
+- [ ] AI Audio Enhancement (local models or API)
+- [ ] AI Voice-over (local TTS)
+- [ ] Social posting (YouTube, TikTok, Instagram Reels APIs)
 
 ### Out of Scope
 
-- Cloud API calls for engagement scoring — want local-only processing
+- Cloud API calls for engagement scoring — want local-only processing for core analysis
 - Historical performance data / virality prediction — no training data available
 - Real-time processing — batch processing is fine
 - Mobile app — CLI tool only
 - Natural language search — requires embedding infrastructure
 - Emotion detection from facial expressions — model complexity
 - Voice tone/sentiment analysis — model complexity
+- Team/collaboration features — CLI tool for individual use
+- GUI wrapper — remains CLI-first, users wanting GUI use NLEs
 
 ## Context
 
@@ -113,16 +122,22 @@ The polish milestone (v1.1) addressed tech debt:
 | JSON schema for hooks | User extensibility without code changes | ✓ Good — shipped in v1.1 |
 | Per-module coverage threshold | Ensures no module drags down average | ✓ Good — shipped in v1.1 |
 
-## Current Milestone: v1.2 Workflow & Performance
+## Current Milestone: v2.0 Workflow, Performance & AI Features
 
-**Goal:** Enable efficient batch workflows and improve performance for high-resolution content.
+**Goal:** Full OpusClip feature parity with local-first AI generation and optional social publishing.
 
 **Target features:**
-- Template-based batch processing for folder-level operations
-- Automatic chapter detection from transcript structure
-- Quick preview generation before full renders
-- GPU-accelerated face detection (Linux/macOS)
-- Memory-optimized 4K+ processing pipeline
+- Batch processing with templates, parallelization, progress reporting
+- Chapter detection (scene change + engagement-driven)
+- Preview/proxy generation (720p, 2-3x realtime)
+- GPU acceleration (CUDA Linux, Metal macOS)
+- Memory optimization for 4K+ content
+- Virality score with breakdown (hook, flow, value, trend)
+- Brand templates (logo, intro/outro, caption presets)
+- AI B-Roll (ComfyUI local or Gemini/API)
+- AI Audio Enhancement (local models or ElevenLabs/Artlist API)
+- AI Voice-over (local TTS)
+- Social posting (YouTube → TikTok → Instagram Reels)
 
 ---
-*Last updated: 2026-02-05 after v1.2 milestone started*
+*Last updated: 2026-02-05 after v2.0 milestone started*
