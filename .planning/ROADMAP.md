@@ -260,7 +260,12 @@ Plans:
   2. Assignment module has unit tests for cost matrix and Hungarian algorithm
   3. Tracker module has integration tests for track lifecycle
   4. Test coverage for tracking modules exceeds 80%
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 13-01-PLAN.md — Kalman filter and assignment algorithm unit tests
+- [ ] 13-02-PLAN.md — Tracker integration tests with mock embeddings
+- [ ] 13-03-PLAN.md — Reframe module tests and CI coverage enforcement
 
 ### Phase 14: Media Metadata Management
 **Goal**: Apply copyright, author, and other standard media metadata in a customizable, repeatable way
