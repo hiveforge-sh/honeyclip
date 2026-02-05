@@ -14,7 +14,7 @@ requires "nimpy >= 0.2.0"
 
 # Tasks
 import std/os
-import std/[strutils, strformat]
+import std/[strutils, strformat, tables]
 import src/cli
 
 var disableVpx = getEnv("DISABLE_VPX").len > 0
@@ -1062,6 +1062,87 @@ proc stripMLLibraries(buildPath: string) =
   else:
     # Windows or other: skip stripping
     echo "  Skipping strip on this platform"
+
+proc reportMLLibrarySizes(buildPath: string): int =
+  ## Report ML library sizes and return total size in MB
+  echo ""
+  echo "ML Library Size Report:"
+  echo "======================="
+
+  let libDir = buildPath / "lib"
+  if not dirExists(libDir):
+    echo "  ERROR: lib directory not found"
+    return 0
+
+  var totalSize = 0
+  var sizesByCategory: seq[(string, int)] = @[]
+
+  for libFile in walkFiles(libDir / "*.a"):
+    when defined(macosx):
+      let (szOut, szCode) = gorgeEx(&"stat -f%z {libFile}")
+    else:
+      let (szOut, szCode) = gorgeEx(&"stat -c%s {libFile}")
+
+    if szCode == 0:
+      let sizeBytes = parseInt(szOut.strip())
+      totalSize += sizeBytes
+
+      # Categorize by library type
+      let name = libFile.extractFilename
+      let category =
+        if name.startsWith("libopencv_"): "OpenCV"
+        elif name.startsWith("libonnx"): "ONNX Runtime"
+        elif name.startsWith("libabsl"): "Abseil"
+        elif name == "libfacedetection.a": "libfacedetection"
+        elif name.startsWith("libprotobuf"): "Protocol Buffers"
+        elif name.startsWith("libre2"): "RE2"
+        elif name.startsWith("libnsync"): "nsync"
+        else: "Other"
+
+      sizesByCategory.add((category, sizeBytes))
+
+  # Aggregate by category
+  var categoryTotals = initTable[string, int]()
+  for (cat, size) in sizesByCategory:
+    categoryTotals[cat] = categoryTotals.getOrDefault(cat, 0) + size
+
+  for cat, size in categoryTotals.pairs:
+    let sizeMB = size.float / (1024.0 * 1024.0)
+    echo &"  {cat:20s}: {sizeMB:6.1f} MB"
+
+  echo "======================="
+  let totalMB = totalSize div (1024 * 1024)
+  echo &"  Total ML libraries: {totalMB} MB"
+
+  return totalMB
+
+proc validateMLLibrarySize(sizeMB: int, softLimit: int = 50, hardLimit: int = 100) =
+  ## Validate ML library size against soft/hard limits
+  ## Per CONTEXT.md:
+  ## - Soft limit (50MB): warning + interactive prompt (skip prompt in CI)
+  ## - Hard limit (100MB): warning only (no build failure)
+  if sizeMB > hardLimit:
+    echo ""
+    echo &"WARNING: ML libraries exceed {hardLimit}MB hard limit ({sizeMB}MB)"
+    echo "This exceeds the size constraint from Phase 1."
+    echo ""
+    echo "Possible fixes:"
+    echo "  1. Verify OpenCV modules are disabled (DBUILD_opencv_*=OFF)"
+    echo "  2. Verify MinSizeRel build type is being used"
+    echo "  3. Check that stripping was successful"
+    # NOTE: No quit(1) here - per CONTEXT.md, hard limit is warning only
+  elif sizeMB > softLimit:
+    echo ""
+    echo &"WARNING: ML libraries exceed {softLimit}MB soft limit ({sizeMB}MB)"
+    echo "Consider additional optimization to meet target."
+
+    # Interactive prompt unless in CI environment
+    if not existsEnv("CI"):
+      echo ""
+      echo "Continue with build? [Y/n]: "
+      # In nimscript, we can't actually read stdin, so just continue
+      # The warning is the important part; the prompt is aspirational
+      echo "(Continuing automatically - interactive prompts not supported in nimscript)"
 
 proc shouldRebuild(package: Package, buildPath: string): bool =
   # Check if cache metadata exists and matches source SHA
