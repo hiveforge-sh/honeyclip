@@ -26,6 +26,11 @@ import ../src/render/scoreviz
 import ../src/metadata/types as metadataTypes
 import ../src/metadata/apply
 import ../src/analyze/hook_schema
+
+# Include test fixture utilities for tolerance-based assertions
+include fixtures/test_utils
+include fixtures/synthetic_faces
+
 # Include the NLE format types and parser from export command
 # (can't use regular import due to 'export' being a reserved keyword)
 type
@@ -2530,6 +2535,99 @@ suite "Kalman Filter":
     check y == 200
     check w == 50
     check h == 60
+
+  test "kalman-predict-zero-velocity":
+    # Filter with zero velocity should keep position unchanged
+    let bbox = FaceRect(x: 100, y: 200, width: 50, height: 50, confidence: 0.9, angle: 0)
+    var kf = newKalmanFilter(bbox)
+    # Velocities are initialized to 0
+    check checkApprox(kf.state[4], 0.0)
+    check checkApprox(kf.state[5], 0.0)
+
+    let predicted = kf.predict()
+    check predicted.x == 100  # x unchanged
+    check predicted.y == 200  # y unchanged
+    check predicted.confidence == 0.5  # Predicted marker
+
+  test "kalman-update-calculates-velocity":
+    # Update should calculate velocity from position change
+    let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    var kf = newKalmanFilter(bbox)
+
+    # Update with detection shifted by (10, 15)
+    let detection = FaceRect(x: 110, y: 115, width: 50, height: 50, confidence: 0.9, angle: 0)
+    kf.update(detection)
+
+    # Velocity should reflect the position change
+    # Note: Kalman filter blends old and new, so velocity may not be exact
+    check kf.state[4] > 0.0  # vx should be positive (moving right)
+    check kf.state[5] > 0.0  # vy should be positive (moving down)
+    # Use tolerance - velocity approximately matches movement
+    check checkApprox(kf.state[4], 10.0, epsilon = 5.0)
+    check checkApprox(kf.state[5], 15.0, epsilon = 5.0)
+
+  test "kalman-covariance-diagonal-initialized":
+    # Verify covariance diagonal is initialized to 1.0
+    let bbox = FaceRect(x: 100, y: 200, width: 50, height: 50, confidence: 0.9, angle: 0)
+    let kf = newKalmanFilter(bbox)
+    for i in 0..5:
+      check checkApprox(kf.covariance[i][i], 1.0)
+
+  test "kalman-covariance-stays-positive":
+    # Verify covariance remains positive definite after operations
+    let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    var kf = newKalmanFilter(bbox)
+
+    # Run several predict/update cycles
+    for i in 0 ..< 10:
+      discard kf.predict()
+      let det = FaceRect(x: 100 + i * 5, y: 100 + i * 3, width: 50, height: 50,
+                         confidence: 0.9, angle: 0)
+      kf.update(det)
+
+    # Covariance diagonal should still be positive
+    check checkCovariancePositive(kf.covariance)
+
+  test "kalman-multi-frame-tracking":
+    # Track face moving in straight line over multiple frames
+    let faces = generateStraightLineFace(100, 100, 50, 50, 5.0, 2.0, 20)
+    check faces.len == 20
+
+    var kf = newKalmanFilter(faces[0])
+
+    # Update with each frame
+    for i in 1 ..< faces.len:
+      discard kf.predict()
+      kf.update(faces[i])
+
+    # Final position should be near expected: (100 + 19*5, 100 + 19*2) = (195, 138)
+    let (x, y, w, h) = kf.getBbox()
+    check checkApprox(float(x), 195.0, epsilon = 10.0)
+    check checkApprox(float(y), 138.0, epsilon = 10.0)
+
+    # Velocities should be positive (moving in positive direction)
+    # Note: Due to Kalman filter dynamics with simplified diagonal covariance,
+    # velocity reflects frame-to-frame position change after update
+    check kf.state[4] > 0.0  # vx positive (moving right)
+    check kf.state[5] > 0.0  # vy positive (moving down)
+
+  test "kalman-handles-noisy-input":
+    # Track face with noisy position measurements
+    let faces = generateNoisyPath(100, 100, 50, 50, 5.0, 2.0, 30, noiseStdDev = 3.0)
+    check faces.len == 30
+
+    var kf = newKalmanFilter(faces[0])
+
+    # Update with each frame
+    for i in 1 ..< faces.len:
+      discard kf.predict()
+      kf.update(faces[i])
+
+    # Despite noise, filter should track general trajectory
+    # Expected final position approx: (100 + 29*5, 100 + 29*2) = (245, 158)
+    let (x, y, w, h) = kf.getBbox()
+    check checkApprox(float(x), 245.0, epsilon = 20.0)  # Larger epsilon for noisy data
+    check checkApprox(float(y), 158.0, epsilon = 20.0)
 
 # Hungarian Assignment Tests (tracking/assignment.nim)
 
