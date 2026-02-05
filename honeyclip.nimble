@@ -1018,6 +1018,51 @@ proc checkMLDependencies() =
         echo "  Arch: sudo pacman -S " & missingDeps.join(" ")
     quit(1)
 
+proc stripMLLibraries(buildPath: string) =
+  ## Strip debug symbols from ML libraries to reduce size
+  ## Creates separate debug symbol files before stripping (per CONTEXT.md)
+  ## Uses platform-appropriate strip command
+  echo "Stripping debug symbols from ML libraries..."
+
+  let libDir = buildPath / "lib"
+  if not dirExists(libDir):
+    echo "  WARNING: lib directory not found, skipping strip"
+    return
+
+  when defined(macosx):
+    # macOS: create .dSYM bundles with dsymutil, then strip -x
+    # dsymutil extracts debug info into .dSYM bundle for crash reports
+    echo "  Creating .dSYM debug symbol files..."
+    for libFile in walkFiles(libDir / "*.a"):
+      let dsymPath = libFile & ".dSYM"
+      let (dsymOut, dsymCode) = gorgeEx(&"dsymutil {libFile} -o {dsymPath}")
+      if dsymCode != 0:
+        echo &"    WARNING: dsymutil failed for {libFile.extractFilename}: {dsymOut}"
+
+    echo "  Stripping libraries..."
+    let (output, code) = gorgeEx(&"find {libDir} -name '*.a' -exec strip -x {{}} \\;")
+    if code != 0:
+      echo &"  WARNING: Strip failed: {output}"
+
+  elif defined(linux):
+    # Linux: extract debug info with objcopy, then strip --strip-unneeded
+    # Creates .debug files that can be used with gdb for debugging
+    echo "  Creating .debug symbol files..."
+    for libFile in walkFiles(libDir / "*.a"):
+      let debugPath = libFile & ".debug"
+      let (debugOut, debugCode) = gorgeEx(&"objcopy --only-keep-debug {libFile} {debugPath}")
+      if debugCode != 0:
+        echo &"    WARNING: objcopy failed for {libFile.extractFilename}: {debugOut}"
+
+    echo "  Stripping libraries..."
+    let (output, code) = gorgeEx(&"find {libDir} -name '*.a' -exec strip --strip-unneeded {{}} \\;")
+    if code != 0:
+      echo &"  WARNING: Strip failed: {output}"
+
+  else:
+    # Windows or other: skip stripping
+    echo "  Skipping strip on this platform"
+
 proc shouldRebuild(package: Package, buildPath: string): bool =
   # Check if cache metadata exists and matches source SHA
   let cacheFile = buildPath / ".cache" / (package.name & ".json")
