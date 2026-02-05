@@ -1,10 +1,10 @@
-import std/[strformat, strutils, os, json, tables, algorithm, times, terminal]
+import std/[strformat, strutils, os, json, algorithm, times, terminal]
 import ../log
 import ../util/fun
 import ../util/bar
 import ../av
 import ../ffmpeg
-import ../analyze/[engagement, engagement_types, hooks, audio, motion, faces]
+import ../analyze/[engagement, engagement_types, hooks]
 import ../transcript/[types, extract]
 
 # Import BarType from log for initBar
@@ -220,21 +220,31 @@ Options:
   if not noTranscript and model != "" and not fileExists(model):
     error &"Model not found: {model}\nDownload from: https://huggingface.co/ggerganov/whisper.cpp"
 
-  if hooksPath != "" and not fileExists(hooksPath):
-    error &"Hooks file not found: {hooksPath}"
+  # Note: We don't check if hooksPath exists here - loadAllHooks handles it
+  # (generates template if explicit path doesn't exist)
 
   # Determine output path
   if outputPath == "" and not showSummary and not useStdout:
     outputPath = generateOutputPath(inputPath, outputDir, ".engage.json")
 
-  # Load custom hooks if provided
-  var customHooks: seq[HookPattern] = @[]
-  if hooksPath != "":
-    if isDebug:
-      debug &"Loading custom hooks from: {hooksPath}"
-    # Load and parse hooks JSON
-    # For now, use default hooks
-    # TODO: Implement hook JSON loading
+  # Load hooks (built-in + custom if provided)
+  var patterns: seq[HookPattern]
+  var hooksLoadedPath: string
+  try:
+    let videoDir = parentDir(inputPath)
+    (patterns, hooksLoadedPath) = loadAllHooks(hooksPath, videoDir, isDebug)
+  except ValueError as e:
+    error e.msg
+  except IOError as e:
+    error e.msg
+
+  # If template was generated (hooksPath specified but file didn't exist), exit early
+  if hooksPath != "" and hooksLoadedPath == "" and fileExists(hooksPath):
+    # Template was just generated
+    quit(0)
+
+  if isDebug and hooksLoadedPath != "":
+    debug &"Using custom hooks from: {hooksLoadedPath}"
 
   # Determine effective verbosity
   let isTTY = stdin.isatty()
@@ -283,7 +293,6 @@ Options:
   var timeline: EngagementTimeline
   try:
     let params = defaultEngagementParams()
-    let patterns = loadBuiltinPatterns()
     timeline = analyzeEngagement(bar, container, inputPath, transcript, tb,
                                   params, patterns, not noFaces)
   except Exception as e:

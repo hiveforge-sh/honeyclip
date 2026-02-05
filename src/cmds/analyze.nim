@@ -50,6 +50,7 @@ proc main*(cArgs: seq[string]) =
   var inputPath: string = ""
   var model: string = ""
   var outputDir: string = ""
+  var hooksPath: string = ""
   var topN: int = 5
   var noFaces: bool = false
   var noTranscript: bool = false
@@ -78,6 +79,7 @@ Options:
   -o, --output DIR        Output directory for files
   --preset NAME           Use named preset (viral, podcast, tutorial, interview,
                           tiktok, youtube, instagram)
+  --hooks PATH            Custom hook patterns JSON file
   --no-faces              Skip face detection (faster)
   --no-transcript         Skip transcript extraction (audio/motion only)
   --fresh                 Ignore cache, re-run analysis
@@ -116,6 +118,8 @@ Workflow:
       expecting = "output"
     of "--preset":
       expecting = "preset"
+    of "--hooks":
+      expecting = "hooks"
     else:
       if key.startsWith("--"):
         error &"Unknown option: {key}"
@@ -136,6 +140,8 @@ Workflow:
         if not Presets.hasKey(key):
           error &"Unknown preset: {key}. Available: viral, podcast, tutorial, interview, tiktok, youtube, instagram"
         presetName = key
+      of "hooks":
+        hooksPath = key
       expecting = ""
 
   # Validate arguments
@@ -197,6 +203,10 @@ Workflow:
     timeline.hookCount = engageData["hook_count"].getInt(0)
 
     for seg in engageData["segments"]:
+      var hookMatches: seq[string] = @[]
+      if seg.hasKey("hooks"):
+        for hook in seg["hooks"]:
+          hookMatches.add(hook.getStr())
       timeline.segments.add(EngagementSegment(
         startMs: seg["start_ms"].getBiggestInt(),
         endMs: seg["end_ms"].getBiggestInt(),
@@ -208,6 +218,7 @@ Workflow:
         speechScore: seg["speech_score"].getFloat().float32,
         text: seg["text"].getStr(""),
         hasHook: seg["has_hook"].getBool(false),
+        hookMatches: hookMatches,
         faceCount: seg["face_count"].getInt(0),
         speaker: seg["speaker"].getInt(-1)
       ))
@@ -246,6 +257,21 @@ Try:
     else:
       error "No video or audio stream found"
 
+    # Load hooks (built-in + custom if provided)
+    var patterns: seq[HookPattern]
+    var hooksLoadedPath: string
+    try:
+      let videoDir = parentDir(inputPath)
+      (patterns, hooksLoadedPath) = loadAllHooks(hooksPath, videoDir, verboseMode)
+    except ValueError as e:
+      error e.msg
+    except IOError as e:
+      error e.msg
+
+    # If template was generated (hooksPath specified but file didn't exist), exit early
+    if hooksPath != "" and hooksLoadedPath == "" and fileExists(hooksPath):
+      quit(0)
+
     # Step 3: Analyze engagement
     try:
       var params = defaultEngagementParams()
@@ -254,7 +280,6 @@ Try:
         params.audioWeight = preset.audioWeight
         params.motionWeight = preset.motionWeight
         params.speechWeight = preset.speechWeight
-      let patterns = loadBuiltinPatterns()
       timeline = analyzeEngagement(bar, container, inputPath, transcript, tb,
                                     params, patterns, not noFaces)
     except Exception as e:

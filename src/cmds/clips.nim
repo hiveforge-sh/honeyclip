@@ -1,10 +1,10 @@
-import std/[strformat, strutils, os, json, tables, algorithm, times]
+import std/[strformat, strutils, os, times]
 import ../log
 import ../util/fun
 import ../util/bar
 import ../av
 import ../ffmpeg
-import ../analyze/[clips, engagement, engagement_types, hooks, audio, motion, faces]
+import ../analyze/[clips, engagement, engagement_types, hooks]
 import ../exports/edl
 import ../transcript/[types, extract]
 
@@ -52,6 +52,7 @@ proc main*(cArgs: seq[string]) =
   var inputPath: string = ""
   var model: string = ""
   var outputDir: string = ""
+  var hooksPath: string = ""
   var topN: int = 5
   var minDuration: int = 15
   var maxDuration: int = 60
@@ -89,6 +90,7 @@ Options:
   --outro-skip SECS       Skip last N seconds (default: 0)
   --no-metadata           Skip EDL/JSON metadata export
   --no-faces              Skip face detection (faster)
+  --hooks PATH            Custom hook patterns JSON file
   --concurrent N          Max parallel renders (default: 4)
   --debug                 Show debug information
   --help                  Show this help
@@ -120,6 +122,8 @@ Workflow:
       noFaces = true
     of "--concurrent":
       expecting = "concurrent"
+    of "--hooks":
+      expecting = "hooks"
     of "--debug":
       isDebug = true
     else:
@@ -155,6 +159,9 @@ Workflow:
         expecting = ""
       of "concurrent":
         concurrent = parseInt(key)
+        expecting = ""
+      of "hooks":
+        hooksPath = key
         expecting = ""
 
   # Check for incomplete argument
@@ -209,12 +216,26 @@ Workflow:
   else:
     error "No video or audio stream found"
 
+  # Load hooks (built-in + custom if provided)
+  var patterns: seq[HookPattern]
+  var hooksLoadedPath: string
+  try:
+    let videoDir = parentDir(inputPath)
+    (patterns, hooksLoadedPath) = loadAllHooks(hooksPath, videoDir, isDebug)
+  except ValueError as e:
+    error e.msg
+  except IOError as e:
+    error e.msg
+
+  # If template was generated (hooksPath specified but file didn't exist), exit early
+  if hooksPath != "" and hooksLoadedPath == "" and fileExists(hooksPath):
+    quit(0)
+
   # Step 3: Analyze engagement (uses internal per-step progress)
   let analyzeStart = epochTime()
   var timeline: EngagementTimeline
   try:
     let params = defaultEngagementParams()
-    let patterns = loadBuiltinPatterns()
     timeline = analyzeEngagement(bar, container, inputPath, transcript, tb,
                                   params, patterns, not noFaces)
   except Exception as e:
