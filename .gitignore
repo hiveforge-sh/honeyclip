@@ -40,6 +40,8 @@ tests/*
 !tests/*.nim
 !tests/*.py
 !tests/resources/
+!tests/fixtures/
+!tests/fixtures/*.nim
 
 # Misc generated
 *_ALTERED*
