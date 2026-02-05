@@ -66,6 +66,7 @@ type
     crf*: int                    # Quality (default 23)
     maxConcurrent*: int          # Max parallel renders (default 4)
     includeAudio*: bool          # Include audio track (default true)
+    metadataPath*: string        # Path to ffmetadata file (empty = no metadata)
 
   ExportResult* = object
     ## Result of clip export operation
@@ -88,6 +89,7 @@ type
     sourceAspect*: float             # Source video aspect ratio
     sourceWidth*, sourceHeight*: int # Source dimensions
     preset*: string                  # Optional platform preset name
+    metadataPath*: string            # Path to ffmetadata file (empty = no metadata)
 
 # ===== Aspect ratio helpers =====
 
@@ -531,11 +533,21 @@ proc buildFFmpegArgs*(inputPath: string, clip: Clip, outputPath: string,
   result = @[
     "-ss", $startSec,
     "-t", $duration,
-    "-i", inputPath,
+    "-i", inputPath
+  ]
+
+  # Add metadata input if provided
+  # -i input.mp4 [-i metadata.txt -map_metadata 1] -c:v ... output.mp4
+  if params.metadataPath != "" and fileExists(params.metadataPath):
+    result.add(@["-i", params.metadataPath])
+    result.add(@["-map_metadata", "1"])
+
+  # Video and audio encoding settings
+  result.add(@[
     "-c:v", params.codec,
     "-preset", params.preset,
     "-crf", $params.crf
-  ]
+  ])
 
   if params.includeAudio:
     result.add(@["-c:a", "aac", "-b:a", "128k"])
@@ -684,6 +696,12 @@ proc buildReframeArgs*(inputPath: string, clip: Clip, outputPath: string,
     "-i", inputPath
   ]
 
+  # Add metadata input if provided
+  # -i input.mp4 [-i metadata.txt -map_metadata 1] -vf ... output.mp4
+  if params.metadataPath != "" and fileExists(params.metadataPath):
+    result.add(@["-i", params.metadataPath])
+    result.add(@["-map_metadata", "1"])
+
   if not skipReframe:
     # Calculate target dimensions based on aspect ratio
     var targetW, targetH: int
@@ -723,6 +741,7 @@ proc buildReframeArgs*(inputPath: string, clip: Clip, outputPath: string,
 
 proc batchExportMultiAspect*(inputPath: string, clips: seq[Clip],
                               params: MultiAspectExportParams,
+                              metadataPath: string = "",
                               onProgress: proc(completed, total: int) = nil): seq[ExportResult] =
   ## Export clips in multiple aspect ratios using process pool
   ##
@@ -735,22 +754,27 @@ proc batchExportMultiAspect*(inputPath: string, clips: seq[Clip],
   ##   inputPath: Source video path
   ##   clips: Clips to export
   ##   params: Multi-aspect export parameters
+  ##   metadataPath: Optional path to ffmetadata file for metadata embedding
   ##   onProgress: Optional callback for progress updates
   ##
   ## Returns:
   ##   Export results with success/error status per job
 
+  # Set metadataPath in params if provided
+  var effectiveParams = params
+  effectiveParams.metadataPath = metadataPath
+
   result = @[]
-  if clips.len == 0 or params.aspects.len == 0:
+  if clips.len == 0 or effectiveParams.aspects.len == 0:
     return result
 
   # Determine source aspect
-  let sourceAspect = aspectFromFloat(params.sourceAspect)
+  let sourceAspect = aspectFromFloat(effectiveParams.sourceAspect)
 
   # Build all jobs
   var jobs: seq[AspectExportJob] = @[]
-  for aspect in params.aspects:
-    let aspectDir = generateAspectSubfolder(params.baseParams.outputDir, aspect)
+  for aspect in effectiveParams.aspects:
+    let aspectDir = generateAspectSubfolder(effectiveParams.baseParams.outputDir, aspect)
     if not dirExists(aspectDir):
       createDir(aspectDir)
 
@@ -782,10 +806,10 @@ proc batchExportMultiAspect*(inputPath: string, clips: seq[Clip],
     return result
 
   for i, job in jobs:
-    let args = buildReframeArgs(inputPath, job.clip, job.outputPath, params, job.aspect, job.skipReframe)
+    let args = buildReframeArgs(inputPath, job.clip, job.outputPath, effectiveParams, job.aspect, job.skipReframe)
 
     # Wait for available slot
-    while activeProcesses.len >= params.baseParams.maxConcurrent:
+    while activeProcesses.len >= effectiveParams.baseParams.maxConcurrent:
       var stillRunning: seq[ProcessInfo] = @[]
       for info in activeProcesses:
         if info.process.running():
@@ -804,7 +828,7 @@ proc batchExportMultiAspect*(inputPath: string, clips: seq[Clip],
           if onProgress != nil:
             onProgress(completed, totalJobs)
       activeProcesses = stillRunning
-      if activeProcesses.len >= params.baseParams.maxConcurrent:
+      if activeProcesses.len >= effectiveParams.baseParams.maxConcurrent:
         sleep(100)
 
     # Start new process
