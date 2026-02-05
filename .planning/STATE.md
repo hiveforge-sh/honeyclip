@@ -11,19 +11,19 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 12 of 14 (Custom Hook Patterns) — In Progress
-Plan: 1 of 3 in phase
-Status: Plan 12-01 complete (JSON schema loading)
-Last activity: 2026-02-05 — Completed 12-01-PLAN.md (JSON schema loading and validation)
+Plan: 2 of 3 in phase
+Status: Plan 12-02 complete (CLI integration)
+Last activity: 2026-02-05 — Completed 12-02-PLAN.md (CLI integration for custom hooks)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
-Progress v1.1: [████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 42%
+Progress v1.1: [█████████████████████████░░░░░░░░░░░░░░░░░░░░░░░] 52%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 52
-- Average duration: 3.3 min
-- Total execution time: 2.83 hours
+- Total plans completed: 53
+- Average duration: 3.4 min
+- Total execution time: 3.08 hours
 
 **By Phase:**
 
@@ -41,11 +41,11 @@ Progress v1.1: [████████████████████░�
 | 10-cli-integration | 5 | 29min | 5.8min |
 | 14-media-metadata-management | 3 | 13.5min | 4.5min |
 | 11-ml-library-size-optimization | 2 | 7min | 3.5min |
-| 12-custom-hook-patterns | 1 | 8min | 8.0min |
+| 12-custom-hook-patterns | 2 | 23min | 11.5min |
 
 **Recent Trend:**
-- Last 5 plans: 14-03 (3.5min), 11-01 (2min), 11-02 (5min), 12-01 (8min)
-- Trend: Phase 12 started, v1.1 Polish 42% done
+- Last 5 plans: 11-01 (2min), 11-02 (5min), 12-01 (8min), 12-02 (15min)
+- Trend: Phase 12 progressing, v1.1 Polish 52% done
 
 *Updated after each plan completion*
 
@@ -266,6 +266,11 @@ Recent decisions affecting current work:
 - Prosody named profiles: excited (150ms/1.8x), emphatic (200ms/1.5x), calm (300ms/1.2x) (12-01)
 - JSON optional fields with {} accessor and defaults (12-01)
 - File discovery priority: CLI > video dir > cwd > ~/.config/honeyclip/ (12-01)
+- Late import of hook_schema after HookPattern type to avoid circular dependency (12-02)
+- Custom patterns with same name override built-ins (priority to user patterns) (12-02)
+- Template generation exits early after creating file (user edits then reruns) (12-02)
+- hookMatches merged during segment merging with deduplication (12-02)
+- JSON output uses 'hooks' array field for matched pattern names (12-02)
 
 ### Pending Todos
 
@@ -354,12 +359,12 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 12-01-PLAN.md (JSON schema loading and validation)
+Stopped at: Completed 12-02-PLAN.md (CLI integration for custom hooks)
 Resume file: None
-Next: 12-02-PLAN.md (CLI integration)
+Next: 12-03-PLAN.md (if exists) or Phase 13
 
 **Project Status: v1.0 COMPLETE, v1.1 IN PROGRESS**
-v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 12 started (1/3 plans), Phase 13 remaining.
+v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 12 at 2/3 plans, Phase 13 remaining.
 
 **Phase 11 (ML Library Size Optimization):**
 - COMPLETE: All 2 plans delivered
@@ -370,12 +375,16 @@ v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 12 
 - Soft/hard limit validation with CI awareness (11-02)
 
 **Phase 12 (Custom Hook Patterns):**
-- IN PROGRESS: 1 of 3 plans delivered
+- IN PROGRESS: 2 of 3 plans delivered
 - JSON schema loading with loadHooksFromJson (12-01)
 - File discovery with priority order (12-01)
 - Starter template generation (12-01)
 - Prosody profile types with thresholds (12-01)
 - HookPattern category field for grouping (12-01)
+- mergeHookPatterns and loadAllHooks functions (12-02)
+- hookMatches field in EngagementSegment (12-02)
+- --hooks CLI flag in engage, analyze, clips commands (12-02)
+- JSON engagement output includes hooks array per segment (12-02)
 
 ### Roadmap Evolution
 
