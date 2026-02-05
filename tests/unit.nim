@@ -25,6 +25,7 @@ import ../src/exports/markers
 import ../src/render/scoreviz
 import ../src/metadata/types as metadataTypes
 import ../src/metadata/apply
+import ../src/analyze/hook_schema
 # Include the NLE format types and parser from export command
 # (can't use regular import due to 'export' being a reserved keyword)
 type
@@ -3009,3 +3010,180 @@ suite "metadata":
     check "artist" in tmpl.global
     check "copyright" in tmpl.global
     check "date" in tmpl.global
+
+suite "hook_schema":
+
+  test "prosody profile to thresholds":
+    let excited = prosodyProfileToThresholds(ppExcited)
+    check excited.pauseMs == 150
+    check excited.volumeSpikeFactor == 1.8f
+
+    let emphatic = prosodyProfileToThresholds(ppEmphatic)
+    check emphatic.pauseMs == 200
+    check emphatic.volumeSpikeFactor == 1.5f
+
+    let calm = prosodyProfileToThresholds(ppCalm)
+    check calm.pauseMs == 300
+    check calm.volumeSpikeFactor == 1.2f
+
+    let none = prosodyProfileToThresholds(ppNone)
+    check none.pauseMs == 0
+    check none.volumeSpikeFactor == 0.0f
+
+  test "parse prosody profile":
+    check parseProsodyProfile("excited") == ppExcited
+    check parseProsodyProfile("emphatic") == ppEmphatic
+    check parseProsodyProfile("calm") == ppCalm
+    check parseProsodyProfile("") == ppNone
+    check parseProsodyProfile("unknown") == ppCustom
+    check parseProsodyProfile("EXCITED") == ppExcited  # Case insensitive
+
+  test "find hooks file returns empty when not found":
+    # With explicit non-existent path
+    let result = findHooksFile("/nonexistent/path.json")
+    check result == ""
+
+    # With no paths (relies on no honeyclip.hooks.json in test environment)
+    let autoResult = findHooksFile()
+    # This may or may not find a file depending on environment
+    # Just check it doesn't crash
+    discard autoResult
+
+  test "load valid hooks json":
+    # Create temp test file
+    let testJson = """
+    {
+      "hooks": {
+        "test_pattern": {
+          "name": "Test Pattern",
+          "category": "test",
+          "weight": 10.0,
+          "regex": "test.*pattern"
+        }
+      }
+    }
+    """
+    let tempPath = getTempDir() / "test_hooks.json"
+    writeFile(tempPath, testJson)
+    defer: removeFile(tempPath)
+
+    let patterns = loadHooksFromJson(tempPath)
+    check patterns.len == 1
+    check patterns[0].name == "Test Pattern"
+    check patterns[0].category == "test"
+    check patterns[0].weight == 10.0f
+    check patterns[0].kind == hpkCustom
+
+  test "load hooks json with keywords synthesizes regex":
+    let testJson = """
+    {
+      "hooks": {
+        "keyword_test": {
+          "keywords": ["hello", "world"],
+          "match": "any"
+        }
+      }
+    }
+    """
+    let tempPath = getTempDir() / "test_hooks_keywords.json"
+    writeFile(tempPath, testJson)
+    defer: removeFile(tempPath)
+
+    let patterns = loadHooksFromJson(tempPath)
+    check patterns.len == 1
+    check patterns[0].name == "keyword_test"  # Defaults to key name
+    check patterns[0].category == "custom"    # Defaults to "custom"
+    # Verify regex was synthesized from keywords
+    check patterns[0].pattern.contains("hello")
+    check patterns[0].pattern.contains("world")
+    check patterns[0].pattern.contains("(?i)")  # Case insensitive
+
+  test "load hooks json with prosody only":
+    let testJson = """
+    {
+      "hooks": {
+        "prosody_only": {
+          "name": "Prosody Test",
+          "prosody": "excited"
+        }
+      }
+    }
+    """
+    let tempPath = getTempDir() / "test_hooks_prosody.json"
+    writeFile(tempPath, testJson)
+    defer: removeFile(tempPath)
+
+    let patterns = loadHooksFromJson(tempPath)
+    check patterns.len == 1
+    check patterns[0].name == "Prosody Test"
+    # Prosody-only patterns have empty pattern string
+    check patterns[0].pattern == ""
+
+  test "load hooks json uses global default weight":
+    let testJson = """
+    {
+      "hooks": {
+        "no_weight": {
+          "regex": "test"
+        }
+      },
+      "settings": {
+        "defaultWeight": 25.0
+      }
+    }
+    """
+    let tempPath = getTempDir() / "test_hooks_default_weight.json"
+    writeFile(tempPath, testJson)
+    defer: removeFile(tempPath)
+
+    let patterns = loadHooksFromJson(tempPath)
+    check patterns.len == 1
+    check patterns[0].weight == 25.0f
+
+  test "load hooks json fails on missing criteria":
+    let testJson = """
+    {
+      "hooks": {
+        "empty_pattern": {
+          "name": "No Criteria",
+          "weight": 10.0
+        }
+      }
+    }
+    """
+    let tempPath = getTempDir() / "test_hooks_invalid.json"
+    writeFile(tempPath, testJson)
+    defer: removeFile(tempPath)
+
+    expect ValueError:
+      discard loadHooksFromJson(tempPath)
+
+  test "load hooks json fails on invalid regex":
+    let testJson = """
+    {
+      "hooks": {
+        "bad_regex": {
+          "regex": "[invalid(regex"
+        }
+      }
+    }
+    """
+    let tempPath = getTempDir() / "test_hooks_bad_regex.json"
+    writeFile(tempPath, testJson)
+    defer: removeFile(tempPath)
+
+    expect ValueError:
+      discard loadHooksFromJson(tempPath)
+
+  test "load hooks json fails on missing hooks key":
+    let testJson = """
+    {
+      "patterns": {}
+    }
+    """
+    let tempPath = getTempDir() / "test_hooks_no_hooks.json"
+    writeFile(tempPath, testJson)
+    defer: removeFile(tempPath)
+
+    expect ValueError:
+      discard loadHooksFromJson(tempPath)
