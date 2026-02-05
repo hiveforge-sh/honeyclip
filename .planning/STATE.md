@@ -10,13 +10,13 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 11 of 14 (ML Library Size Optimization) — In Progress
-Plan: 1 of 2 in phase
-Status: Plan 11-01 complete (build configuration optimizations)
-Last activity: 2026-02-05 — Completed 11-01-PLAN.md (build configuration)
+Phase: 11 of 14 (ML Library Size Optimization) — Complete
+Plan: 2 of 2 in phase
+Status: Phase 11 complete (stripping and size validation)
+Last activity: 2026-02-05 — Completed 11-02-PLAN.md (stripping and size validation)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
-Progress v1.1: [██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 20%
+Progress v1.1: [████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -40,11 +40,11 @@ Progress v1.1: [██████████░░░░░░░░░░░�
 | 09-nle-integration-markers | 7 | 27.8min | 4.0min |
 | 10-cli-integration | 5 | 29min | 5.8min |
 | 14-media-metadata-management | 3 | 13.5min | 4.5min |
-| 11-ml-library-size-optimization | 1 | 2min | 2min |
+| 11-ml-library-size-optimization | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 14-01 (4min), 14-02 (5.5min), 14-03 (3.5min), 11-01 (2min)
-- Trend: Phase 11 started, v1.1 Polish 20% done
+- Last 5 plans: 14-02 (5.5min), 14-03 (3.5min), 11-01 (2min), 11-02 (5min)
+- Trend: Phase 11 complete, v1.1 Polish 33% done
 
 *Updated after each plan completion*
 
@@ -255,6 +255,11 @@ Recent decisions affecting current work:
 - Keep opencv_photo module for future image preprocessing (11-01)
 - Disable 5 unused 3rdparty dependencies: CAROTENE, EIGEN, ADE, FLATBUFFERS, ITT (11-01)
 - Package-specified CMAKE_BUILD_TYPE overrides cmakeBuild default (11-01)
+- walkFiles replaced with find command via gorgeEx (NimScript compatibility) (11-02)
+- Debug symbols extracted before stripping (.dSYM macOS, .debug Linux) (11-02)
+- Hard limit (100MB) is warning only, no build failure (11-02)
+- Soft limit (50MB) shows interactive prompt, skipped in CI via existsEnv('CI') (11-02)
+- Platform-specific strip: strip -x (macOS), strip --strip-unneeded (Linux) (11-02)
 
 ### Pending Todos
 
@@ -264,7 +269,7 @@ None yet.
 
 **Phase 1 (Foundation):**
 - Cross-platform build complexity for ONNX Runtime and OpenCV (especially Windows cross-compile via MinGW) - PARTIALLY RESOLVED: Windows cross-compile works for libfacedetection and OpenCV (01-03), ONNX Runtime needs Windows SDK headers
-- Binary size explosion risk (10MB → 100MB+ with ML libraries) - ACTIVE: Current ML libs total 114MB, exceeds 100MB hard limit
+- Binary size explosion risk (10MB → 100MB+ with ML libraries) - MITIGATED: Phase 11 added MinSizeRel build type and stripping. Expected reduction from 114MB to 70-85MB. Full verification pending.
 - Nim/C++ FFI memory management patterns must be established before adding multiple ML dependencies - RESOLVED: Patterns established in 01-02 (=destroy hooks, defer cleanup)
 - ONNX Runtime build complexity may cause issues on different systems - RESOLVED: Eigen hash issue fixed in 01-05
 - First ML library build takes 1-2 hours - DOCUMENTED: Users need to be aware
@@ -342,13 +347,21 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-05T15:25:00Z
-Stopped at: Completed 11-01-PLAN.md (build configuration)
+Last session: 2026-02-05T15:35:00Z
+Stopped at: Completed 11-02-PLAN.md (stripping and size validation)
 Resume file: None
-Next: 11-02-PLAN.md (dead code elimination)
+Next: Phase 12 or 13
 
 **Project Status: v1.0 COMPLETE, v1.1 IN PROGRESS**
-v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 11 started (1/2 plans), 2 phases remaining after 11.
+v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 11 complete (2/2 plans), 2 phases remaining after 11.
+
+**Phase 11 (ML Library Size Optimization):**
+- COMPLETE: All 2 plans delivered
+- MinSizeRel build type for OpenCV and libfacedetection (11-01)
+- Explicitly disable 15 OpenCV modules and 5 3rdparty dependencies (11-01)
+- Debug symbol extraction before stripping (.dSYM macOS, .debug Linux) (11-02)
+- Size reporting by category (OpenCV, ONNX, Abseil, etc.) (11-02)
+- Soft/hard limit validation with CI awareness (11-02)
 
 ### Roadmap Evolution
 
