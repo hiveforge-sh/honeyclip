@@ -57,6 +57,23 @@ task test, "Run unit tests":
   else:
     exec &"nim c {flags} -r tests/unit"
 
+task coverage, "Run tests with coverage (Linux only)":
+  # Coverage via gcov/lcov is Linux-only
+  when defined(linux):
+    # Build with coverage flags
+    exec &"nim c {flags} --passC:--coverage --passL:--coverage -r tests/unit"
+    # Generate LCOV report
+    exec "lcov --capture --directory . --output-file lcov.info --ignore-errors source"
+    # Remove system includes
+    exec "lcov --remove lcov.info '/usr/*' '*/nimcache/*' --output-file lcov.info"
+    # Generate HTML report (optional, for local viewing)
+    exec "genhtml lcov.info --output-directory coverage_html || true"
+    # Show summary
+    exec "lcov --list lcov.info"
+  else:
+    echo "Coverage task requires Linux (lcov). Use CI for coverage reports."
+    echo "On macOS/Windows: Run 'nimble test' for tests without coverage."
+
 task make, "Export the project":
   # LTO disabled on Windows due to GCC 11.1.0 internal compiler error (ICE in choose_baseaddr)
   when defined(windows):

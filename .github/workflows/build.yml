@@ -118,6 +118,25 @@ jobs:
           fi
       - name: Test
         run: nimble test
+      - name: Generate coverage
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          # Install lcov
+          sudo apt-get install -y lcov
+
+          # Build with coverage
+          nim c -d:enable_ml --passC:--coverage --passL:--coverage -r tests/unit
+
+          # Generate LCOV report
+          lcov --capture --directory . --output-file lcov.info --ignore-errors source
+          lcov --remove lcov.info '/usr/*' '*/nimcache/*' --output-file lcov.info
+
+          # Show coverage summary
+          lcov --list lcov.info
+      - name: Check coverage thresholds
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          python3 scripts/check_coverage.py lcov.info 80
       - name: Rename binary
         run: |
           mv honeyclip ${{ matrix.binary_name }}
