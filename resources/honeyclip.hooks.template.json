@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "brand_mention": {
+      "name": "Brand Mention",
+      "category": "callouts",
+      "weight": 20.0,
+      "keywords": ["your-brand", "your-product"],
+      "match": "any"
+    },
+    "cta_phrase": {
+      "name": "Call to Action",
+      "category": "callouts",
+      "weight": 15.0,
+      "regex": "(?:subscribe|like|comment|share|follow)",
+      "prosody": "emphatic"
+    },
+    "excited_question": {
+      "name": "Excited Question",
+      "category": "questions",
+      "weight": 18.0,
+      "regex": "^(can you believe|did you know|have you ever)",
+      "prosody": "excited",
+      "match": "all"
+    }
+  },
+  "settings": {
+    "defaultWeight": 15.0
+  }
+}

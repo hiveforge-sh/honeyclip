@@ -10,6 +10,7 @@ type
   HookPattern* = object
     pattern*: string      # Regex pattern string
     name*: string         # Human-readable name
+    category*: string     # Pattern category for grouping (e.g., "questions", "callouts")
     kind*: HookPatternKind
     weight*: float32      # Score weight (1.0 = normal, 1.5 = strong)
 
@@ -27,6 +28,7 @@ proc loadBuiltinPatterns*(): seq[HookPattern] =
   result.add(HookPattern(
     pattern: r"(?i)^(what|why|how|when|where|who)\b",
     name: "question_opening",
+    category: "questions",
     kind: hpkQuestion,
     weight: 1.5
   ))
@@ -34,6 +36,7 @@ proc loadBuiltinPatterns*(): seq[HookPattern] =
   result.add(HookPattern(
     pattern: r"\?$",
     name: "question_ending",
+    category: "questions",
     kind: hpkQuestion,
     weight: 1.2
   ))
@@ -42,6 +45,7 @@ proc loadBuiltinPatterns*(): seq[HookPattern] =
   result.add(HookPattern(
     pattern: r"(?i)\b(never|always|must|shocking|revealed|secret|truth)\b",
     name: "emphasis_words",
+    category: "emphasis",
     kind: hpkEmphasis,
     weight: 1.3
   ))
@@ -49,6 +53,7 @@ proc loadBuiltinPatterns*(): seq[HookPattern] =
   result.add(HookPattern(
     pattern: r"(?i)^(you need to|you have to|listen)\b",
     name: "direct_address",
+    category: "emphasis",
     kind: hpkEmphasis,
     weight: 1.3
   ))
@@ -57,6 +62,7 @@ proc loadBuiltinPatterns*(): seq[HookPattern] =
   result.add(HookPattern(
     pattern: r"(?i)^(imagine|picture this|here's the thing|let me tell you)\b",
     name: "storytelling_opening",
+    category: "storytelling",
     kind: hpkStorytelling,
     weight: 1.4
   ))
