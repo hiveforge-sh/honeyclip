@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 11: ML Library Size Optimization** - Strip symbols, -Os optimization, remove unused OpenCV modules
 - [ ] **Phase 12: Custom Hook Patterns** - JSON schema for user-defined hook patterns, CLI flag
 - [ ] **Phase 13: Tracker Test Coverage** - Unit tests for Kalman filter, assignment algorithm, tracker
-- [ ] **Phase 14: Media Metadata Management** - JSON templates for copyright, author, custom tags, chapter markers; standalone `meta` command + export integration
+- [x] **Phase 14: Media Metadata Management** - JSON templates for copyright, author, custom tags, chapter markers; standalone `meta` command + export integration
 
 ## Phase Details
 
@@ -271,9 +271,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 14-01-PLAN.md — Metadata types, JSON parser, and ffmetadata generation
-- [ ] 14-02-PLAN.md — CLI meta command with template loading and FFmpeg application
-- [ ] 14-03-PLAN.md — Export command integration with --meta-template flag
+- [x] 14-01-PLAN.md — Metadata types, JSON parser, and ffmetadata generation
+- [x] 14-02-PLAN.md — CLI meta command with template loading and FFmpeg application
+- [x] 14-03-PLAN.md — Export command integration with --meta-template flag
 
 ## Progress
 
@@ -303,4 +303,4 @@ Plans:
 | 11. ML Library Size Optimization | 0/2 | Planned | - |
 | 12. Custom Hook Patterns | 0/? | Not started | - |
 | 13. Tracker Test Coverage | 0/? | Not started | - |
-| 14. Media Metadata Management | 0/3 | Planned | - |
+| 14. Media Metadata Management | 3/3 | Complete | 2026-02-05 |
