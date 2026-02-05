@@ -244,7 +244,11 @@ Plans:
   2. Custom patterns support regex, keywords, and prosody thresholds
   3. CLI --hooks flag loads custom patterns from file
   4. Built-in patterns remain available as defaults
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 12-01-PLAN.md — JSON schema loading, validation, and file discovery
+- [ ] 12-02-PLAN.md — CLI integration with merging and output visibility
 
 ### Phase 13: Tracker Test Coverage
 **Goal**: Add comprehensive unit tests for speaker tracking modules
@@ -301,6 +305,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 11. ML Library Size Optimization | 2/2 | Complete | 2026-02-05 |
-| 12. Custom Hook Patterns | 0/? | Not started | - |
+| 12. Custom Hook Patterns | 0/2 | Not started | - |
 | 13. Tracker Test Coverage | 0/? | Not started | - |
 | 14. Media Metadata Management | 3/3 | Complete | 2026-02-05 |
