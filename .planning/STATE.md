@@ -6,17 +6,17 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Phase 10 - CLI Integration
+**Current focus:** Phase 12 - Custom Hook Patterns
 
 ## Current Position
 
-Phase: 11 of 14 (ML Library Size Optimization) — Complete
-Plan: 2 of 2 in phase
-Status: Phase 11 complete (stripping and size validation)
-Last activity: 2026-02-05 — Completed 11-02-PLAN.md (stripping and size validation)
+Phase: 12 of 14 (Custom Hook Patterns) — In Progress
+Plan: 1 of 3 in phase
+Status: Plan 12-01 complete (JSON schema loading)
+Last activity: 2026-02-05 — Completed 12-01-PLAN.md (JSON schema loading and validation)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
-Progress v1.1: [████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 33%
+Progress v1.1: [████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 42%
 
 ## Performance Metrics
 
@@ -41,10 +41,11 @@ Progress v1.1: [████████████████░░░░░�
 | 10-cli-integration | 5 | 29min | 5.8min |
 | 14-media-metadata-management | 3 | 13.5min | 4.5min |
 | 11-ml-library-size-optimization | 2 | 7min | 3.5min |
+| 12-custom-hook-patterns | 1 | 8min | 8.0min |
 
 **Recent Trend:**
-- Last 5 plans: 14-02 (5.5min), 14-03 (3.5min), 11-01 (2min), 11-02 (5min)
-- Trend: Phase 11 complete, v1.1 Polish 33% done
+- Last 5 plans: 14-03 (3.5min), 11-01 (2min), 11-02 (5min), 12-01 (8min)
+- Trend: Phase 12 started, v1.1 Polish 42% done
 
 *Updated after each plan completion*
 
@@ -260,6 +261,11 @@ Recent decisions affecting current work:
 - Hard limit (100MB) is warning only, no build failure (11-02)
 - Soft limit (50MB) shows interactive prompt, skipped in CI via existsEnv('CI') (11-02)
 - Platform-specific strip: strip -x (macOS), strip --strip-unneeded (Linux) (11-02)
+- Nim 2.x exception handling: separate except blocks instead of except A, B as e (12-01)
+- Keywords-only patterns synthesize regex at load time: (?i)\b(kw1|kw2)\b (12-01)
+- Prosody named profiles: excited (150ms/1.8x), emphatic (200ms/1.5x), calm (300ms/1.2x) (12-01)
+- JSON optional fields with {} accessor and defaults (12-01)
+- File discovery priority: CLI > video dir > cwd > ~/.config/honeyclip/ (12-01)
 
 ### Pending Todos
 
@@ -347,13 +353,13 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-05T15:35:00Z
-Stopped at: Completed 11-02-PLAN.md (stripping and size validation)
+Last session: 2026-02-05
+Stopped at: Completed 12-01-PLAN.md (JSON schema loading and validation)
 Resume file: None
-Next: Phase 12 or 13
+Next: 12-02-PLAN.md (CLI integration)
 
 **Project Status: v1.0 COMPLETE, v1.1 IN PROGRESS**
-v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 11 complete (2/2 plans), 2 phases remaining after 11.
+v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 12 started (1/3 plans), Phase 13 remaining.
 
 **Phase 11 (ML Library Size Optimization):**
 - COMPLETE: All 2 plans delivered
@@ -362,6 +368,14 @@ v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 11 
 - Debug symbol extraction before stripping (.dSYM macOS, .debug Linux) (11-02)
 - Size reporting by category (OpenCV, ONNX, Abseil, etc.) (11-02)
 - Soft/hard limit validation with CI awareness (11-02)
+
+**Phase 12 (Custom Hook Patterns):**
+- IN PROGRESS: 1 of 3 plans delivered
+- JSON schema loading with loadHooksFromJson (12-01)
+- File discovery with priority order (12-01)
+- Starter template generation (12-01)
+- Prosody profile types with thresholds (12-01)
+- HookPattern category field for grouping (12-01)
 
 ### Roadmap Evolution
 
