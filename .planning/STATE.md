@@ -10,19 +10,19 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 14 of 14 (Media Metadata Management) — In progress
-Plan: 1 of 3 in phase
-Status: Foundation modules complete (types, parser, apply)
-Last activity: 2026-02-05 — Completed 14-01-PLAN.md (metadata foundation)
+Phase: 14 of 14 (Media Metadata Management) — Complete
+Plan: 3 of 3 in phase
+Status: Phase complete (foundation, meta command, export integration)
+Last activity: 2026-02-05 — Completed 14-03-PLAN.md (export integration)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
-Progress v1.1: [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 8%
+Progress v1.1: [████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 16%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 49
-- Average duration: 3.2 min
+- Total plans completed: 51
+- Average duration: 3.3 min
 - Total execution time: 2.8 hours
 
 **By Phase:**
@@ -39,11 +39,11 @@ Progress v1.1: [████░░░░░░░░░░░░░░░░░�
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
 | 09-nle-integration-markers | 7 | 27.8min | 4.0min |
 | 10-cli-integration | 5 | 29min | 5.8min |
-| 14-media-metadata-management | 1 | 4.2min | 4.2min |
+| 14-media-metadata-management | 3 | 13.5min | 4.5min |
 
 **Recent Trend:**
-- Last 5 plans: 10-03 (4min), 10-04 (7min), 10-05 (7min), 14-01 (4min)
-- Trend: v1.1 Polish phase in progress
+- Last 5 plans: 10-05 (7min), 14-01 (4min), 14-02 (5.5min), 14-03 (3.5min)
+- Trend: Phase 14 complete, v1.1 Polish 16% done
 
 *Updated after each plan completion*
 
@@ -242,6 +242,13 @@ Recent decisions affecting current work:
 - Use "artist" not "author" field for MP4 compatibility (14-01)
 - FFmetadata INI format generation for FFmpeg -i metadata.txt (14-01)
 - Escape special chars (=, ;, #, \, newline) for ffmetadata format (14-01)
+- Standalone `meta` command for applying metadata to video files (14-02)
+- CLI override flags (--title, --author, --copyright) take precedence over template (14-02)
+- Dry-run mode shows template content before applying (14-02)
+- Export command --meta-template flag for single-command metadata workflow (14-03)
+- Use source video path for variable substitution, not individual clip paths (14-03)
+- FFmpeg -map_metadata pattern for embedding metadata during export (14-03)
+- effectiveParams pattern for propagating optional parameters through export pipeline (14-03)
 
 ### Pending Todos
 
@@ -319,15 +326,23 @@ None yet.
 - --quiet and --verbose flags for scriptable/debuggable workflows (10-05)
 - Enhanced error messages with actionable troubleshooting hints (10-05)
 
+**Phase 14 (Media Metadata Management):**
+- COMPLETE: All 3 plans delivered
+- JSON template format with variable substitution (VIDEO_TITLE, AUTHOR_NAME, YEAR, ISO_DATE) (14-01)
+- FFmetadata INI generation for FFmpeg integration (14-01)
+- Standalone `meta` command for applying templates to video files (14-02)
+- Export command --meta-template flag for single-command workflow (14-03)
+- CLI override flags (--meta-title, --meta-author, --meta-copyright) (14-03)
+
 ## Session Continuity
 
-Last session: 2026-02-05T13:20:06Z
-Stopped at: Completed 14-01-PLAN.md (metadata foundation)
+Last session: 2026-02-05T13:28:19Z
+Stopped at: Completed 14-03-PLAN.md (export integration)
 Resume file: None
-Next: Plan 14-02 (Meta command implementation)
+Next: Phase 11, 12, or 13 (remaining v1.1 Polish phases)
 
 **Project Status: v1.0 COMPLETE, v1.1 IN PROGRESS**
-v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 14 started (1/3 plans complete).
+v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 14 complete (3/3 plans), 3 phases remaining.
 
 ### Roadmap Evolution
 
