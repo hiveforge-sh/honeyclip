@@ -2,7 +2,12 @@
 
 ## Overview
 
-This roadmap transforms honeyclip from a silence removal tool into a comprehensive video engagement platform. Over 10 phases, we'll add ML-powered transcript extraction, multi-modal engagement scoring, speaker tracking with auto-reframing, and multi-aspect-ratio export with NLE integration. The journey starts by establishing build infrastructure for ML libraries, then progressively layers transcript features, face detection, engagement analysis, speaker reframing, and workflow polish. Each phase delivers verifiable user value while maintaining honeyclip's local-first, privacy-focused architecture.
+This roadmap transforms honeyclip from a silence removal tool into a comprehensive video engagement platform. The v1.0 milestone (Phases 1-10) delivers ML-powered transcript extraction, multi-modal engagement scoring, speaker tracking with auto-reframing, and multi-aspect-ratio export with NLE integration. The v1.1 Polish milestone (Phases 11-13) addresses tech debt identified during audit: ML library size optimization, custom hook patterns, and test coverage improvements.
+
+## Milestones
+
+- ✅ **v1.0 Engagement Analysis** — Phases 1-10 (ready for completion)
+- 🚧 **v1.1 Polish** — Phases 11-13 (tech debt closure)
 
 ## Phases
 
@@ -11,6 +16,8 @@ This roadmap transforms honeyclip from a silence removal tool into a comprehensi
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 Decimal phases appear between their surrounding integers in numeric order.
+
+### v1.0 Engagement Analysis
 
 - [x] **Phase 1: Foundation & Build Infrastructure** - ML library integration, FFI patterns, cross-platform builds
 - [x] **Phase 2: Transcript Foundation** - Word-level timestamps, SRT/VTT export, speaker diarization
@@ -22,6 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 8: Multi-Aspect Export & Workflow** - 16:9/9:16/1:1 export, previews, adjustments
 - [x] **Phase 9: NLE Integration & Markers** - Engagement markers, speaker markers, multi-format export
 - [x] **Phase 10: CLI Integration** - New subcommand, existing workflow integration, progress reporting
+
+### v1.1 Polish (Tech Debt Closure)
+
+- [ ] **Phase 11: ML Library Size Optimization** - Strip symbols, -Os optimization, remove unused OpenCV modules
+- [ ] **Phase 12: Custom Hook Patterns** - JSON schema for user-defined hook patterns, CLI flag
+- [ ] **Phase 13: Tracker Test Coverage** - Unit tests for Kalman filter, assignment algorithm, tracker
 
 ## Phase Details
 
@@ -204,10 +217,49 @@ Plans:
 - [x] 10-04-PLAN.md — Per-step progress reporting
 - [x] 10-05-PLAN.md — TTY-aware behavior and polish
 
+### Phase 11: ML Library Size Optimization
+**Goal**: Reduce ML library size from 114MB to under 50MB target
+**Depends on**: Phase 1 (tech debt closure)
+**Requirements**: None (optimization)
+**Gap Closure**: Closes tech debt from v1.0-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. ML libraries total under 50MB (soft limit) or under 100MB (hard limit)
+  2. OpenCV builds only core, imgproc, objdetect modules (no calib3d, features2d, flann)
+  3. All libraries have debug symbols stripped
+  4. Build uses -Os optimization for size
+**Plans**: TBD
+
+### Phase 12: Custom Hook Patterns
+**Goal**: Enable users to define custom hook detection patterns via JSON file
+**Depends on**: Phase 5 (enhancement)
+**Requirements**: None (enhancement)
+**Gap Closure**: Closes tech debt from v1.0-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. User can create hooks.json with custom pattern definitions
+  2. Custom patterns support regex, keywords, and prosody thresholds
+  3. CLI --hooks flag loads custom patterns from file
+  4. Built-in patterns remain available as defaults
+**Plans**: TBD
+
+### Phase 13: Tracker Test Coverage
+**Goal**: Add comprehensive unit tests for speaker tracking modules
+**Depends on**: Phase 7 (test coverage)
+**Requirements**: None (test coverage)
+**Gap Closure**: Closes tech debt from v1.0-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. Kalman filter module has unit tests for predict, update, getBbox
+  2. Assignment module has unit tests for cost matrix and Hungarian algorithm
+  3. Tracker module has integration tests for track lifecycle
+  4. Test coverage for tracking modules exceeds 80%
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
+- v1.0: Phases 1-10 (complete)
+- v1.1: Phases 11-13 (planned)
+
+### v1.0 Engagement Analysis
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -221,3 +273,11 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 8. Multi-Aspect Export & Workflow | 5/5 | Complete | 2026-02-03 |
 | 9. NLE Integration & Markers | 7/7 | Complete | 2026-02-03 |
 | 10. CLI Integration | 5/5 | Complete | 2026-02-04 |
+
+### v1.1 Polish (Tech Debt Closure)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 11. ML Library Size Optimization | 0/? | Not started | - |
+| 12. Custom Hook Patterns | 0/? | Not started | - |
+| 13. Tracker Test Coverage | 0/? | Not started | - |
