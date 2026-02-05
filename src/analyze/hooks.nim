@@ -1,4 +1,4 @@
-import std/[re, json, strutils, algorithm]
+import std/[re, json, algorithm, tables]
 
 type
   HookPatternKind* = enum
@@ -19,6 +19,10 @@ type
     textMatches*: seq[string]  # Which text patterns matched
     hasProsodyIndicator*: bool # Volume spike or unusual pause
     confidence*: float32       # 0-1 combined confidence
+
+# Import hook_schema after types are defined to avoid circular dependency
+import hook_schema
+export hook_schema.findHooksFile, hook_schema.generateStarterTemplate, hook_schema.loadHooksFromJson
 
 proc loadBuiltinPatterns*(): seq[HookPattern] =
   ## Returns built-in hook patterns for common engagement indicators
@@ -204,6 +208,68 @@ proc rateLimitHooks*(hooks: seq[tuple[timestampMs: int64, result: HookResult]],
     # Take top maxPerMinute
     for i in 0..<min(maxPerMinute, sortedBucket.len):
       result.add(sortedBucket[i].timestampMs)
+
+proc mergeHookPatterns*(builtins, custom: seq[HookPattern]): seq[HookPattern] =
+  ## Merge custom hooks with built-ins
+  ## Custom patterns with same name override built-ins
+  result = @[]
+
+  # Track which names have been added
+  var seen = initTable[string, bool]()
+
+  # Add custom patterns first (priority)
+  for pattern in custom:
+    result.add(pattern)
+    seen[pattern.name] = true
+
+  # Add built-ins that weren't overridden
+  for pattern in builtins:
+    if not seen.hasKey(pattern.name):
+      result.add(pattern)
+
+proc loadAllHooks*(explicitPath: string = "",
+                   videoDir: string = "",
+                   verbose: bool = false): tuple[patterns: seq[HookPattern],
+                                                 customPath: string] =
+  ## Load all hooks: built-ins + custom from discovered file
+  ## Returns patterns and path to custom file (empty if none loaded)
+  ##
+  ## If explicitPath is provided but doesn't exist, generates starter template
+
+  let builtins = loadBuiltinPatterns()
+  var customPatterns: seq[HookPattern] = @[]
+  var loadedPath = ""
+
+  # Try to find hooks file
+  let hooksPath = findHooksFile(explicitPath, videoDir)
+
+  if hooksPath != "":
+    # Load custom hooks from discovered file
+    try:
+      customPatterns = loadHooksFromJson(hooksPath)
+      loadedPath = hooksPath
+      if verbose:
+        echo "Loaded custom hooks from: ", hooksPath
+        echo "  Custom patterns: ", customPatterns.len
+    except ValueError as e:
+      # Re-raise with context
+      raise newException(ValueError, e.msg)
+  elif explicitPath != "":
+    # Explicit path specified but not found - generate template
+    if generateStarterTemplate(explicitPath):
+      echo "Generated starter hooks template: ", explicitPath
+      echo "  Edit this file and run again to use custom hooks"
+    else:
+      raise newException(IOError, "Failed to generate hooks template at: " & explicitPath)
+
+  # Merge patterns
+  result.patterns = mergeHookPatterns(builtins, customPatterns)
+  result.customPath = loadedPath
+
+  if verbose:
+    echo "Active hook patterns: ", result.patterns.len
+    for p in result.patterns:
+      echo "  - ", p.name, " (", p.kind, ", weight: ", p.weight, ")"
 
 when isMainModule:
   # Test hook detection
