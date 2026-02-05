@@ -3432,3 +3432,315 @@ suite "hook_schema":
 
     expect ValueError:
       discard loadHooksFromJson(tempPath)
+
+# Tracker Integration Tests (tracking/tracker.nim)
+
+import ../src/tracking/tracker
+# embeddings already imported earlier (line 1029 in enable_ml section)
+# synthetic_faces already included at line 32
+include fixtures/mock_embeddings
+
+import std/[options, times]
+
+suite "Tracker Integration":
+  test "tracker-newTracker-default-parameters":
+    let tracker = newTracker()
+    check tracker.state.maxAge == 90
+    check tracker.state.minHits == 3
+    check tracker.embedder.isNone  # No model = IoU-only mode
+
+  test "tracker-newTracker-custom-parameters":
+    let tracker = newTracker(modelPath = "", maxAge = 60, minHits = 5)
+    check tracker.state.maxAge == 60
+    check tracker.state.minHits == 5
+    check tracker.iouThreshold == 0.5
+    check tracker.embeddingThreshold == 0.7
+
+  test "tracker-creates-track-for-first-detection":
+    var tracker = newTracker()
+    let detection = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    discard tracker.updateTracks(@[detection], nil)
+
+    check tracker.state.tracks.len == 1
+    check tracker.state.tracks[0].id == 0
+    check tracker.state.tracks[0].hitStreak == 1
+
+  test "tracker-increments-hitStreak":
+    var tracker = newTracker()
+    let detection = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    for i in 1..5:
+      discard tracker.updateTracks(@[detection], nil)
+      check tracker.state.tracks[0].hitStreak == i
+
+  test "tracker-single-face-identity-over-30-frames":
+    var tracker = newTracker()
+    let faces = generateStraightLineFace(100, 100, 50, 50, 5.0, 2.0, 30)
+
+    var trackId = -1
+    for i, face in faces:
+      discard tracker.updateTracks(@[face], nil)
+      if i == 0:
+        trackId = tracker.state.tracks[0].id
+      else:
+        # Track ID should remain the same throughout
+        check tracker.state.tracks.len == 1
+        check tracker.state.tracks[0].id == trackId
+
+    # Verify final position near expected (100 + 29*5, 100 + 29*2) = (245, 158)
+    check tracker.state.tracks[0].bbox.x >= 240 and tracker.state.tracks[0].bbox.x <= 250
+    check tracker.state.tracks[0].bbox.y >= 155 and tracker.state.tracks[0].bbox.y <= 165
+
+  test "tracker-creates-separate-tracks-for-two-faces":
+    var tracker = newTracker()
+    let face1 = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    let face2 = FaceRect(x: 500, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    discard tracker.updateTracks(@[face1, face2], nil)
+
+    check tracker.state.tracks.len == 2
+    check tracker.state.tracks[0].id != tracker.state.tracks[1].id
+
+  test "tracker-maintains-two-faces-crossing":
+    var tracker = newTracker()
+    let (faces1, faces2) = generateCrossingPaths(
+      face1Start = (x: 0, y: 500),
+      face2Start = (x: 800, y: 500),
+      face1Vel = (x: 10.0, y: 0.0),
+      face2Vel = (x: -10.0, y: 0.0),
+      numFrames = 30
+    )
+
+    # Get initial track IDs
+    discard tracker.updateTracks(@[faces1[0], faces2[0]], nil)
+    let initialIds = (tracker.state.tracks[0].id, tracker.state.tracks[1].id)
+
+    # Update for remaining frames
+    for i in 1..<30:
+      discard tracker.updateTracks(@[faces1[i], faces2[i]], nil)
+
+    # Both tracks should still exist with same IDs
+    check tracker.state.tracks.len == 2
+    let finalIds = (tracker.state.tracks[0].id, tracker.state.tracks[1].id)
+
+    # Verify identity preserved (same set of IDs)
+    check (finalIds[0] == initialIds[0] or finalIds[0] == initialIds[1])
+    check (finalIds[1] == initialIds[0] or finalIds[1] == initialIds[1])
+    check finalIds[0] != finalIds[1]
+
+  test "tracker-unmatched-track-increments-timeSinceUpdate":
+    var tracker = newTracker()
+    let detection = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    # Establish track
+    for _ in 1..5:
+      discard tracker.updateTracks(@[detection], nil)
+
+    # Update with empty detections
+    for i in 1..3:
+      discard tracker.updateTracks(@[], nil)
+      check tracker.state.tracks[0].timeSinceUpdate == i
+
+  test "tracker-deletes-stale-track":
+    var tracker = newTracker(maxAge = 10)
+    let detection = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    # Establish track
+    discard tracker.updateTracks(@[detection], nil)
+    check tracker.state.tracks.len == 1
+
+    # Update with empty detections until track is deleted
+    for _ in 1..11:
+      discard tracker.updateTracks(@[], nil)
+
+    check tracker.state.tracks.len == 0
+
+  test "tracker-maintains-identity-after-brief-occlusion":
+    var tracker = newTracker()
+    let detection = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    # Establish track over 5 frames
+    for _ in 1..5:
+      discard tracker.updateTracks(@[detection], nil)
+
+    let originalId = tracker.state.tracks[0].id
+
+    # Empty detections for 5 frames (< maxAge)
+    for _ in 1..5:
+      discard tracker.updateTracks(@[], nil)
+
+    # Detection reappears at similar position
+    discard tracker.updateTracks(@[detection], nil)
+
+    # Track should recover with same ID
+    check tracker.state.tracks.len == 1
+    check tracker.state.tracks[0].id == originalId
+
+  test "tracker-getActiveTracks-empty-before-minHits":
+    var tracker = newTracker(minHits = 3)
+    let detection = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    # Update only 2 times (less than minHits)
+    discard tracker.updateTracks(@[detection], nil)
+    discard tracker.updateTracks(@[detection], nil)
+
+    let active = tracker.getActiveTracks()
+    check active.len == 0
+
+  test "tracker-getActiveTracks-returns-after-minHits":
+    var tracker = newTracker(minHits = 3)
+    let detection = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    # Update 3 times (equals minHits)
+    for _ in 1..3:
+      discard tracker.updateTracks(@[detection], nil)
+
+    let active = tracker.getActiveTracks()
+    check active.len == 1
+
+  test "tracker-getActiveTracks-filters-unconfirmed":
+    var tracker = newTracker(minHits = 3)
+    let face1 = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    let face2 = FaceRect(x: 500, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    # Establish first track over 10 frames
+    for _ in 1..10:
+      discard tracker.updateTracks(@[face1], nil)
+
+    # Add new track (1 frame only)
+    discard tracker.updateTracks(@[face1, face2], nil)
+
+    # Only confirmed track should be returned
+    let active = tracker.getActiveTracks()
+    check active.len == 1
+    check active[0].bbox.x == face1.x  # First track, not second
+
+suite "TrackingState":
+  test "trackingState-newTrackingState-defaults":
+    let state = newTrackingState()
+    check state.tracks.len == 0
+    check state.nextId == 0
+    check state.maxAge == 90
+    check state.minHits == 3
+
+  test "trackingState-newTrackingState-custom":
+    let state = newTrackingState(maxAge = 60, minHits = 5)
+    check state.tracks.len == 0
+    check state.nextId == 0
+    check state.maxAge == 60
+    check state.minHits == 5
+
+suite "Mock Embeddings":
+  test "tracker-cosine-similarity-same-embedding":
+    let emb1 = mockEmbedding(1)
+    let emb2 = mockEmbedding(1)
+    let similarity = cosineSimilarity(emb1, emb2)
+    check abs(similarity - 1.0) < 0.001
+
+  test "tracker-cosine-similarity-different-embeddings":
+    let emb1 = mockEmbedding(1)
+    let emb2 = mockEmbedding(2)
+    let similarity = cosineSimilarity(emb1, emb2)
+    # Different seeds should produce approximately orthogonal vectors
+    check similarity < 0.5
+
+  test "tracker-embedding-pair-target-similarity":
+    let (emb1, emb2) = mockEmbeddingPair(0.8)
+    let similarity = cosineSimilarity(emb1, emb2)
+    # Should be approximately 0.8 (with some tolerance)
+    check abs(similarity - 0.8) < 0.1
+
+  test "tracker-embedding-sequence-drift":
+    let sequence = mockEmbeddingSequence(seed = 42, numFrames = 10, drift = 0.01)
+    check sequence.len == 10
+
+    # All embeddings should be similar to the first (low drift)
+    # Note: drift is cumulative, so later frames drift more
+    for i in 1..<sequence.len:
+      let similarity = cosineSimilarity(sequence[0], sequence[i])
+      check similarity > 0.6  # Allow more drift over time
+
+suite "Performance Benchmarks":
+  test "benchmark-kalman-update-timing":
+    let bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    var kf = newKalmanFilter(bbox)
+
+    let startTime = epochTime()
+    for _ in 1..10000:
+      discard kf.predict()
+      kf.update(bbox)
+    let elapsed = (epochTime() - startTime) * 1000.0  # ms
+
+    echo "Kalman 10k updates: " & $elapsed.int & "ms"
+    check elapsed < 1000.0  # Very generous, just catch regressions
+
+  test "benchmark-tracker-single-face-30fps":
+    var tracker = newTracker()
+    let faces = generateStraightLineFace(100, 100, 50, 50, 2.0, 1.0, 900)  # 30s @ 30fps
+
+    let startTime = epochTime()
+    for face in faces:
+      discard tracker.updateTracks(@[face], nil)
+    let elapsed = (epochTime() - startTime) * 1000.0  # ms
+
+    echo "Tracker 30s@30fps (1 face): " & $elapsed.int & "ms"
+    check elapsed < 5000.0
+
+  test "benchmark-tracker-five-faces-30fps":
+    var tracker = newTracker()
+
+    # Generate 5 faces with different motion patterns
+    let f1 = generateStraightLineFace(100, 100, 50, 50, 2.0, 0.0, 900)
+    let f2 = generateStraightLineFace(300, 100, 50, 50, 0.0, 1.0, 900)
+    let f3 = generateStraightLineFace(500, 100, 50, 50, -1.0, 1.0, 900)
+    let f4 = generateStraightLineFace(100, 400, 50, 50, 1.5, 0.5, 900)
+    let f5 = generateStraightLineFace(600, 400, 50, 50, -0.5, 0.0, 900)
+
+    let startTime = epochTime()
+    for i in 0..<900:
+      discard tracker.updateTracks(@[f1[i], f2[i], f3[i], f4[i], f5[i]], nil)
+    let elapsed = (epochTime() - startTime) * 1000.0  # ms
+
+    echo "Tracker 30s@30fps (5 faces): " & $elapsed.int & "ms"
+    check elapsed < 10000.0  # Should complete in reasonable time
+
+  test "benchmark-iou-computation":
+    let a = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    let b = FaceRect(x: 120, y: 110, width: 50, height: 50, confidence: 0.9, angle: 0)
+
+    let startTime = epochTime()
+    for _ in 1..100000:
+      discard iou(a, b)
+    let elapsed = (epochTime() - startTime) * 1000.0  # ms
+
+    echo "IoU 100k calculations: " & $elapsed.int & "ms"
+    check elapsed < 500.0
+
+  test "benchmark-cost-matrix-5x5":
+    # Create 5 tracks
+    var tracks: seq[Track] = @[]
+    for i in 0..<5:
+      tracks.add(Track(
+        id: i,
+        bbox: FaceRect(x: i * 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0),
+        embedding: @[],
+        timeSinceUpdate: 0,
+        hitStreak: 5,
+        age: 10,
+        speakerId: -1
+      ))
+
+    # Create 5 detections
+    var detections: seq[FaceRect] = @[]
+    for i in 0..<5:
+      detections.add(FaceRect(x: i * 100 + 10, y: 110, width: 50, height: 50, confidence: 0.9, angle: 0))
+
+    let embeddings: seq[seq[float32]] = @[]
+
+    let startTime = epochTime()
+    for _ in 1..10000:
+      discard computeCostMatrix(tracks, detections, embeddings)
+    let elapsed = (epochTime() - startTime) * 1000.0  # ms
+
+    echo "Cost matrix 5x5 10k: " & $elapsed.int & "ms"
+    check elapsed < 2000.0

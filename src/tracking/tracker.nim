@@ -165,7 +165,9 @@ proc updateTracks*(tracker: var FaceTracker, detections: seq[FaceRect],
       tracker.state.nextId += 1
 
   # Step 7: Handle unmatched tracks (increment timeSinceUpdate)
-  for trackIdx, track in tracker.state.tracks:
+  # Note: Only iterate over original tracks (not newly added ones)
+  # matchedTracks was sized for original track count before Step 6 added new tracks
+  for trackIdx in 0 ..< matchedTracks.len:
     if not matchedTracks[trackIdx]:
       tracker.state.tracks[trackIdx].timeSinceUpdate += 1
       if tracker.state.tracks[trackIdx].hitStreak > 0:
