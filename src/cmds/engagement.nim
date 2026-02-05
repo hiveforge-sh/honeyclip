@@ -37,6 +37,7 @@ proc segmentToJson*(seg: EngagementSegment): JsonNode =
     "motion_score": seg.motionScore,
     "speech_score": seg.speechScore,
     "has_hook": seg.hasHook,
+    "hooks": seg.hookMatches,
     "face_count": seg.faceCount,
     "speaker": seg.speaker
   }

@@ -19,6 +19,7 @@ type
     motionScore*: float32        # Raw motion level score (0-100)
     speechScore*: float32        # Raw speech feature score (0-100)
     hasHook*: bool               # True if hook pattern detected
+    hookMatches*: seq[string]    # Names of matched hook patterns
     faceCount*: int              # Number of stable faces in segment
     speaker*: int                # Speaker index (-1 = unassigned, 0+ = speaker)
 
@@ -68,6 +69,7 @@ proc newEngagementSegment*(startMs, endMs: int64): EngagementSegment =
   result.motionScore = 0.0f
   result.speechScore = 0.0f
   result.hasHook = false
+  result.hookMatches = @[]
   result.faceCount = 0
   result.speaker = -1
 

@@ -167,6 +167,7 @@ proc scoreSegment*(startMs, endMs: int64, text: string, words: seq[Word],
   let audioSegment = getSignalRange(audioSignal, startIdx, endIdx)
   let hookResult = detectHook(text, audioSegment, avgAudioEnergy, hookPatterns)
   result.hasHook = hookResult.isHook
+  result.hookMatches = hookResult.textMatches  # Store matched pattern names
 
   # Calculate combined relative score
   var relativeScore = (result.audioScore * params.audioWeight +
@@ -232,6 +233,11 @@ proc mergeAdjacentSegments*(segments: seq[EngagementSegment],
       merged.speechScore = ((prev.speechScore * prev.durationMs.float32) +
                             (curr.speechScore * curr.durationMs.float32)) / totalDuration.float32
       merged.hasHook = prev.hasHook or curr.hasHook
+      # Merge hookMatches from both segments (deduplicated)
+      merged.hookMatches = prev.hookMatches
+      for match in curr.hookMatches:
+        if match notin merged.hookMatches:
+          merged.hookMatches.add(match)
       merged.faceCount = max(prev.faceCount, curr.faceCount)
       merged.speaker = if prev.speaker == curr.speaker: prev.speaker else: -1
 
