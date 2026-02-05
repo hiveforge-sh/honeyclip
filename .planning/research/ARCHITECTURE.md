@@ -1,907 +1,581 @@
-# Architecture Research
+# Architecture Integration Patterns
 
-**Domain:** Video Engagement Analysis for FFmpeg-based Processing Pipelines
-**Researched:** 2026-02-01
+**Milestone:** v1.2 Workflow & Performance
+**Domain:** Batch processing, chapter detection, preview generation, GPU acceleration, 4K optimization
+**Researched:** 2026-02-05
 **Confidence:** HIGH
 
-## Standard Architecture
+## Executive Summary
 
-### System Overview
+The v1.2 features integrate cleanly with honeyclip's existing pipeline architecture. Batch processing wraps the existing single-file workflow with job queue management. Chapter detection extends the transcript/engagement analyzer pattern with topic segmentation. Preview generation already exists and needs only batch support. GPU acceleration extends ML modules (face detection) with CUDA backend selection. 4K memory optimization touches the frame decoding loop in av.nim and analyzer buffering.
+
+**Key integration pattern:** All new features extend existing components rather than creating parallel systems. Batch processing orchestrates, chapter detection analyzes, preview generation renders, GPU acceleration accelerates, and 4K optimization reduces memory footprint—but all operate within the established pipeline stages (decode → analyze → timeline → render).
+
+## Recommended Architecture
+
+### High-Level Integration Map
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    CLI & Input Layer                            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
-│  │  FFmpeg  │  │  Media   │  │  Input   │                       │
-│  │  Decode  │  │  Metadata│  │  Args    │                       │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
-│       │             │             │                              │
-├───────┴─────────────┴─────────────┴──────────────────────────────┤
-│                    Analysis Layer                                │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
-│  │  Audio   │  │  Motion  │  │ Subtitle │  │   Face   │         │
-│  │ Silence  │  │ Detection│  │  Match   │  │ Detection│         │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘         │
-│       │             │             │             │                │
-│       └─────────────┴─────────────┴─────────────┘                │
-│                      │                                           │
-│              ┌───────▼───────┐                                   │
-│              │  Engagement   │  [NEW: Scoring & Integration]     │
-│              │    Scorer     │                                   │
-│              └───────┬───────┘                                   │
-│                      │                                           │
-├──────────────────────┴───────────────────────────────────────────┤
-│                 Timeline Construction Layer                      │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Boolean Array → Action Index → Clip Sequence           │    │
-│  │  [TTTFFFFTTTTT] → [1,1,1,0,0,0,0,1,...] → Clips w/Effects│    │
-│  └─────────────────────────────────────────────────────────┘    │
+│                     NEW: Batch Orchestrator                     │
+│  (src/batch.nim - job queue, progress aggregation, CLI wrapper) │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │ spawns per-file →
+                       ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                   EXISTING: Single File Pipeline                │
 ├─────────────────────────────────────────────────────────────────┤
-│                    Output Layer                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
-│  │  Render  │  │  Export  │  │ Reframe  │  [NEW: Smart Crop]    │
-│  │  (FFmpeg)│  │  (JSON)  │  │ (ROI)    │                       │
-│  └──────────┘  └──────────┘  └──────────┘                       │
+│  1. Decode (av.nim)  ← NEW: 4K frame buffer optimization        │
+│  2. Analyze (analyze/*) ← NEW: chapter detection, GPU accel     │
+│  3. Timeline (timeline.nim)                                     │
+│  4. Render (render/*)  ← EXISTING: preview generation           │
+│  5. Export (exports/*)                                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+### Component Integration Points
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| **FFmpeg Decode** | Extract frames/audio from media containers | libavformat demuxer + libavcodec decoder |
-| **Media Metadata** | Parse stream info (codecs, dimensions, duration) | `MediaInfo` struct from container inspection |
-| **Analysis Processors** | Detect features in decoded frames/audio | Filter graphs + threshold-based detection |
-| **Engagement Scorer** | Combine multi-modal signals into engagement score | Weighted scoring model combining face, audio, transcript |
-| **Timeline Builder** | Convert boolean arrays to timestamped clip sequences | Chunkify boolean regions into `Clip` objects with effects |
-| **Render Pipeline** | Encode timeline back to video/audio | libavcodec encoder + muxer via filter graphs |
-| **Export Pipeline** | Serialize timeline to NLE formats | JSON/XML serializers for Premiere, Final Cut, etc. |
-| **Reframing Engine** | Dynamic crop based on ROI tracking | Frame-by-frame crop filter with face/speaker position |
+| New Feature | Integration Point | New vs Modified | Priority |
+|-------------|------------------|-----------------|----------|
+| Batch processing | Wraps main() with job queue | NEW: src/batch.nim, MODIFIED: src/main.nim (entry point detection) | HIGH (user value) |
+| Chapter detection | Analyzer following audio.nim pattern | NEW: src/analyze/chapters.nim, NEW: src/cmds/chapters.nim | MEDIUM (builds on transcript) |
+| Preview generation | **Already implemented!** | EXISTING: src/render/previews.nim (add batch wrapper) | MEDIUM (enhancement) |
+| GPU acceleration | ML backend selection in existing modules | MODIFIED: src/ml/facedetect.nim, MODIFIED: build system | LOW (optional perf) |
+| 4K memory optimization | Frame buffer management in decode loop | MODIFIED: src/av.nim (decode iterator), MODIFIED: analyze/* (buffering) | MEDIUM (enables 4K) |
 
-## Recommended Project Structure
+## Component Details
 
-```
-src/
-├── analyze/
-│   ├── audio.nim           # Existing: Audio level analysis
-│   ├── motion.nim          # Existing: Pixel diff motion detection
-│   ├── subtitle.nim        # Existing: Text pattern matching
-│   ├── face.nim            # NEW: Face detection via MediaPipe/OpenCV
-│   ├── speaker.nim         # NEW: Speaker diarization via pyannote
-│   └── engagement.nim      # NEW: Multi-modal engagement scoring
-├── palet/
-│   ├── lexer.nim           # Existing: Edit expression tokenizer
-│   └── edit.nim            # EXTEND: Add face(), speaker(), engage() functions
-├── timeline.nim            # EXTEND: Add engagement metadata to Clip type
-├── render/
-│   ├── format.nim          # Existing: Encoder setup
-│   ├── video.nim           # EXTEND: ROI-based reframing filter
-│   └── reframe.nim         # NEW: Dynamic crop logic
-├── exports/
-│   └── json.nim            # EXTEND: Serialize engagement scores
-├── cache.nim               # EXTEND: Cache face/speaker detection results
-└── edit.nim                # EXTEND: Wire engagement analysis into main flow
-```
+### 1. Batch Processing (NEW: src/batch.nim)
 
-### Structure Rationale
+**Purpose:** Process multiple videos sequentially or in parallel without restarting the binary for each file.
 
-- **analyze/**: Modular detectors following existing pattern (audio, motion, subtitle)
-  - Each analyzer produces `seq[bool]` or scored regions
-  - Face/speaker detection integrate like existing analyzers
-  - Engagement scorer combines signals from multiple analyzers
-
-- **palet/**: Edit expression language extended with new detection primitives
-  - Users write `--edit '(engage :threshold 0.7)'`
-  - Composable with existing operators: `(or (audio) (face))`
-
-- **timeline.nim**: Clip objects annotated with engagement metadata
-  - Preserves existing v3 timeline structure
-  - Optional engagement scores in metadata for advanced workflows
-
-- **render/**: Reframing as optional post-process on video clips
-  - Integrates with existing filter graph architecture
-  - ROI data flows from face/speaker detection → reframe filter
-
-## Architectural Patterns
-
-### Pattern 1: Frame-by-Frame Analysis with Buffering
-
-**What:** Decode media in chunks, analyze each frame, aggregate results into boolean arrays or scored segments
-
-**When to use:** All analysis modules (audio, motion, face, speaker)
-
-**Trade-offs:**
-- ✅ Memory efficient (process one frame at a time)
-- ✅ Parallelizable (FFmpeg filter graphs auto-parallelize)
-- ❌ Requires buffering for temporal features (e.g., speaker change detection)
-
-**Example:**
-```nim
-# Existing pattern in honeyclip
-type AudioProcessor = object
-  iterator: AudioIterator
-  codecCtx: ptr AVCodecContext
-  audioIndex: cint
-  chunkDuration: float64
-
-proc analyzeAudio(processor: AudioProcessor, threshold: float32): seq[bool] =
-  var result: seq[bool] = @[]
-  for audioChunk in processor.iterator:
-    let isLoud = calcRMS(audioChunk) > threshold
-    result.add(isLoud)
-  return result
-
-# NEW: Face detection follows same pattern
-type FaceProcessor = object
-  iterator: VideoFrameIterator
-  detector: FaceDetector  # MediaPipe or OpenCV
-  frameIndex: int
-
-proc analyzeFaces(processor: FaceProcessor, minConfidence: float32): seq[FaceRegion] =
-  var result: seq[FaceRegion] = @[]
-  for frame in processor.iterator:
-    let faces = processor.detector.detect(frame, minConfidence)
-    result.add(FaceRegion(frameIndex: processor.frameIndex, faces: faces))
-    processor.frameIndex += 1
-  return result
-```
-
-### Pattern 2: Boolean Array as Common Interface
-
-**What:** All detectors produce `seq[bool]` arrays where index = time chunk, value = detected/not detected
-
-**When to use:** Integration with existing timeline builder (`initLinearTimeline`)
-
-**Trade-offs:**
-- ✅ Simple, composable (supports `or`, `and`, `not` operators)
-- ✅ Already implemented in honeyclip
-- ❌ Loses granular scores (must threshold engagement to boolean)
-- ❌ Fixed time resolution (chunk duration)
-
-**Example:**
-```nim
-# Existing flow in honeyclip
-proc interpretEdit(args: mainArgs, container: InputContainer,
-                   tb: AVRational, bar: Bar): seq[bool] =
-  # Audio analysis produces seq[bool]
-  let audioLoud = analyzeAudio(...)
-
-  # Motion analysis produces seq[bool]
-  let motionActive = analyzeMotion(...)
-
-  # Combine via boolean operators
-  return audioLoud or motionActive
-
-# NEW: Engagement extends this pattern
-proc analyzeEngagement(container: InputContainer, threshold: float32): seq[bool] =
-  let faces = analyzeFaces(...)       # seq[FaceRegion]
-  let speakers = analyzeSpeakers(...) # seq[SpeakerSegment]
-  let audio = analyzeAudio(...)       # seq[bool]
-
-  # Convert to engagement scores
-  var scores: seq[float32] = combineSignals(faces, speakers, audio)
-
-  # Threshold to boolean
-  return scores.map(proc(s: float32): bool = s >= threshold)
-```
-
-### Pattern 3: Two-Stage Pipeline (Detect → Score → Timeline)
-
-**What:** Analysis produces rich data structures first, then converts to boolean/timeline format
-
-**When to use:** When downstream consumers need both boolean cuts AND rich metadata (e.g., reframing)
-
-**Trade-offs:**
-- ✅ Preserves granular data for advanced features (reframing, annotations)
-- ✅ Backward compatible (still produces seq[bool] for timeline)
-- ❌ More complex data flow
-- ❌ Requires caching intermediate results
-
-**Example:**
-```nim
-# Stage 1: Detection produces rich data
-type EngagementData = object
-  faces: seq[FaceRegion]        # Per-frame face boxes
-  speakers: seq[SpeakerSegment] # Speaker change timestamps
-  scores: seq[float32]          # Per-chunk engagement scores
-
-proc detectAll(container: InputContainer): EngagementData =
-  result.faces = analyzeFaces(container)
-  result.speakers = analyzeSpeakers(container)
-  result.scores = combineSignals(result.faces, result.speakers, ...)
-
-# Stage 2: Convert to boolean for timeline
-proc toBoolean(data: EngagementData, threshold: float32): seq[bool] =
-  return data.scores.map(proc(s: float32): bool = s >= threshold)
-
-# Stage 3: Timeline builder (existing)
-let engagementData = detectAll(container)
-let hasHighEngagement = toBoolean(engagementData, 0.7)
-let timeline = initLinearTimeline(..., hasHighEngagement, ...)
-
-# Stage 4: Reframing uses rich data (NEW)
-if args.reframe:
-  applyDynamicCrop(timeline, engagementData.faces)
-```
-
-## Data Flow
-
-### Request Flow
-
-```
-User CLI Input
-    ↓
-Parse Args → Open Media (FFmpeg demux)
-    ↓
-Decode Frames/Audio
-    ↓
-┌──────────────────────────────────────────┐
-│         Analysis Layer (Parallel)        │
-│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐ │
-│  │Audio │  │Motion│  │ Face │  │Speaker│ │
-│  │ RMS  │  │ Diff │  │Detect│  │Diariz │ │
-│  └──┬───┘  └──┬───┘  └──┬───┘  └──┬────┘ │
-│     │         │         │         │      │
-│     └─────────┴─────────┴─────────┘      │
-│                  ↓                        │
-│         Engagement Scorer                 │
-│       (Weighted Combination)              │
-└──────────────────┬───────────────────────┘
-                   ↓
-         ┌─────────────────┐
-         │  Boolean Array  │  [TTTFFFFTTTTT...]
-         │  (per chunk)    │
-         └────────┬────────┘
-                  ↓
-         ┌─────────────────┐
-         │ Timeline Builder│
-         │ (chunkify bool  │
-         │  → Clip objects)│
-         └────────┬────────┘
-                  ↓
-         ┌─────────────────┐
-         │  Apply Effects  │
-         │ (cut/speed/vol) │
-         └────────┬────────┘
-                  ↓
-      ┌───────────┴──────────┐
-      ↓                      ↓
-   Render                Export
- (FFmpeg encode)        (JSON/XML)
-      ↓                      ↓
-  Output.mp4         timeline.json
-```
-
-### Engagement Analysis Data Flow (NEW)
-
-```
-Video Input
-    ↓
-FFmpeg Decode
-    ↓
-┌────────────────────────────────────────────┐
-│          Frame-by-Frame Analysis           │
-├────────────────────────────────────────────┤
-│                                            │
-│  Video Frames → MediaPipe/OpenCV           │
-│                 ↓                          │
-│          Face Detection                    │
-│          (faces/frame)                     │
-│                 ↓                          │
-│          Track ROI positions               │
-│                                            │
-│  Audio Stream → FFmpeg Filter Graph        │
-│                 ↓                          │
-│          RMS Calculation                   │
-│          (loudness/chunk)                  │
-│                                            │
-│  Audio File → Pyannote Diarization         │
-│                 ↓                          │
-│          Speaker Segments                  │
-│          (who speaks when)                 │
-│                                            │
-│  Audio + Transcript → Whisper              │
-│                 ↓                          │
-│          Text Transcript                   │
-│          (words + timestamps)              │
-│                                            │
-└──────────────┬─────────────────────────────┘
-               ↓
-┌──────────────────────────────────────────┐
-│       Engagement Scoring Engine          │
-├──────────────────────────────────────────┤
-│                                          │
-│  Inputs:                                 │
-│  - Face count & confidence per frame     │
-│  - Audio RMS level per chunk             │
-│  - Speaker change frequency              │
-│  - Transcript word rate                  │
-│                                          │
-│  Scoring Formula:                        │
-│    engagement_score =                    │
-│      w1 * face_score +                   │
-│      w2 * audio_score +                  │
-│      w3 * speaker_score +                │
-│      w4 * transcript_score               │
-│                                          │
-│  Output: seq[float32] (per chunk)        │
-│                                          │
-└──────────────┬───────────────────────────┘
-               ↓
-        Threshold to Boolean
-               ↓
-        Timeline Builder
-               ↓
-        Clip Sequence with Effects
-```
-
-### State Management
-
-- **Immutable detection results**: Face regions, speaker segments cached per input file
-- **Mutable timeline construction**: Boolean arrays modified by margin/smoothing operations
-- **Persistent metadata**: Engagement scores stored in Clip metadata for export
-- **Frame-level ROI tracking**: Face positions accumulated for reframing decision
-
-## Key Data Structures
-
-### Existing Auto-Editor Structures (Reused)
-
-**InputContainer:**
-```nim
-type InputContainer = object
-  formatContext: ptr AVFormatContext
-  video: seq[VideoStream]
-  audio: seq[AudioStream]
-  subtitle: seq[SubtitleStream]
-```
-
-**Timeline v3:**
-```nim
-type v3 = object
-  tb: AVRational              # Time base
-  bg: RGBColor                # Background color
-  v: seq[seq[Clip]]           # Video tracks
-  a: seq[seq[Clip]]           # Audio tracks
-  effects: seq[seq[Action]]   # Global effect pool
-
-type Clip = object
-  src: ptr string             # Source file
-  start: int64                # Timeline start
-  dur: int64                  # Duration
-  offset: int64               # Source offset
-  effects: uint32             # Effect index
-  stream: int32               # Stream index
-```
-
-### NEW: Engagement Analysis Structures
-
-**FaceRegion:**
-```nim
-type FaceRegion = object
-  frameIndex: int             # Frame number
-  boxes: seq[BoundingBox]     # Detected face boxes
-  confidence: seq[float32]    # Detection confidence per face
-  landmarks: seq[FaceLandmarks] # Optional: 68-point landmarks
-
-type BoundingBox = object
-  x, y, w, h: int             # Pixel coordinates
-
-type FaceLandmarks = object
-  points: array[68, (int, int)] # MediaPipe 68-point model
-```
-
-**SpeakerSegment:**
-```nim
-type SpeakerSegment = object
-  start: float64              # Start time (seconds)
-  end: float64                # End time (seconds)
-  speaker: string             # Speaker ID (e.g., "SPEAKER_00")
-  confidence: float32         # Diarization confidence
-```
-
-**TranscriptWord:**
-```nim
-type TranscriptWord = object
-  word: string                # Transcribed text
-  start: float64              # Word start time
-  end: float64                # Word end time
-  speaker: Option[string]     # Speaker if diarized
-  confidence: float32         # ASR confidence
-```
-
-**EngagementScore:**
-```nim
-type EngagementScore = object
-  chunkIndex: int             # Time chunk index
-  score: float32              # Composite 0.0-1.0
-  components: EngagementComponents
-
-type EngagementComponents = object
-  faceScore: float32          # Face presence/count contribution
-  audioScore: float32         # Audio energy contribution
-  speakerScore: float32       # Speaker variation contribution
-  transcriptScore: float32    # Speech rate contribution
-```
-
-**EngagementMetadata (extends Clip):**
-```nim
-# Option 1: Extend Clip directly
-type ClipWithEngagement = object
-  clip: Clip                  # Existing clip structure
-  engagementScore: float32    # Average engagement for this clip
-  faceRegions: seq[FaceRegion] # Face data for reframing
-
-# Option 2: Side table (cleaner, backward compatible)
-type EngagementTable = Table[int, EngagementMetadata]
-  # Key = clip index, Value = engagement data
-
-type EngagementMetadata = object
-  avgScore: float32
-  maxScore: float32
-  faceRegions: seq[FaceRegion]
-  speakerSegments: seq[SpeakerSegment]
-```
-
-## Integration Points with Existing Auto-Editor
-
-### 1. Analysis Layer Integration
-
-**Existing Pattern:**
-```nim
-# src/analyze/audio.nim
-proc analyzeAudio*(container: InputContainer, threshold: float32): seq[bool]
-
-# src/analyze/motion.nim
-proc analyzeMotion*(container: InputContainer, threshold: float32): seq[bool]
-
-# src/analyze/subtitle.nim
-proc analyzeSubtitle*(container: InputContainer, pattern: string): seq[bool]
-```
-
-**NEW Pattern (follows same signature):**
-```nim
-# src/analyze/face.nim
-proc analyzeFaces*(container: InputContainer, minConfidence: float32): seq[FaceRegion]
-
-# src/analyze/speaker.nim
-proc analyzeSpeakers*(container: InputContainer): seq[SpeakerSegment]
-
-# src/analyze/engagement.nim
-proc analyzeEngagement*(container: InputContainer, weights: EngagementWeights): seq[float32]
-```
-
-**Integration Point:** `src/palet/edit.nim` - Add new detection functions to edit expression evaluator
+**Integration pattern:** Producer-consumer model where batch orchestrator produces jobs, worker pool consumes via FFmpeg pipeline.
 
 ```nim
-# Existing in editEval():
-of "audio":
-  return analyzeAudio(container, threshold)
-of "motion":
-  return analyzeMotion(container, threshold)
+# src/batch.nim
+type
+  BatchJob* = object
+    inputPath*: string
+    outputPath*: string
+    args*: mainArgs  # Reuse existing args type
+    status*: JobStatus
+    startTime*: Time
+    endTime*: Time
+    error*: string
 
-# NEW additions:
-of "face":
-  let faceRegions = analyzeFaces(container, minConfidence)
-  return faceRegionsToBoolean(faceRegions, chunkDuration)
+  JobQueue* = object
+    jobs*: seq[BatchJob]
+    maxWorkers*: int
+    activeJobs*: int
+    completed*: int
+    failed*: int
 
-of "speaker":
-  let segments = analyzeSpeakers(container)
-  return speakerSegmentsToBoolean(segments, chunkDuration)
-
-of "engage":
-  let scores = analyzeEngagement(container, weights)
-  return scores.map(proc(s: float32): bool = s >= threshold)
+proc processBatch*(inputPaths: seq[string], args: mainArgs,
+                   maxWorkers: int = 4): BatchResult
 ```
 
-### 2. Timeline Construction Integration
+**How it works:**
+1. Parse batch input (glob pattern, directory, or file list)
+2. Create JobQueue with one BatchJob per file
+3. Spawn worker pool (threads or processes) calling existing `editMedia(args)` per job
+4. Aggregate progress bars (show per-file + overall progress)
+5. Generate batch summary report (successes, failures, total time)
 
-**Existing Flow:**
-```nim
-# src/edit.nim
-var hasLoud = interpretEdit(args, container, tb, bar)  # seq[bool]
-mutMargin(hasLoud, startMargin, endMargin)             # Apply margins
-var actionIndex = hasLoud.map(toInt)                   # Convert to indices
-tlV3 = initLinearTimeline(src, tb, bg, mi, actionMap, actionIndex)
-```
+**Integration with existing code:**
+- **src/main.nim**: Detect batch mode via `--batch` flag or multiple positional args, delegate to `batch.processBatch()`
+- **Reuses existing pipeline**: Each worker calls `editMedia(args)` from edit.nim with different input path
+- **No changes to analyzers**: Audio, motion, engagement analyzers don't know they're in batch mode
+- **Cache benefits batch**: First video caches engagement analysis, subsequent videos reuse if same timebase
 
-**Extended Flow (backward compatible):**
-```nim
-# src/edit.nim
-var hasLoud = interpretEdit(args, container, tb, bar)  # seq[bool]
-mutMargin(hasLoud, startMargin, endMargin)
-var actionIndex = hasLoud.map(toInt)
+**Research validation:**
+Per [Automated Video Processing with FFmpeg and Docker](https://img.ly/blog/building-a-production-ready-batch-video-processing-server-with-ffmpeg/), Docker-based batch video processing uses producer-consumer model with FastAPI layer producing jobs and async workers consuming. For CLI tools, simpler approach: sequential processing with optional parallel workers (controlled by `--concurrent N` flag).
 
-# NEW: Optionally compute engagement metadata
-var engagementTable: EngagementTable
-if args.analyzeEngagement:
-  engagementTable = buildEngagementTable(container, args, tb)
+FFmpeg itself doesn't have built-in batch processing—tools wrap it. Honeyclip follows this pattern: `batch.nim` wraps the existing single-file `editMedia()` call.
 
-tlV3 = initLinearTimeline(src, tb, bg, mi, actionMap, actionIndex)
+**Build order:** Phase 1 (lowest risk, highest user value)
 
-# NEW: Attach engagement metadata to timeline
-if args.analyzeEngagement:
-  attachEngagementMetadata(tlV3, engagementTable)
-```
+### 2. Chapter Detection (NEW: src/analyze/chapters.nim)
 
-### 3. Export Integration
+**Purpose:** Segment video into semantic chapters based on transcript topic boundaries.
 
-**Existing Export (JSON):**
-```nim
-# src/exports/json.nim
-proc exportJsonTl*(tl: v3, version: string, output: string) =
-  # Serialize timeline to JSON
-  writeFile(output, toJson(tl))
-```
-
-**Extended Export (with engagement scores):**
-```nim
-# src/exports/json.nim
-proc exportJsonTl*(tl: v3, version: string, output: string,
-                   engagement: Option[EngagementTable] = none(EngagementTable)) =
-  var json = toJson(tl)
-
-  if engagement.isSome:
-    # Add engagement metadata to JSON
-    json["engagement"] = toJson(engagement.get)
-
-  writeFile(output, json)
-```
-
-### 4. Cache Integration
-
-**Existing Cache:**
-```nim
-# src/cache.nim
-proc getCachedAnalysis(inputPath: string, analysisType: string): Option[seq[bool]]
-proc setCachedAnalysis(inputPath: string, analysisType: string, data: seq[bool])
-```
-
-**Extended Cache (for expensive operations):**
-```nim
-# src/cache.nim
-proc getCachedFaces(inputPath: string): Option[seq[FaceRegion]]
-proc setCachedFaces(inputPath: string, data: seq[FaceRegion])
-
-proc getCachedSpeakers(inputPath: string): Option[seq[SpeakerSegment]]
-proc setCachedSpeakers(inputPath: string, data: seq[SpeakerSegment])
-
-# Cache key based on input hash + detector version
-proc makeCacheKey(inputPath: string, detectorType: string, version: string): string
-```
-
-**Why caching matters:**
-- Face detection: ~5-20 FPS on CPU (slow for long videos)
-- Speaker diarization: ~10-60 seconds for 1hr audio (expensive)
-- Audio RMS: Fast, cache optional
-- Motion detection: Moderate, cache optional
-
-## Scaling Considerations
-
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| **Short clips (< 5 min)** | Process inline, no caching needed. Single-threaded analysis OK. |
-| **Medium videos (5-60 min)** | Cache expensive detections (face, speaker). Parallelize analysis using FFmpeg filter threading. |
-| **Long videos (1hr+)** | Mandatory caching. Batch process frames (e.g., 1 FPS sampling for face detection). Consider GPU acceleration for face detection. |
-| **Batch processing** | Pre-compute all analysis, store in cache. Separate analysis + edit phases. Use persistent cache (SQLite or file-based). |
-
-### Scaling Priorities
-
-1. **First bottleneck: Face detection CPU cost**
-   - **Symptom:** Processing takes >10x realtime (e.g., 1hr video takes 10hr)
-   - **Fix:**
-     - Reduce sampling rate (analyze every Nth frame, interpolate between)
-     - Use GPU acceleration (CUDA for MediaPipe, if available)
-     - Cache detection results aggressively
-     - Use faster models (MediaPipe Lite vs Full)
-
-2. **Second bottleneck: Speaker diarization latency**
-   - **Symptom:** 5+ minute startup time for diarization model loading
-   - **Fix:**
-     - Lazy load pyannote model (only when `--edit` uses `speaker()`)
-     - Keep model in memory across multiple files (batch mode)
-     - Use quantized models (INT8 vs FP32)
-     - Cache speaker segments permanently
-
-3. **Third bottleneck: Memory for long videos**
-   - **Symptom:** OOM when loading entire face detection results
-   - **Fix:**
-     - Stream-based processing (don't load all frames into memory)
-     - Chunk-based aggregation (process 10min segments independently)
-     - Lazy evaluation (compute engagement only for visible timeline regions)
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Running All Detectors Unconditionally
-
-**What people do:** Run face detection, speaker diarization, and transcript generation for every video
-
-**Why it's wrong:**
-- Wastes 10-100x processing time if user only needs audio detection
-- User runs `--edit '(audio)'` but face detector still runs
-
-**Do this instead:**
-- Parse `--edit` expression first, determine which detectors are needed
-- Only instantiate required analyzers
-- Use lazy evaluation pattern
+**Integration pattern:** Analyzer following existing audio.nim/motion.nim/engagement.nim pattern, produces seq[ChapterSegment] consumed by timeline.
 
 ```nim
-# BAD: Always run everything
-let faces = analyzeFaces(container)
-let speakers = analyzeSpeakers(container)
-let engagement = analyzeEngagement(container)
-let hasLoud = interpretEdit(args, container)  # Might only use audio!
+# src/analyze/chapters.nim
+type
+  ChapterSegment* = object
+    startMs*: int64
+    endMs*: int64
+    title*: string        # Auto-generated from transcript
+    confidence*: float32  # 0-1 confidence in boundary
 
-# GOOD: Parse edit expression first
-let requiredAnalyzers = parseEditExpression(args.edit)
-var faces: seq[FaceRegion]
-if "face" in requiredAnalyzers or "engage" in requiredAnalyzers:
-  faces = analyzeFaces(container)
-# Only compute what's needed
+proc detectChapters*(transcript: Transcript,
+                     params: ChapterParams): seq[ChapterSegment]
 ```
 
-### Anti-Pattern 2: Per-Frame Engagement Scoring
+**How it works:**
+1. **Input:** Transcript with word-level timestamps and sentence boundaries (already available from existing whisper integration)
+2. **Segmentation:** Apply text segmentation algorithm (sliding window + cosine similarity, or hierarchical clustering)
+3. **Title generation:** Extract keywords from segment text or use first sentence as title
+4. **Output:** seq[ChapterSegment] with timestamps and titles
 
-**What people do:** Compute engagement score independently for every frame
+**Integration with existing code:**
+- **Input source:** Consumes `Transcript` from `src/transcript/types.nim` (already structured with segments and words)
+- **Called by:** New subcommand `src/cmds/chapters.nim` or integrated into `analyze` workflow
+- **Output format:** Export to YouTube chapters format (timestamp + title), EDL markers, or JSON
+- **Timeline integration:** ChapterSegment boundaries can inform clip detection boundaries (don't split clips across chapters)
 
-**Why it's wrong:**
-- Engagement is temporal (requires context from nearby frames)
-- Speaker changes matter, but single frame doesn't show speaker context
-- Noisy frame-level scores → unstable timeline cuts
+**Architectural pattern match:**
+```nim
+# Existing: src/analyze/audio.nim
+proc audio*(bar: Bar, container: InputContainer, path: string,
+            tb: AVRational, stream: int32): seq[float32]
 
-**Do this instead:**
-- Use chunk-based scoring (align with audio chunk duration, e.g., 0.1s)
-- Apply temporal smoothing (moving average over 1-3 seconds)
-- Aggregate features within chunks before scoring
+# New: src/analyze/chapters.nim (same signature style)
+proc chapters*(bar: Bar, transcript: Transcript,
+               params: ChapterParams): seq[ChapterSegment]
+```
+
+**Research validation:**
+Per [Chapter-Llama: Efficient Chaptering](https://openaccess.thecvf.com/content/CVPR2025/papers/Ventura_Chapter-Llama_Efficient_Chaptering_in_Hour-Long_Videos_with_LLMs_CVPR_2025_paper.pdf), recent research (2024-2026) uses LLMs (Chapter-Llama) or hierarchical text segmentation (MiniSeg on YTSeg benchmark) for video chaptering. These operate on transcripts, not raw video, which fits honeyclip's existing whisper → transcript pipeline perfectly.
+
+Local implementation strategy:
+1. **Phase 1 (MVP):** Simple sliding window with TF-IDF cosine similarity for topic shifts (no LLM required)
+2. **Phase 2 (Advanced):** Optional LLM integration via ONNX Runtime (if user provides GGUF model path) for title generation
+
+**Build order:** Phase 2 (after engagement scoring working, before GPU acceleration complexity)
+
+### 3. Preview Generation (EXISTING: src/render/previews.nim)
+
+**Status:** **Already implemented in v1.1!** Full preview generation module exists.
+
+**Current capabilities:**
+- Contact sheet generation (thumbnail grid)
+- Best frame thumbnails (histogram-based selection)
+- Video snippets (3-second start/middle/end previews)
+- Side-by-side comparison (original vs reframed)
+- Overview video (concatenated snippets)
+
+**Integration points:**
+- Used by `src/cmds/analyze.nim` for clip preview workflow
+- Uses `findFFmpegPath()` to locate build/bin/ffmpeg (prefers honeyclip's built FFmpeg)
+- Generates previews in `{video}_previews/` subdirectory
+- Burns metadata (clip rank, timestamps) into previews
+
+**What v1.2 needs to add:**
+- Batch preview generation (apply to multiple clips at once)
+- Progress reporting during preview generation (currently no progress bar)
+- Preview optimization for 4K videos (downscale before thumbnail extraction)
+
+**Modifications for batch context:**
+```nim
+# New: Batch wrapper in src/batch.nim
+proc generateBatchPreviews*(jobs: seq[BatchJob],
+                            mode: PreviewMode): seq[PreviewResult] =
+  var results: seq[PreviewResult] = @[]
+  for job in jobs:
+    # Extract clips from job.outputPath or engagement data
+    let clips = loadClipsFromEngagement(job.inputPath)
+    let result = generatePreviews(job.inputPath, clips, mode)
+    results.add(result)
+  results
+```
+
+**Research validation:**
+Per [Generating thumbnails 3.8x faster with FFmpeg seeking](https://sebi.io/posts/2024-12-21-faster-thumbnail-generation-with-ffmpeg-seeking/), input seeking (keyframe parsing) is 3.8x faster than fps filtering. The existing implementation already uses this pattern (`-ss` before `-i`).
+
+Per [Extracting Thumbnails Faster with FFmpeg](https://wistia.com/learn/marketing/faster-thumbnail-extraction-ffmpeg), I-frame extraction is most efficient (select='eq(pict_type,I)'), and the existing thumbnail filter implements histogram-based selection.
+
+**No architecture changes needed** — preview generation already structured for reuse.
+
+**Build order:** Phase 3 (enhancement of existing feature)
+
+### 4. GPU Acceleration (MODIFIED: src/ml/facedetect.nim, build system)
+
+**Purpose:** Offload face detection to CUDA-capable GPU for 3-10x speedup on ML inference.
+
+**Integration pattern:** Add GPU backend selection to existing ML modules, preserve CPU fallback.
 
 ```nim
-# BAD: Per-frame scoring
-for frame in videoFrames:
-  let faces = detectFaces(frame)
-  let score = if faces.len > 0: 1.0 else: 0.0
-  scores.add(score)
+# src/ml/facedetect.nim (modified)
+type
+  AcceleratorBackend* = enum
+    CPU, CUDA, OpenCL
 
-# GOOD: Chunk-based with temporal context
-for chunk in timeChunks:
-  let frames = chunk.frames  # e.g., 3 frames @ 30fps = 0.1s
-  let avgFaces = frames.map(detectFaces).map(len).sum / frames.len
-  let faceScore = min(avgFaces / 2.0, 1.0)  # Normalize
-
-  let audioRMS = calcChunkRMS(chunk.audio)
-  let audioScore = if audioRMS > threshold: 1.0 else: 0.0
-
-  let compositeScore = 0.6 * faceScore + 0.4 * audioScore
-  scores.add(compositeScore)
+proc detect*(image: ptr uint8, width, height, step: int,
+             backend: AcceleratorBackend = CPU): seq[FaceRect]
 ```
 
-### Anti-Pattern 3: Ignoring Existing Timeline Structure
+**How it works:**
+1. **Build system** (honeyclip.nimble): Add CUDA build flags when `ENABLE_CUDA=1`
+2. **Runtime detection**: Check for CUDA availability via library probe
+3. **Backend dispatch**: Route inference calls to CUDA kernel if available, fallback to CPU
+4. **Memory management**: Pin memory for GPU transfers (cudaMallocHost), reuse buffers across frames
 
-**What people do:** Build parallel data structures for engagement, bypass timeline system
+**Integration with existing code:**
+- **ML modules**: Modify `src/ml/facedetect.nim` and `src/ml/onnx.nim` to accept backend parameter
+- **Analyzers**: `src/analyze/faces.nim` passes backend from CLI flag `--gpu` or env var `ENABLE_CUDA=1`
+- **Cache invalidation**: Cache keys include backend (cache/face_detection_cpu.bin vs cache/face_detection_cuda.bin)
 
-**Why it's wrong:**
-- Breaks compatibility with exports (Premiere, Final Cut, etc.)
-- Duplicates logic for clip merging, effect application
-- Hard to compose engagement with existing `--edit` expressions
+**Research validation:**
+Per [Hardware-Accelerated Machine Learning | Immich](https://docs.immich.app/features/ml-hardware-acceleration/), CUDA is most reliable among hardware acceleration backends for face detection. OpenCV supports CUDA acceleration via `cuda` module. ONNX Runtime supports CUDA via `CUDAExecutionProvider`.
 
-**Do this instead:**
-- Convert engagement scores to boolean arrays (threshold)
-- Feed into existing timeline builder
-- Store rich metadata as side table, reference by clip index
+Per [Computer vision algorithms acceleration using CUDA](https://link.springer.com/article/10.1007/s10586-020-03090-6), face detection sees 1.2-13x speedup with CUDA depending on model.
 
+**Critical constraints:**
+- CUDA requires NVIDIA GPU (check via `nvidia-smi`)
+- OpenCL more portable but slower than CUDA
+- Build complexity: CUDA toolkit dependency, platform-specific compilation
+- Memory overhead: GPU memory separate from system RAM
+
+**Implementation stages:**
+1. **Phase 1:** Add CUDA backend to libfacedetection (existing C++ library has CUDA support)
+2. **Phase 2:** Add CUDA backend to ONNX Runtime inference (CUDAExecutionProvider)
+3. **Phase 3:** Add OpenCL backend for AMD/Intel GPUs (broader compatibility)
+
+**Build order:** Phase 4 (after core features working, before 4K optimization which reduces GPU load)
+
+### 5. 4K Memory Optimization (MODIFIED: src/av.nim, src/analyze/*)
+
+**Purpose:** Reduce memory footprint when processing 4K video (3840×2160 = 8.3MP per frame vs 1920×1080 = 2.1MP).
+
+**Integration pattern:** Optimize frame buffer management and analyzer downsizing without changing API contracts.
+
+**Current memory hotspots:**
+1. **Frame decoding loop** (av.nim): Allocates full-resolution frame buffers
+2. **Analyzer buffering** (analyze/audio.nim, analyze/motion.nim): Accumulates frames for batch processing
+3. **ML inference** (analyze/faces.nim): Passes full-resolution frames to face detector
+
+**Optimization strategies:**
+
+#### Strategy 1: Adaptive downscaling in analyzers
 ```nim
-# BAD: Separate engagement timeline
-type EngagementTimeline = object
-  segments: seq[EngagementSegment]  # Parallel to v3 timeline
-
-proc buildEngagementTimeline(...): EngagementTimeline  # Doesn't use v3!
-
-# GOOD: Integrate with v3 timeline
-proc analyzeEngagement(...): seq[float32]  # Scores per chunk
-
-# Convert to boolean for timeline
-let hasHighEngagement = scores.map(proc(s: float32): bool = s >= threshold)
-
-# Build v3 timeline (existing code path)
-let tl = initLinearTimeline(..., hasHighEngagement, ...)
-
-# Attach engagement metadata as side table
-let metadata = buildEngagementMetadata(scores, faces, speakers)
-tl.engagementMetadata = some(metadata)  # Optional field in v3
+# src/analyze/faces.nim (modified)
+proc faces*(bar: Bar, container: InputContainer, path: string, tb: AVRational,
+            targetWidth: int = 640): seq[FrameFaces] =
+  # Downscale to targetWidth before face detection
+  # 4K (3840×2160) → 640×360 = 14x fewer pixels
+  # Face detection accuracy impact: <5% (faces must be >32px wide)
 ```
 
-### Anti-Pattern 4: Reframing Without Face Tracking
+**Where to apply:**
+- Face detection: Downscale to 640×360 (minimal accuracy loss, faces still >32px)
+- Motion detection: Already uses downscaling (see `analyze/motion.nim` — samples at `downsample: int = 160`)
+- Engagement scoring: Uses downscaled signals from face/motion analyzers
 
-**What people do:** Crop video to first detected face per frame
+**Memory savings:**
+- 4K frame: 3840×2160×3 bytes (RGB) = 24.9 MB
+- 640×360 frame: 640×360×3 bytes = 0.69 MB
+- **36x reduction** in memory per frame for ML analysis
 
-**Why it's wrong:**
-- Face jumps between people → jittery output
-- No temporal consistency (camera whips around)
-- Breaks on multi-person scenes (arbitrary choice)
-
-**Do this instead:**
-- Track faces across frames (assign persistent IDs)
-- Smooth ROI positions (exponential moving average)
-- Prioritize primary speaker (combine with diarization)
-- Fallback to centered crop when no faces
-
+#### Strategy 2: Streaming decode (already implemented!)
 ```nim
-# BAD: Per-frame independent crop
-for frame in frames:
-  let faces = detectFaces(frame)
-  if faces.len > 0:
-    let cropBox = faces[0].box  # Arbitrary first face
-    applyCrop(frame, cropBox)
-
-# GOOD: Tracked ROI with smoothing
-var tracker = initFaceTracker()
-var smoothedROI = CenterROI  # Start at center
-
-for frame in frames:
-  let faces = detectFaces(frame)
-  let trackedFaces = tracker.update(faces)  # Persistent IDs
-
-  let primaryFace = selectPrimarySpeaker(trackedFaces, speakerSegments)
-  if primaryFace.isSome:
-    smoothedROI = smoothROI(smoothedROI, primaryFace.get.box, alpha=0.1)
-
-  applyCrop(frame, smoothedROI)
+# src/av.nim - decode iterator already streams frames
+iterator decode*(container: InputContainer, index: cint,
+                 codecCtx: ptr AVCodecContext, frame: ptr AVFrame): ptr AVFrame =
+  # Only one frame in memory at a time - no buffering
+  for decodedFrame in ...:
+    yield frame  # Caller processes immediately, frame reused
 ```
+
+**Current architecture already optimal** — frame-by-frame decode with immediate processing. No accumulation of full-resolution frames.
+
+#### Strategy 3: Audio sample buffer limits
+```nim
+# src/analyze/audio.nim (modified AudioIterator)
+type AudioIterator = ref object
+  fifo: ptr AVAudioFifo
+  maxBufferSize: int  # Already limits buffer size
+```
+
+**Current implementation already capped** — `maxBufferSize` prevents unbounded growth. For 4K videos with high audio bitrate, consider reducing fifo size from 1024 to 512 samples.
+
+#### Strategy 4: Cache downsized analysis
+```nim
+# src/cache.nim (modified procTag)
+proc procTag(path: string, tb: AVRational, kind, args: string): string =
+  # Include downsample factor in cache key
+  let key = fmt"{name}{ext}:{modTime:x}:{tb}:{args}:downscale={downscaleFactor}"
+```
+
+**Benefit:** First pass caches face detection at 640×360, subsequent renders reuse without re-analyzing 4K frames.
+
+**Research validation:**
+Per [NVIDIA RTX Accelerates 4K AI Video Gen](https://blogs.nvidia.com/blog/rtx-ai-garage-ces-2026-open-models-video-generation/), 4K AI video generation achieves 3x faster speeds and 60% less VRAM via PyTorch-CUDA optimizations and native precision support. The same principle applies: downscale for analysis, preserve original resolution for render.
+
+Per [Buffer Count and Buffer Fill](https://www.fastpix.io/blog/buffer-count-and-buffer-fill-for-smooth-video-streaming), codec efficiency (VP9 vs H.264) affects buffering needs. Our approach: downscale before ML analysis, use original resolution for final render.
+
+**Build order:** Phase 5 (after GPU acceleration, since downscaling reduces GPU load too)
+
+## Data Flow: Existing vs New
+
+### Existing Single-File Flow
+```
+CLI args → main() → editMedia() → Pipeline
+  ↓
+  av.open(video) → decode frames
+  ↓
+  analyze/audio → seq[float32]  ← caches to disk
+  analyze/motion → seq[float32] ← caches to disk
+  analyze/engagement → EngagementTimeline ← caches to disk
+  ↓
+  timeline.initLinearTimeline() → v3 (clips)
+  ↓
+  render/video → OutputContainer
+  render/audio → OutputContainer
+  ↓
+  exports/* → .fcpxml / .edl / .json
+```
+
+### New Batch Flow
+```
+CLI args → main() → detectBatchMode()
+  ↓ if batch mode
+  batch.processBatch() → JobQueue
+  ↓ per job
+  ┌─────────────────────────────────┐
+  │ editMedia(job.args)             │ ← reuses entire existing pipeline
+  │   (same flow as single-file)    │
+  └─────────────────────────────────┘
+  ↓ aggregate
+  BatchResult → report
+```
+
+**Key insight:** Batch processing is orchestration layer, not pipeline modification.
+
+### New Chapter Detection Flow
+```
+Transcript (existing from whisper)
+  ↓
+  analyze/chapters.detectChapters()
+    → segment by topic shifts (TF-IDF cosine similarity)
+    → generate titles (keyword extraction or first sentence)
+  ↓
+  seq[ChapterSegment] → export formats
+    → YouTube chapters (00:00:00 Title)
+    → EDL markers
+    → JSON metadata
+```
+
+**Integration with existing analyzers:**
+```nim
+# In analyze command or clips command
+let transcript = extractTranscript(inputPath, model)
+let chapters = detectChapters(transcript, params)
+let clips = detectClips(timeline, chapters)  # Pass chapters as boundary hints
+```
+
+### New Preview Generation Flow (Already Exists)
+```
+Engagement timeline + clips
+  ↓
+  render/previews.generatePreviews()
+    → Contact sheet (thumbnail grid)
+    → Best frame per clip (histogram filter)
+    → Video snippets (3s start/middle/end)
+  ↓
+  {video}_previews/*.jpg, *.mp4
+```
+
+**No architectural changes needed** — already integrated into analyze command.
+
+### New GPU Acceleration Flow
+```
+Frame → analyze/faces.nim
+  ↓ check backend
+  if GPU available:
+    ml/facedetect.nim (CUDA backend)
+      → cudaMallocHost (pin memory)
+      → launch CUDA kernel
+      → cudaMemcpy results
+  else:
+    ml/facedetect.nim (CPU backend)
+      → libfacedetection CPU inference
+  ↓
+  seq[FaceRect] (same output format)
+```
+
+**Key pattern:** Backend dispatch transparent to caller. Analyzer API unchanged.
+
+### New 4K Optimization Flow
+```
+av.decode() → 4K frame (3840×2160)
+  ↓
+  if analysis (not render):
+    render/video.reformat(frame, targetWidth=640)  ← downscale
+    ↓ 640×360 frame
+  ml/facedetect.nim
+    ↓ cached result
+  else (render):
+    use full 4K frame
+```
+
+**Key pattern:** Downscale for analysis, preserve original resolution for render.
+
+## Component Boundaries
+
+| Component | Responsibility | Communicates With | New/Modified | Phase |
+|-----------|---------------|-------------------|--------------|-------|
+| **batch.nim** | Job queue, worker pool, progress aggregation | main.nim (entry), edit.nim (per-job processing) | NEW | 1 |
+| **analyze/chapters.nim** | Topic segmentation, title generation | transcript/types (input), timeline.nim (boundary hints) | NEW | 2 |
+| **render/previews.nim** | Thumbnail/snippet generation | av.nim (decode), FFmpeg CLI (encoding) | EXISTING (add batch wrapper) | 3 |
+| **ml/facedetect.nim** | Face detection with backend dispatch | av.nim (frames), analyze/faces.nim (caller) | MODIFIED (add GPU) | 4 |
+| **av.nim** | Frame decoding, format conversion | All analyzers, renderers | MODIFIED (4K downscale helper) | 5 |
+| **cache.nim** | Disk caching for expensive operations | All analyzers | MODIFIED (cache key includes downscale factor) | 5 |
 
 ## Build Order & Dependencies
 
-### Phase 1: Core Analysis Components (Foundation)
+### Phase Structure Recommendation
 
-**Components:**
-1. Face detection module (`analyze/face.nim`)
-2. Speaker diarization module (`analyze/speaker.nim`)
-3. Engagement scoring module (`analyze/engagement.nim`)
+**Phase 1: Batch Processing**
+- **Why first:** Lowest risk, highest user value. No new dependencies, pure orchestration.
+- **Dependencies:** None (wraps existing pipeline)
+- **Delivers:** Process 10 videos without manual intervention
+- **Build steps:**
+  1. Implement batch.nim (job queue, worker pool)
+  2. Modify main.nim (detect batch mode)
+  3. Add progress aggregation
+  4. Test with existing single-file pipeline (no changes to analyzers)
 
-**Dependencies:**
-- External: MediaPipe/OpenCV (face detection)
-- External: Pyannote (speaker diarization)
-- Internal: Existing FFmpeg decode pipeline
+**Phase 2: Chapter Detection**
+- **Why second:** Builds on existing transcript pipeline, enables clip boundary improvements.
+- **Dependencies:** Existing whisper.cpp integration, transcript types
+- **Delivers:** YouTube chapters, EDL markers, improved clip detection
+- **Build steps:**
+  1. Implement analyze/chapters.nim (text segmentation)
+  2. Add cmds/chapters.nim (new subcommand)
+  3. Integrate with clips command (boundary hints)
+  4. Export formats (YouTube, EDL, JSON)
 
-**Build Order Rationale:**
-- Face detection is independent, build first
-- Speaker diarization is independent, build in parallel
-- Engagement scorer depends on both → build last
+**Phase 3: Preview Enhancements**
+- **Why third:** Builds on existing previews.nim, adds batch support.
+- **Dependencies:** Existing render/previews.nim
+- **Delivers:** Batch preview generation, progress reporting
+- **Build steps:**
+  1. Add batch wrapper (process multiple files)
+  2. Add progress bars to preview generation
+  3. Add 4K optimization (downscale before thumbnail)
+  4. Integrate with batch command
 
-**Integration Complexity:** LOW
-- Follows existing analyzer pattern (audio.nim, motion.nim)
-- No changes to core timeline structure yet
+**Phase 4: GPU Acceleration**
+- **Why fourth:** Complex dependencies (CUDA toolkit), optional feature.
+- **Dependencies:** CUDA toolkit (optional), modified build system
+- **Delivers:** 3-10x speedup on face detection with NVIDIA GPU
+- **Build steps:**
+  1. Add CUDA backend to ml/facedetect.nim
+  2. Add build flags (ENABLE_CUDA=1)
+  3. Add runtime GPU detection
+  4. Add fallback to CPU if CUDA unavailable
 
-### Phase 2: Edit Expression Integration
-
-**Components:**
-1. Add `face()`, `speaker()`, `engage()` to palet/edit.nim
-2. Boolean conversion utilities (FaceRegion → seq[bool])
-3. Caching layer for expensive detections
-
-**Dependencies:**
-- Internal: Phase 1 analyzers
-- Internal: Existing edit expression parser
-
-**Build Order Rationale:**
-- Can't test via CLI until edit expressions support new functions
-- Caching needed before integration (avoid re-computation during testing)
-
-**Integration Complexity:** MEDIUM
-- Extends existing parser (well-defined extension point)
-- Requires careful handling of chunk duration alignment
-
-### Phase 3: Timeline Metadata Extension
-
-**Components:**
-1. EngagementMetadata data structures
-2. Side table storage in v3 timeline
-3. JSON export with engagement scores
-
-**Dependencies:**
-- Internal: Phase 2 (need engagement data to store)
-- Internal: Existing v3 timeline structure
-
-**Build Order Rationale:**
-- Optional enhancement (doesn't break backward compatibility)
-- Enables advanced workflows (segment-level engagement in exports)
-
-**Integration Complexity:** LOW
-- Side table approach avoids modifying core Clip structure
-- JSON export already extensible
-
-### Phase 4: Reframing Engine
-
-**Components:**
-1. Face tracking (persistent IDs across frames)
-2. ROI smoothing (temporal stabilization)
-3. Dynamic crop filter integration
-4. Speaker-aware ROI selection
-
-**Dependencies:**
-- Internal: Phase 1 face detection
-- Internal: Phase 1 speaker diarization
-- Internal: Existing FFmpeg filter graph system
-
-**Build Order Rationale:**
-- Most complex component (tracking + smoothing + rendering)
-- Depends on all previous phases for input data
-- Can be built independently (doesn't block other features)
-
-**Integration Complexity:** HIGH
-- Modifies render pipeline (video.nim)
-- Requires new filter graph (crop with dynamic parameters)
-- Needs careful testing (visual quality, performance)
+**Phase 5: 4K Memory Optimization**
+- **Why last:** Optimization, not new feature. Benefits from GPU acceleration (less memory to transfer).
+- **Dependencies:** All analyzers, av.nim
+- **Delivers:** Reduced memory footprint for 4K videos
+- **Build steps:**
+  1. Add downscale helper to av.nim
+  2. Modify analyzers (faces, motion) to request downscaled frames
+  3. Update cache keys (include downscale factor)
+  4. Benchmark memory usage (verify 36x reduction for face detection)
 
 ### Dependency Graph
-
 ```
-┌──────────────┐     ┌──────────────┐
-│     Face     │     │   Speaker    │
-│  Detection   │     │ Diarization  │
-│(analyze/face)│     │(analyze/spkr)│
-└──────┬───────┘     └──────┬───────┘
-       │                    │
-       └─────────┬──────────┘
-                 ↓
-          ┌──────────────┐
-          │ Engagement   │
-          │   Scorer     │
-          │(analyze/eng) │
-          └──────┬───────┘
-                 ↓
-          ┌──────────────┐
-          │    Cache     │
-          │   Layer      │
-          └──────┬───────┘
-                 ↓
-          ┌──────────────┐
-          │  Edit Expr   │
-          │ Integration  │
-          │(palet/edit)  │
-          └──────┬───────┘
-                 ↓
-          ┌──────────────┐
-          │  Timeline    │
-          │  Metadata    │
-          └──────┬───────┘
-                 ↓
-          ┌──────────────┐
-          │  Reframing   │
-          │   Engine     │
-          │(render/refr) │
-          └──────────────┘
+Phase 1 (Batch Processing)
+  ↓ no dependencies
+
+Phase 2 (Chapter Detection)
+  ↓ depends on: existing transcript pipeline
+
+Phase 3 (Preview Enhancements)
+  ↓ depends on: Phase 1 (batch wrapper), existing previews.nim
+
+Phase 4 (GPU Acceleration)
+  ↓ depends on: existing ML modules (facedetect.nim)
+
+Phase 5 (4K Optimization)
+  ↓ depends on: Phase 4 (GPU reduces memory transfer), all analyzers
 ```
 
-**Critical Path:** Face Detection → Engagement → Edit Expressions → Timeline
-**Parallel Tracks:**
-- Speaker Diarization (independent until Engagement)
-- Reframing (independent until render phase)
+**Critical path:** Phase 1 → Phase 2 → Phase 3 can proceed in parallel with Phase 4 → Phase 5.
+
+## Scalability Considerations
+
+| Concern | At 10 videos | At 100 videos | At 1000 videos |
+|---------|--------------|---------------|----------------|
+| **Batch processing** | Sequential (30 min) | Parallel 4 workers (2 hrs) | Parallel 16 workers + disk I/O bottleneck |
+| **Cache disk usage** | 100 MB (10×10MB) | 1 GB (100×10MB) | 10 GB → implement cache eviction (LRU, keep 100 most recent) |
+| **Preview storage** | 50 MB (10×5MB) | 500 MB | 5 GB → warn user, offer cleanup |
+| **GPU memory** | 2 GB VRAM | 2 GB VRAM (same, processes sequentially) | 2 GB VRAM (no change) |
+| **4K memory per video** | 8 GB RAM (one 4K frame + buffers) | 8 GB RAM (same, sequential) | 8 GB RAM (no change with optimization) |
+
+**Bottlenecks:**
+- **Disk I/O:** Reading 4K video at 100 Mbps = 12.5 MB/s. NVMe SSD can sustain 3000 MB/s → not bottleneck until 240 parallel workers.
+- **Cache eviction:** After 100 videos, cache directory grows to 1 GB. Implement LRU eviction (already prototyped in cache.nim — keeps 10 most recent).
+- **Preview cleanup:** Warn user when preview directories exceed 1 GB total, offer batch cleanup command.
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Batch Processing with Shared State
+**What:** Reusing decoder/encoder contexts across files without cleanup
+**Why bad:** Memory leaks, corrupted state, crashes after 10th file
+**Instead:** Each BatchJob gets isolated `editMedia()` call with fresh containers
+
+### Anti-Pattern 2: Chapter Detection without Transcript
+**What:** Implementing scene-based chaptering (detect visual transitions)
+**Why bad:** Visual scenes ≠ semantic topics. YouTube users expect topic chapters, not shot changes.
+**Instead:** Require transcript for chapter detection. Scene detection already exists for clip boundaries.
+
+### Anti-Pattern 3: GPU Acceleration without CPU Fallback
+**What:** Fail if CUDA unavailable
+**Why bad:** Users without NVIDIA GPU can't use feature
+**Instead:** Detect GPU at runtime, fallback to CPU silently
+
+### Anti-Pattern 4: 4K Downscaling for All Operations
+**What:** Downscale before rendering output
+**Why bad:** User expects 4K output, not 640×360
+**Instead:** Downscale only for analysis (face detection, motion), preserve original resolution for render
+
+### Anti-Pattern 5: Batch Processing via Shell Script
+**What:** `for video in *.mp4; do honeyclip "$video"; done`
+**Why bad:** No progress aggregation, no failure recovery, restarts binary per file (cold start overhead)
+**Instead:** Native batch support with job queue and worker pool
 
 ## Sources
 
-### FFmpeg Pipeline Architecture
-- [Extend the FFmpeg Framework to Analyze Media Content](https://arxiv.org/pdf/2103.03539) - FFVA extension architecture
-- [FFmpeg Documentation](https://ffmpeg.org/ffmpeg.html) - Filtergraph and pipeline design
-- [Automate Video Analysis with Azure ML](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/analyze-video-computer-vision-machine-learning) - Cloud-based video analysis patterns
+### Architecture Patterns (HIGH confidence)
 
-### Face Detection Integration
-- [How to Process Live Video Stream Using FFMPEG and OpenCV](https://lembergsolutions.com/blog/how-process-live-video-stream-using-ffmpeg-and-opencv) - Integration patterns
-- [Face Detection Guide | MediaPipe](https://developers.google.com/mediapipe/solutions/vision/face_detector) - MediaPipe batch/video processing modes
-- [Efficient video face recognition based on frame selection](https://pmc.ncbi.nlm.nih.gov/articles/PMC7959602/) - Pipeline architecture with detection, tracking, recognition stages
+**Batch processing:**
+- [Automated Video Processing with FFmpeg and Docker | IMG.LY Blog](https://img.ly/blog/building-a-production-ready-batch-video-processing-server-with-ffmpeg/) — Producer-consumer model, FastAPI + async workers, profile-based templates
+- [Batch Processing Architecture | Swiftorial](https://www.swiftorial.com/swiftlessons/architecture-patterns_bkp/software-architecture-patterns/batch-processing-architecture) — Workflow orchestration, pipeline patterns
+- [Batch Architectural Design Patterns | Medium](https://medium.com/@pandeyarpit88/batch-architectural-design-patterns-and-tools-for-seamless-implementation-5a6fa1e03eb7) — Apache Airflow patterns, controller-based execution
 
-### Speaker Diarization
-- [pyannote/speaker-diarization](https://huggingface.co/pyannote/speaker-diarization-3.1) - Pyannote 3.1 architecture
-- [Best Speaker Diarization Models Compared 2026](https://brasstranscripts.com/blog/speaker-diarization-models-comparison) - Architecture comparison
-- [Deploy PyAnnote on Amazon SageMaker](https://aws.amazon.com/blogs/machine-learning/deploy-a-hugging-face-pyannote-speaker-diarization-model-on-amazon-sagemaker-as-an-asynchronous-endpoint/) - Integration patterns
+**Chapter detection:**
+- [Chapter-Llama: Efficient Chaptering | CVPR 2025](https://openaccess.thecvf.com/content/CVPR2025/papers/Ventura_Chapter-Llama_Efficient_Chaptering_in_Hour-Long_Videos_with_LLMs_CVPR_2025_paper.pdf) — LLM-based chaptering, 45.3% F1 score on VidChapters-7M
+- [From Text Segmentation to Smart Chaptering | EACL 2024](https://aclanthology.org/2024.eacl-long.25.pdf) — YTSeg benchmark, MiniSeg model, hierarchical segmentation
+- [Automatically determine video sections with AI | AssemblyAI](https://www.assemblyai.com/blog/automatically-determine-video-sections-with-ai-using-python) — Practical implementation guide
 
-### Engagement Analysis
-- [24 Automated Transcription Statistics 2026](https://sonix.ai/resources/automated-transcription-statistics/) - Engagement metrics (91% completion with subtitles)
-- [Video Engagement Metrics](https://mindstamp.com/blog/video-engagement-metrics) - Measurement patterns
-- [Video Big Data Analytics Architecture Survey](https://www.mdpi.com/2076-3417/15/14/8089) - Centralized, cloud, edge, hybrid architectures
+**Preview generation:**
+- [Generating thumbnails 3.8x faster with FFmpeg seeking | Sebastian Aigner](https://sebi.io/posts/2024-12-21-faster-thumbnail-generation-with-ffmpeg-seeking/) — Input seeking (keyframe parsing) 3.8x faster than fps filtering
+- [Extracting Thumbnails Faster with FFmpeg | Wistia](https://wistia.com/learn/marketing/faster-thumbnail-extraction-ffmpeg) — I-frame extraction, -ss before -i optimization, 5x speedup
+- [FFmpeg Mastery: Extracting Perfect Thumbnails | Medium](https://medium.com/@sergiu.savva/ffmpeg-mastery-extracting-perfect-thumbnails-from-videos-339a4229bb32) — Quality settings (-q:v 2), thumbnail filter
 
-### Segment Annotation
-- [Segment Anything Model 3 (SAM 3)](https://encord.com/blog/segment-anything-model-3/) - Data annotation pipeline architecture
-- [SAM 3 in CVAT](https://www.cvat.ai/resources/blog/sam-3-image-segmentation) - Integration patterns
-- [How to Build Data Pipelines for Media Industry](https://www.integrate.io/blog/data-pipelines-media-industry/) - Media pipeline patterns
+**GPU acceleration:**
+- [Hardware-Accelerated Machine Learning | Immich](https://docs.immich.app/features/ml-hardware-acceleration/) — CUDA vs OpenCL for face detection, CUDAExecutionProvider reliability
+- [CUDA - OpenCV](https://opencv.org/platforms/cuda/) — OpenCV CUDA module, GPU-accelerated computer vision
+- [Computer vision algorithms acceleration using CUDA | Springer](https://link.springer.com/article/10.1007/s10586-020-03090-6) — Performance analysis, 1.2-13x speedup
+
+**4K memory optimization:**
+- [NVIDIA RTX Accelerates 4K AI Video Gen | NVIDIA Blog](https://blogs.nvidia.com/blog/rtx-ai-garage-ces-2026-open-models-video-generation/) — 3x faster 4K generation, 60% less VRAM via PyTorch-CUDA optimizations
+- [Buffer Count and Buffer Fill | Fastpix](https://www.fastpix.io/blog/buffer-count-and-buffer-fill-for-smooth-video-streaming) — Codec efficiency (VP9 vs H.264), buffer size optimization
+- [Low Quality for High Quality: 2K Frames for 4K Streaming | IEEE](https://ieeexplore.ieee.org/document/9345461/) — Upscaling approach, render at lower resolution
+
+### Implementation Details (MEDIUM confidence)
+
+- FFmpeg filter documentation — Verified thumbnail filter, drawtext filter, tile filter
+- ONNX Runtime C++ API docs — Verified CUDAExecutionProvider usage
+- OpenCV CUDA module docs — Verified GPU backend selection pattern
 
 ---
-*Architecture research for: Video Engagement Analysis in FFmpeg Pipelines*
-*Researched: 2026-02-01*
+
+*Research completed: 2026-02-05*
+*Architecture validation: Extends existing patterns, no parallel systems required*
+*Ready for roadmap: Yes*

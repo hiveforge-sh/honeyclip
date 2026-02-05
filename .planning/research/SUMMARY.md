@@ -1,311 +1,282 @@
 # Project Research Summary
 
-**Project:** Auto-Editor Video Engagement Analysis Features
-**Domain:** Video engagement analysis and auto-clipping tools (local-first CLI)
-**Researched:** 2026-02-01
-**Confidence:** MEDIUM-HIGH
+**Project:** honeyclip v1.2 - Workflow & Performance
+**Domain:** Video processing CLI - batch processing, GPU acceleration, 4K optimization, chapter detection
+**Researched:** 2026-02-05
+**Confidence:** HIGH
 
 ## Executive Summary
 
-Auto-editor is adding video engagement analysis features to compete with cloud-based auto-clipping tools like OpusClip and Kapwing, while maintaining its local-first, privacy-focused architecture. The recommended approach leverages existing FFmpeg/whisper.cpp integration and adds face detection (libfacedetection or ONNX models), speaker diarization (Falcon SDK), and multi-modal engagement scoring. This enables automatic clip detection, virality scoring, auto-captions, and smart vertical reframing without cloud dependencies.
+honeyclip v1.2 extends an existing, validated video CLI tool with workflow and performance features. The research reveals that most requirements can be met with minimal new dependencies: only nim-toml for batch configuration files. GPU acceleration leverages existing CUDA/Metal support already integrated for whisper.cpp. 4K memory optimization is achieved through application-level patterns (downsampling frames before ML analysis) rather than new libraries. Chapter detection uses FFmpeg's built-in scene detection filter combined with transcript analysis. Preview generation already exists and needs only batch integration.
 
-The core differentiator is local processing with open-source transparency. Cloud competitors require $29-99/month subscriptions and upload video to their servers. Auto-editor can provide comparable features (transcription, engagement scoring, auto-clipping, multi-aspect-ratio export) while running entirely offline. The recommended stack uses CPU-friendly libraries (libfacedetection, ONNX Runtime) with optional GPU acceleration, following honeyclip's existing build patterns (static linking, cross-platform compilation via nimble).
+The recommended approach is to build workflow features first (batch processing, chapter detection) before performance optimizations (GPU acceleration, 4K memory optimization). This ordering allows users to gain immediate value from batch processing while the team validates GPU integration complexity on production workloads. Critical risk: GPU acceleration requires careful memory transfer management - frames must stay GPU-resident to avoid PCIe bandwidth bottlenecks that negate performance gains.
 
-Key risks center on build complexity and performance. Adding ML libraries (OpenCV, ONNX Runtime) to the existing FFmpeg build system creates cross-platform compilation challenges, particularly for Windows cross-compile via MinGW. Binary size can balloon from 10MB to 100MB+ without careful dependency management. Face detection at 30fps consumes significant CPU, requiring adaptive frame sampling (1-5fps analysis rate) and aggressive caching. Memory management at the Nim/C++ FFI boundary must follow strict patterns (GC_ref/GC_unref, shared allocation) to prevent leaks and crashes. Mitigation: establish build architecture and FFI patterns in Phase 1 before adding multiple ML libraries.
+The architecture cleanly extends existing patterns: batch processing wraps the single-file pipeline, chapter detection follows the analyzer pattern established by audio/motion/engagement modules, and GPU acceleration adds backend selection to existing ML modules. No parallel systems needed. The main technical debt risk is Nim's garbage collector not tracking C-allocated FFmpeg frame buffers - migration to --gc:orc recommended for deterministic cleanup of 32MB 4K frames.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The research identifies a pragmatic stack that builds on honeyclip's existing strengths (FFmpeg, whisper.cpp, Nim) while adding minimal new dependencies. All recommended libraries are open-source with permissive licenses (BSD, MIT, Apache 2.0) and provide C/C++ APIs compatible with Nim's FFI.
+v1.2 builds on the validated v1.0-v1.1 stack without major changes. Only one new dependency: nim-toml (50 KB) for batch configuration files. GPU acceleration extends existing CUDA 12.8 (Linux) and Metal (macOS) support from whisper.cpp by enabling OpenCV CUDA module via cmake flags. No new runtime dependencies - just build configuration changes.
 
 **Core technologies:**
-- **libfacedetection v3.0**: Face detection — BSD-3 license, no dependencies, 1000 FPS on CPU, cross-platform including ARM
-- **ONNX Runtime 1.23.2+**: Neural network inference — Industry standard, CPU/GPU support, C++ API, enables flexible model deployment
-- **OpenCV 4.13+**: Video frame processing and tracking — Most mature option, extensive documentation, Apache 2.0 license
-- **Falcon Speaker Diarization**: Speaker identification — Apache 2.0, C API, free tier 250 min/month, only viable local C++ diarization option
-- **FFmpeg 8.0.1 (existing)**: Video decoding and audio processing — Already integrated and proven reliable
-- **whisper.cpp 1.8.2 (existing)**: Speech-to-text transcription — Already integrated, provides foundation for transcript-based features
+- **nim-toml (NEW)**: Human-editable batch templates - chosen over JSON (no comments) and YAML (implicit typing bugs)
+- **OpenCV CUDA module (build flag)**: GPU-accelerated face detection - already have CUDA 12.8 for whisper, just enable OpenCV integration
+- **FFmpeg scdet filter (existing)**: Scene change detection for chapter boundaries - built-in, no new dependency
+- **Memory-mapped I/O (existing)**: FFmpeg already uses this - 4K optimization is application-level frame management, not library changes
+- **ONNX Runtime CoreML EP (optional)**: Enable via --use_coreml build flag on macOS for Apple Neural Engine acceleration
 
-**What NOT to use:**
-- MediaPipe (deprecated C++ support as of March 2023, Android/Python/Web only)
-- Cloud APIs (violates local-first architecture)
-- TensorFlow/PyTorch runtime (heavy dependencies vs lightweight ONNX Runtime)
-- Python-based solutions like pyannote.audio directly (requires Python runtime; use Falcon SDK instead)
-
-**Critical version compatibility:** ONNX Runtime 1.23+ supports ONNX opset 7-21, compatible with InsightFace models (opset 11). OpenCV 4.13+ requires C++11 minimum, compatible with Nim's C++ backend. All libraries confirmed cross-platform for Linux, macOS, Windows (MinGW), and ARM.
+**What NOT to add:**
+- TensorRT (NVIDIA): Overkill for v1.2, defer to Phase 3+ if needed
+- OpenCL: Deprecated on macOS, inferior to CUDA on Linux
+- Vulkan Compute: Immature video ecosystem
+- SQLite job queue: Start with simple TOML, add only if 1000+ video batches become common
 
 ### Expected Features
 
-Research shows auto-clipping tools have standardized on a core feature set. Missing any table stakes makes the product feel incomplete. Differentiators justify choosing honeyclip over cloud competitors.
+**Must have (table stakes) - Users expect these from modern video CLI tools:**
+- **Batch template/preset system**: Content creators process multiple videos with same settings - YAML/JSON config is standard (FFmpeg-batch, HandBrake presets)
+- **Batch progress reporting**: Overall progress (N/M files, ETA), not just current file - GNU Parallel's --progress is expected
+- **Batch error recovery**: One failure shouldn't stop 50-video overnight batch - job log with skip/resume capability
+- **Parallel processing**: Use all CPU cores, not serial - GNU Parallel pattern
+- **Chapter: Scene change detection**: Adobe/DaVinci/Final Cut all have this - FFmpeg filter provides parity
+- **Chapter: Transcript-based markers**: When transcripts exist, users expect auto-chapters from topic changes (Descript, Sonix)
+- **Preview: Low-res proxy generation**: 720p proxies for 4K+ source is standard NLE workflow
+- **Preview: Fast preview mode**: Quick preview at 2-3x faster than realtime before full render
+- **GPU: CUDA on Linux**: Linux users with NVIDIA expect CUDA for ML - 3-22x speedup for face detection
+- **GPU: Metal on macOS**: Apple's GPU API since 2014 - CoreML + Metal Performance Shaders expected
+- **Memory: Streaming decode**: 4K at 60fps = 1GB/sec uncompressed - frame-at-a-time is mandatory
+- **Memory: Frame pooling**: Reuse buffers to prevent allocation churn and fragmentation
 
-**Must have (table stakes):**
-- Automatic transcription with word-level timestamps (SRT/VTT export) — users expect this
-- Auto-caption generation with stylized text overlay — required for social media
-- Scene/moment detection for auto-clipping boundaries — defines "auto-clipping"
-- Multi-platform export (16:9 YouTube, 9:16 TikTok/Reels, 1:1 Instagram) — users expect this
-- Batch processing (one video → multiple ranked clips) — expected behavior
+**Should have (differentiators) - Novel features that set honeyclip apart:**
+- **Engagement-driven chapters**: Use existing engagement scores to set boundaries at high-engagement moments (novel in CLI space)
+- **Hook pattern chapters**: Chapters at detected hooks from v1.1 (questions, cliffhangers) - "Chapter 1: How to optimize..."
+- **Multi-modal boundaries**: Combine transcript + scene changes + engagement drops for smarter boundaries (most tools use single signal)
+- **GPU automatic fallback**: Detect CUDA/Metal availability, gracefully fall back to CPU without user intervention
+- **Hybrid CPU+GPU pipeline**: GPU for face detection, CPU for I/O and timeline - minimize data transfer overhead
 
-**Should have (competitive advantage):**
-- Local processing with no cloud upload — MAJOR differentiator, privacy-conscious users can't use cloud tools
-- Engagement scoring using local signals (audio energy, motion, speech rate, pauses) — matches OpusClip's Virality Score but transparent and local
-- Speaker reframing for vertical conversion (face tracking + smart crop) — matches OpusClip's ReframeAnything premium feature
-- Open-source and transparent algorithms — builds trust vs proprietary black boxes
-- No subscription lock-in — free/donate model vs $29-99/month recurring payments
-
-**Defer (v2+):**
-- ClipAnything-style natural language search ("find all moments where speaker says X") — requires semantic embeddings, high complexity
-- Advanced B-roll insertion points — suggests where to add B-roll but doesn't generate/fetch it
-- Multi-speaker diarization with per-speaker clip export — valuable but niche, requires Falcon integration
-- Emotion detection via facial expression or voice tone — experimental, requires additional ML models
-
-**Anti-features (avoid):**
-- Cloud virality scores connected to TikTok/YouTube data — violates privacy differentiator, creates false confidence
-- Automatic B-roll from stock libraries — licensing complexity, generic results, users prefer their own B-roll
-- AI-generated video content (Sora/Veo) — requires expensive cloud APIs, quality inconsistent, out of scope
-- Social media auto-posting/scheduling — platform APIs unstable, not core editing functionality
-- Real-time live stream processing — completely different architecture, niche use case
+**Defer (v2+) - High complexity or lower priority:**
+- Folder watch mode (HIGH complexity, async monitoring)
+- Adaptive resolution processing (HIGH complexity, auto-downscale based on available RAM)
+- Progress checkpointing for 3hr+ videos (HIGH complexity)
+- Multi-preview generation (multiple types in one pass)
 
 ### Architecture Approach
 
-The research validates extending honeyclip's existing pipeline architecture rather than building parallel systems. Face detection, speaker diarization, and engagement scoring integrate as new analyzers following the existing audio.nim/motion.nim pattern. All analyzers produce seq[bool] arrays that feed into the existing timeline builder, maintaining backward compatibility with exports and edit expressions.
+v1.2 features integrate cleanly with honeyclip's existing pipeline architecture. All new features extend existing components rather than creating parallel systems. Batch processing wraps the single-file workflow with job queue orchestration. Chapter detection follows the analyzer pattern (audio.nim, motion.nim, engagement.nim). Preview generation already exists. GPU acceleration extends ML modules with backend selection. 4K optimization touches frame decoding loop and analyzer buffering.
 
 **Major components:**
-1. **Analysis Layer Extension** (analyze/face.nim, analyze/speaker.nim, analyze/engagement.nim) — New analyzers follow existing pattern, produce boolean arrays or scored regions, integrate with palet edit expression language
-2. **Timeline Metadata** (optional side table) — Rich engagement data (face regions, speaker segments, scores) stored separately, referenced by clip index, preserves v3 timeline structure for backward compatibility
-3. **Reframing Engine** (render/reframe.nim) — Face tracking with persistent IDs, ROI smoothing via exponential moving average, dynamic crop filter integrated with FFmpeg filter graphs
-4. **Caching Layer** (extends existing cache.nim) — Mandatory for expensive operations (face detection 5-20 FPS, speaker diarization 10-60s per hour), cache keyed by input hash + detector version
+1. **batch.nim (NEW)**: Job queue, worker pool, progress aggregation - wraps main() with batch orchestration, reuses existing editMedia() per file
+2. **analyze/chapters.nim (NEW)**: Topic segmentation with sliding window + TF-IDF cosine similarity - follows analyzer pattern, consumes existing Transcript type
+3. **render/previews.nim (EXISTING)**: Already has contact sheets, thumbnails, snippets - just needs batch wrapper and progress reporting
+4. **ml/facedetect.nim (MODIFIED)**: Add AcceleratorBackend enum (CPU, CUDA, Metal) - backend dispatch transparent to callers
+5. **av.nim (MODIFIED)**: Add downscale helper for 4K optimization - analyzers request 640x360 frames instead of 3840x2160 for face detection (36x memory reduction)
 
-**Key architectural patterns:**
-- **Frame-by-frame analysis with buffering:** Process one frame at a time for memory efficiency, parallelize via FFmpeg filter graphs
-- **Boolean array as common interface:** All detectors produce seq[bool] for timeline integration, enables composability with existing edit expressions
-- **Two-stage pipeline (Detect → Score → Timeline):** Rich data structures (FaceRegion, SpeakerSegment) converted to boolean for timeline, metadata preserved for advanced features like reframing
-- **Lazy evaluation:** Parse --edit expression first, only instantiate required analyzers (avoid running face detection if user only needs audio)
+**Integration pattern:** Existing pipeline is decode → analyze → timeline → render → export. Batch wraps this as orchestrator. Chapter detection inserts between transcript and timeline. GPU acceleration is drop-in backend replacement in ML modules. 4K optimization is application-level buffering, not pipeline changes.
 
 ### Critical Pitfalls
 
-Based on research, the top pitfalls that could derail implementation:
+1. **GPU memory round-trip bottleneck**: Missing `-hwaccel_output_format cuda` flag causes frames to copy from GPU to system RAM after decode, then back to GPU for encoding - PCIe bandwidth saturation defeats GPU acceleration (2x throughput loss). Prevention: Add platform-specific hwaccel flags, verify GPU-resident pipeline with nvidia-smi profiling.
 
-1. **Memory management at FFI boundaries (Nim/C ML libraries)** — Memory leaks or crashes at Nim GC / C++ manual memory boundary. Nim's GC runs unpredictably; ref types passed to C get garbage collected while still in use. **Avoid:** Use GC_ref/GC_unref to extend lifetimes, use shared allocation (createShared/deallocShared) for cross-thread usage, wrap FFI calls in RAII-style Nim objects. Establish patterns in Phase 1 before integrating multiple ML libraries.
+2. **Thread count misconfiguration for hybrid workloads**: Using default thread_count=0 (all cores) with GPU encoding causes 100% CPU saturation while GPU sits at 20% utilization - cache thrashing, system unresponsiveness. Prevention: Dynamic thread allocation - limit to 4 threads when GPU available, use all cores for CPU-only fallback.
 
-2. **Binary size explosion from static linking ML libraries** — Adding ONNX Runtime and OpenCV via static linking can balloon binaries from 10MB to 100MB+ per platform. **Avoid:** Disable unnecessary ONNX Runtime backends during compilation, use aggressive optimization (-Os, LTO), strip debug symbols, consider dynamic linking on platforms where runtime is controlled. Establish build architecture in Phase 1.
+3. **4K frame buffer accumulation without backpressure**: Decode queue fills faster than encode drains - 30 frames × 32MB = 960MB spike, multiple files = OOM kill. Prevention: Bounded queue with max 8 frames for 4K (256MB ceiling), block decode when queue full, implement drain logic.
 
-3. **False positive rate in production video analysis** — Face detection produces 85% false positive rates in real-world deployments (Metropolitan Police finding) due to motion blur, occlusions, varying lighting. Default thresholds sacrifice specificity. **Avoid:** Implement multi-frame consensus (require face detection across N consecutive frames), calibrate thresholds on user video not benchmarks, use Scene Change Indicator to reduce temporal false positives. Address in Phase 2.
+4. **Batch processing without checkpoint/resume**: Multi-hour batch fails at file 99/100 - entire batch restarts from file 1, wasting 50 hours. Prevention: Save checkpoint after EACH file completes, include batch ID (hash of inputs), install signal handler for graceful Ctrl+C shutdown.
 
-4. **Frame extraction rate vs detection accuracy tradeoff** — Processing 30fps (1800 frames/min) wastes CPU but skipping too many frames misses events. **Avoid:** Use adaptive frame selection based on scene changes and motion, target 1-5fps analysis rate for offline processing (not real-time 24fps), validate accuracy within 5% of all-frame processing. Optimize in Phase 2.
-
-5. **Cross-platform ONNX/OpenCV build system complexity** — ONNX Runtime requires Visual Studio 2022+ on Windows, GCC 9+ on Linux. OpenCV CMake with ONNX support has version conflicts. Windows cross-compile via MinGW has limited ONNX Runtime support. Protobuf version conflicts between FFmpeg, ONNX Runtime, OpenCV. **Avoid:** Document minimum toolchain versions, test cross-compilation early, consider ONNX Runtime pre-built binaries for Windows, use opencv_lite (bundles compatible ONNX Runtime v1.14-1.22). Validate in Phase 1.
+5. **Chapter detection without speaker diarization**: Topic changes during conversation create 60 micro-chapters instead of 8 meaningful segments - splits mid-sentence during natural topic pivots. Prevention: Implement speaker diarization (whisper.cpp has tinydiarize support) before chapter algorithm, only create boundaries on speaker change + topic change.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure prioritizes foundation (build system, FFI patterns) before adding ML features, validates each analyzer independently before integration, and defers complex features (reframing, NL search) until core auto-clipping works.
+Based on research, suggested phase structure prioritizes user value and risk management:
 
-### Phase 1: Foundation & Build Infrastructure
-**Rationale:** Must establish Nim/C++ FFI memory management patterns, cross-platform build system for ML libraries, and binary size optimization strategy before adding multiple ML dependencies. Research shows this is the #1 cause of project failure (memory leaks, cross-compile failures, 100MB+ binaries).
+### Phase 1: Batch Processing Foundation
+**Rationale:** Lowest risk, highest immediate value. No new dependencies beyond nim-toml. Wraps existing pipeline without modifying analyzers. Validates orchestration patterns before adding GPU complexity.
 
 **Delivers:**
-- Build system extensions for libfacedetection, ONNX Runtime, OpenCV (static linking with size optimization)
-- FFI wrapper patterns with GC_ref/GC_unref and RAII lifetime management
-- Cross-platform validation (Linux, macOS, Windows via MinGW)
-- Binary size CI checks (fail if >50MB per platform)
+- Process 10-100 videos without manual intervention
+- TOML template system for preset configurations
+- Parallel processing (N workers = CPU cores)
+- Progress reporting with ETA calculation
+- Checkpoint/resume capability
 
 **Addresses:**
-- Pitfall #2 (Binary size explosion)
-- Pitfall #5 (Cross-platform build complexity)
-- Pitfall #9 (Memory management at FFI boundaries)
+- Table stakes: batch template system, progress reporting, error recovery, parallel processing (FEATURES.md)
+- User workflow: "Process folder like this file" pattern
 
-**Research flag:** Needs `/gsd:research-phase` for cross-compilation strategy (MinGW vs pre-built binaries for ONNX Runtime on Windows)
+**Avoids:**
+- Pitfall 4: Checkpoint/resume from start (not retrofit)
+- Pitfall 7: Per-file context isolation to prevent error cascade
 
-### Phase 2: Transcript & Auto-Captions (Table Stakes MVP)
-**Rationale:** Leverages existing whisper.cpp integration (lowest risk), provides immediate user value (SRT/VTT export, captions for social media), no new ML dependencies. Table stakes features that competitors all provide.
+**Research flag:** SKIP RESEARCH - Standard orchestration pattern, well-documented. Implement directly from ARCHITECTURE.md producer-consumer model.
+
+### Phase 2: Chapter Detection & Export
+**Rationale:** Builds on existing transcript pipeline (v1.1 whisper integration). Enables clip boundary improvements. FFmpeg scdet filter is built-in, no complex dependencies.
 
 **Delivers:**
-- Word-level timestamp extraction from whisper.cpp output
-- SRT/VTT export formats
-- Auto-caption rendering with basic styling (FFmpeg subtitle filters)
-- Multi-aspect-ratio export (16:9, 9:16, 1:1) via FFmpeg scale/crop
+- Scene change detection via FFmpeg scdet filter
+- Transcript-based topic segmentation (sliding window + TF-IDF)
+- Engagement-driven chapter boundaries (novel differentiator)
+- Export formats: YouTube chapters, EDL markers, FCPXML markers
 
 **Uses:**
-- whisper.cpp (existing)
-- FFmpeg subtitle filters (existing)
-
-**Addresses:**
-- FEATURES.md table stakes: transcription, auto-captions, multi-aspect-ratio export
-
-**Research flag:** Standard patterns, no research needed (whisper integration exists, FFmpeg subtitle filters well-documented)
-
-### Phase 3: Face Detection & Motion Analysis
-**Rationale:** Face detection is foundation for engagement scoring and reframing. Must validate accuracy, performance, and false positive rate before building dependent features. Research shows adaptive frame sampling and multi-frame consensus are critical to avoid CPU waste and false positives.
-
-**Delivers:**
-- Face detection analyzer (analyze/face.nim) following audio/motion pattern
-- Adaptive frame extraction (1-5fps based on scene changes)
-- Multi-frame consensus to reduce false positives
-- Cache layer for face detection results
-- Integration with edit expressions: `--edit '(face :min-confidence 0.7)'`
-
-**Uses:**
-- libfacedetection v3.0 (CPU-first, 1000 FPS claim)
-- OpenCV for tracking (optional)
-- Existing FFmpeg scene detection
-
-**Addresses:**
-- Pitfall #1 (Face alignment and low-quality input)
-- Pitfall #4 (False positive rate)
-- Pitfall #7 (Frame extraction rate vs accuracy)
-
-**Research flag:** Needs `/gsd:research-phase` for face detection model selection (libfacedetection vs ONNX models like SCRFD/RetinaFace) and quantization validation
-
-### Phase 4: Engagement Scoring (Core Differentiator)
-**Rationale:** Multi-modal engagement scoring is the killer feature (local alternative to OpusClip's Virality Score). Combines face presence, audio energy, motion, and transcript features. Must define domain-specific metrics before implementation to avoid metric misalignment (Pitfall #5).
-
-**Delivers:**
-- Engagement scorer combining audio energy (RMS), motion (frame diff), face presence, speech rate
-- Heuristic scoring model with configurable weights
-- Boolean conversion (threshold engagement scores) for timeline integration
-- Batch auto-clipping: export top N clips ranked by engagement
-- Scene detection + silence detection for clip boundaries
+- Existing Transcript type (src/transcript/types.nim)
+- Existing engagement scores (src/analyze/engagement.nim)
+- FFmpeg scdet filter (built-in)
 
 **Implements:**
-- analyze/engagement.nim (multi-modal fusion)
-- Timeline metadata with engagement scores
-- Batch export workflow
+- analyze/chapters.nim following analyzer pattern
+- cmds/chapters.nim new subcommand
 
-**Addresses:**
-- FEATURES.md differentiator: local engagement scoring
-- Pitfall #6 (Engagement metric misalignment) — define metrics for screencast/tutorial domain
-- Pitfall #8 (Cold start problem) — content-based features work without history
+**Avoids:**
+- Pitfall 5: Implement speaker diarization first (whisper.cpp tinydiarize)
 
-**Research flag:** Needs `/gsd:research-phase` for scoring algorithm validation (how to weight audio vs motion vs face without cloud data for ground truth)
+**Research flag:** NEEDS RESEARCH for Phase 2b - Speaker diarization integration with whisper.cpp is experimental (2026 feature). Research: tinydiarize API, WhisperX alternative, Falcon integration options.
 
-### Phase 5: Speaker Reframing (Advanced Feature)
-**Rationale:** Most complex feature (tracking + smoothing + rendering). Requires all previous phases (face detection, speaker diarization, rendering pipeline changes). Differentiator against cloud tools but not essential for MVP.
+### Phase 3: Preview Enhancement & Batch Integration
+**Rationale:** Builds on existing previews.nim (already implemented in v1.1). Low risk enhancement. Adds batch support and progress reporting.
 
 **Delivers:**
-- Face tracking with persistent IDs across frames
-- ROI smoothing via exponential moving average or Kalman filter
-- Speaker-aware ROI selection (combine face detection + speaker diarization)
-- Dynamic crop filter for vertical conversion (9:16)
-- Fallback to center crop when no faces detected
+- Batch preview generation (process multiple clips)
+- Progress bars during preview generation
+- 4K-aware preview (downscale before thumbnail extraction)
+- Integration with batch command from Phase 1
 
 **Uses:**
-- analyze/face.nim (from Phase 3)
-- Falcon speaker diarization SDK (new dependency)
-- OpenCV tracking API (KCF/CSRT)
-- FFmpeg crop filter with dynamic parameters
+- Existing src/render/previews.nim
+- Batch orchestrator from Phase 1
+- FFmpeg thumbnail filter, tile filter
 
-**Addresses:**
-- FEATURES.md differentiator: speaker reframing (matches OpusClip ReframeAnything)
-- Pitfall #11 (Reframing without tracking) — persistent IDs + smoothing prevents jitter
+**Avoids:**
+- Pitfall 9: Streaming preview generation (decode → thumbnail → discard, not accumulate frames)
 
-**Research flag:** Needs `/gsd:research-phase` for Falcon SDK integration (C API bindings, licensing for commercial use, fallback when over free tier limit)
+**Research flag:** SKIP RESEARCH - Enhancement of existing feature, patterns established.
 
-### Phase 6: Advanced Features (v2+)
-**Rationale:** Defer until core auto-clipping validated and user feedback gathered. High complexity features that aren't essential for competing with cloud tools.
+### Phase 4: GPU Acceleration (Optional Performance)
+**Rationale:** Complex dependencies (CUDA toolkit), optional feature. Comes after core workflow features deliver user value. GPU reduces memory pressure for Phase 5's 4K optimization.
 
 **Delivers:**
-- Natural language search (semantic embeddings via CLIP/sentence-transformers)
-- Advanced motion analysis (GPU-accelerated optical flow)
-- Emotion detection (facial expression or voice tone ML models)
-- Custom scoring weight UI/config
+- CUDA backend for face detection (Linux, NVIDIA GPUs)
+- CoreML backend for neural inference (macOS, Apple Silicon)
+- Automatic fallback to CPU if GPU unavailable
+- 5-10x speedup for face detection on supported hardware
 
-**Research flag:** Needs `/gsd:research-phase` for each feature (experimental, sparse documentation for local C++ implementations)
+**Uses:**
+- Existing CUDA 12.8 from whisper.cpp build
+- OpenCV CUDA module (enable via cmake flag)
+- ONNX Runtime CoreML EP (rebuild with --use_coreml)
+
+**Implements:**
+- Modified src/ml/facedetect.nim (AcceleratorBackend enum)
+- New src/gpu.nim (runtime capability detection)
+
+**Avoids:**
+- Pitfall 1: GPU memory round-trip (use -hwaccel_output_format cuda)
+- Pitfall 2: Thread misconfiguration (limit to 4 threads when GPU active)
+- Pitfall 6: macOS Metal assumption (detect at runtime, support pre-2017 Macs)
+- Pitfall 12: GPU capability detection (query compute capability, graceful degradation)
+
+**Research flag:** NEEDS RESEARCH for Phase 4a - CUDA integration specifics: OpenCV CUDA module build flags, compute capability requirements, memory transfer patterns. Research: nvidia-smi integration, pinned memory allocation, benchmark data transfer overhead.
+
+### Phase 5: 4K Memory Optimization
+**Rationale:** Optimization, not new feature. Benefits from Phase 4's GPU acceleration (less memory to transfer). Touches core decode loop and all analyzers - highest integration risk, goes last.
+
+**Delivers:**
+- Downsampled face detection (4K → 640x360 = 36x memory reduction)
+- Bounded frame queue with backpressure (max 8 frames for 4K = 256MB ceiling)
+- Sparse sampling for face detection (1 FPS instead of 30 FPS = 30x speedup)
+- Memory budget enforcement across batch jobs
+
+**Uses:**
+- Modified src/av.nim (downscale helper, bounded decode queue)
+- Modified src/analyze/faces.nim (request downscaled frames)
+- Modified src/cache.nim (cache keys include downscale factor)
+
+**Implements:**
+- Frame pool with backpressure mechanism
+- Resolution-based queue sizing (queueDepth = min(16, 256MB / frameSize))
+
+**Avoids:**
+- Pitfall 3: 4K frame buffer accumulation (bounded queue from start)
+- Pitfall 8: Nim GC not tracking C buffers (migrate to --gc:orc for deterministic cleanup)
+
+**Research flag:** SKIP RESEARCH for implementation, but ADD VALIDATION - Profile with valgrind, test with ulimit -v to simulate memory constraints, benchmark peak RSS with 4K 10-minute test videos.
 
 ### Phase Ordering Rationale
 
-- **Foundation first:** Build system and FFI patterns are the most common cause of project failure. Must validate cross-platform builds and memory management before adding ML dependencies.
-- **Incremental ML complexity:** Start with existing whisper.cpp (Phase 2), add single new analyzer (face detection, Phase 3), then combine into multi-modal scorer (Phase 4). Avoids "big bang" integration failures.
-- **Validate each layer independently:** Transcript export (Phase 2) works without face detection. Face detection (Phase 3) works without engagement scoring. Engagement scoring (Phase 4) works without reframing. Each phase delivers user value independently.
-- **Defer complex features:** Reframing (Phase 5) requires all previous components plus new dependencies (Falcon SDK, OpenCV tracking). NL search (Phase 6) requires embeddings models and vector search. Save until core validated.
-- **Dependency-driven grouping:** Phases 2-4 use existing FFmpeg/whisper.cpp with minimal new dependencies. Phase 5 adds Falcon SDK. Phase 6 adds CLIP/transformers. Minimizes build system churn per phase.
+- **Workflow before performance**: Batch processing (Phase 1) delivers immediate user value. GPU acceleration (Phase 4) is optional enhancement - users without NVIDIA GPUs still get full functionality.
+- **Simple before complex**: Chapter detection (Phase 2) uses built-in FFmpeg filter. GPU acceleration (Phase 4) requires CUDA toolkit and complex build configuration.
+- **Foundation before optimization**: 4K optimization (Phase 5) goes last because it touches core decode loop and all analyzers - highest integration risk. GPU acceleration (Phase 4) reduces memory transfer needs for Phase 5.
+- **Validation via usage**: Phases 1-3 deliver complete workflow features. Phases 4-5 are performance optimizations that can be validated with real user workloads from Phases 1-3.
+
+**Dependency graph:**
+- Phase 1 (Batch) → independent, can start immediately
+- Phase 2 (Chapters) → depends on existing transcript pipeline (v1.1), independent of Phase 1
+- Phase 3 (Previews) → depends on Phase 1 (batch wrapper), independent of Phase 2
+- Phase 4 (GPU) → independent of Phases 1-3, but Phase 3 benefits from GPU speedup
+- Phase 5 (4K) → benefits from Phase 4 (less GPU memory to transfer), touches all phases
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
+**Phases needing deeper research during planning:**
+- **Phase 2b (Speaker Diarization)**: Whisper.cpp tinydiarize is experimental 2026 feature. Need to research API stability, accuracy benchmarks, fallback options (WhisperX, Falcon). Estimated research: 2-4 hours.
+- **Phase 4a (CUDA Integration)**: OpenCV CUDA module build process, compute capability detection, pinned memory patterns. Estimated research: 4-6 hours.
 
-- **Phase 1 (Foundation):** Cross-compilation strategy for ONNX Runtime on Windows (MinGW support unclear, may need pre-built binaries)
-- **Phase 3 (Face Detection):** Model selection (libfacedetection vs ONNX models) and quantization validation (INT8 accuracy on real videos)
-- **Phase 4 (Engagement Scoring):** Scoring algorithm validation without cloud data (how to weight signals, what metrics define "engaging" for screencast/tutorial videos)
-- **Phase 5 (Speaker Reframing):** Falcon SDK C API bindings, commercial use licensing, fallback strategy when free tier exceeded (250 min/month)
-
-Phases with standard patterns (skip research-phase):
-
-- **Phase 2 (Transcript & Captions):** Whisper integration exists, FFmpeg subtitle filters well-documented, SRT/VTT formats are standard
-- **Phase 6 (Advanced Features):** Defer until needed, research closer to implementation
+**Phases with standard patterns (skip research-phase):**
+- **Phase 1 (Batch Processing)**: Producer-consumer pattern, well-documented in GNU Parallel, FFmpeg-batch, AWS Batch. ARCHITECTURE.md provides sufficient detail.
+- **Phase 3 (Preview Enhancement)**: Existing previews.nim established patterns. Extension, not net-new.
+- **Phase 5 (4K Optimization)**: Application-level buffering, no new libraries. PITFALLS.md covers backpressure patterns. Needs profiling validation, not research.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | libfacedetection, ONNX Runtime, OpenCV are proven cross-platform. Licenses verified (BSD, MIT, Apache). Only uncertainty: Falcon SDK integration (C API exists but no Nim examples). |
-| Features | HIGH | Competitor analysis comprehensive (OpusClip, Kapwing, Reap). Table stakes vs differentiators clearly identified. Anti-features well-documented to prevent scope creep. |
-| Architecture | HIGH | Extends existing honeyclip patterns (analyzer modules, boolean arrays, v3 timeline). Integration points well-defined. Two-stage pipeline (rich data → boolean) preserves backward compatibility. |
-| Pitfalls | MEDIUM-HIGH | Critical pitfalls identified from ML deployment literature (face detection false positives, FFI memory leaks, binary size, build complexity). Some mitigations untested (multi-frame consensus accuracy, adaptive frame sampling rate). |
+| Stack | HIGH | Minimal new dependencies (only nim-toml). GPU acceleration extends existing CUDA/Metal from whisper.cpp. Verified via official NVIDIA, Apple docs. |
+| Features | MEDIUM | Table stakes verified across FFmpeg-batch, GNU Parallel, HandBrake patterns. Differentiators (engagement-driven chapters) are novel but build on existing v1.1 features. Speaker diarization tooling experimental. |
+| Architecture | HIGH | Clean extension of existing patterns. Batch wraps pipeline, chapters follow analyzer pattern, GPU adds backend selection. No parallel systems. Validated via CVPR 2025 chaptering research, IMG.LY batch processing patterns. |
+| Pitfalls | HIGH | GPU memory round-trip, thread misconfiguration, 4K OOM documented in NVIDIA official guides, FFmpeg 7.x release notes, Linux kernel docs. Checkpoint patterns from AWS/Azure/HTCondor. Speaker diarization gap from Auphonic, WhisperX sources. |
 
-**Overall confidence:** MEDIUM-HIGH
-
-Research validates feasibility but highlights execution risks (build system, memory management, performance). Mitigation strategies exist but require validation during implementation.
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-Areas where research was inconclusive or needs validation during implementation:
+**Speaker diarization accuracy:** Research shows whisper.cpp tinydiarize is experimental (2026). WhisperX provides production-ready alternative but requires Python dependency. Falcon Speaker Diarization is offline but integration unclear.
 
-- **Engagement scoring ground truth:** No clear methodology for validating engagement scores without cloud platform data. **Handle:** Define metrics based on content features (hooks, pacing, motion), gather user feedback, A/B test with "which clip is better" comparisons.
+**How to handle:** Phase 2a implements topic-based chapters WITHOUT speaker diarization (accept micro-chapter risk for single-speaker content). Phase 2b adds speaker diarization after validating tinydiarize stability or selecting WhisperX/Falcon alternative. Flag Phase 2b for `/gsd:research-phase` during roadmap execution.
 
-- **Falcon SDK commercial licensing:** Free tier is 250 min/month (Apache 2.0 license). Unclear if usage limits acceptable for production or if fallback VAD-based segmentation needed. **Handle:** Research during Phase 5 planning, implement fallback strategy (Voice Activity Detection without speaker labels).
+**GPU performance variability:** Research shows 3-22x speedup range for face detection depending on implementation. Data transfer overhead can negate gains if not managed carefully.
 
-- **ONNX model licensing for commercial use:** InsightFace models are "research-permissive" but commercial use unclear. **Handle:** Verify licenses during Phase 3 planning, consider training custom face detection model if needed.
+**How to handle:** Phase 4 must include profiling gates: measure GPU memory usage (nvidia-smi), verify frames stay GPU-resident (no system RAM spikes), benchmark throughput vs CPU baseline. If speedup <3x, revisit memory transfer patterns before declaring phase complete.
 
-- **Optimal frame sampling rate:** Research suggests 1-5fps for offline analysis but accuracy impact on face detection unknown. **Handle:** Benchmark during Phase 3 with adaptive sampling (scene changes = dense, static = sparse), validate <5% accuracy degradation vs all-frame processing.
+**Nim GC with C FFI:** Current codebase uses default refc GC. Research indicates ARC/ORC better for multimedia (deterministic cleanup, no GC pauses). Migration risk unclear.
 
-- **Windows cross-compile for ONNX Runtime via MinGW:** ONNX Runtime has "limited MinGW support." Auto-editor cross-compiles Windows binaries from Linux via MinGW. Unclear if ONNX Runtime builds work. **Handle:** Test during Phase 1, fallback to pre-built Windows binaries if cross-compile fails, document Windows-specific build process.
+**How to handle:** Phase 5 (4K optimization) tests --gc:orc on isolated module first (av.nim). If stable, migrate incrementally. Document fallback to manual av_frame_free() if ORC issues surface. Add memory leak tests with valgrind to validate cleanup.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-
-**Stack:**
-- [libfacedetection GitHub](https://github.com/ShiqiYu/libfacedetection) — Face detection library, BSD-3 license, cross-platform validation
-- [ONNX Runtime GitHub](https://github.com/microsoft/onnxruntime) — Inference engine releases, C++ API documentation
-- [Falcon Speaker Diarization GitHub](https://github.com/Picovoice/falcon) — C API, Apache 2.0 license, cross-platform support
-
-**Features:**
-- [OpusClip Virality Score](https://help.opus.pro/docs/article/virality-score) — Official documentation of competitor's scoring feature
-- [Kapwing AI Features](https://www.kapwing.com/ai/auto-speaker-focus) — Official feature documentation for auto-reframing
-- [Top AI Clipping Tools 2026](https://www.reap.video/blog/top-ai-clipping-tools-in-2026) — Comprehensive feature comparison
-
-**Architecture:**
-- [FFmpeg Documentation](https://ffmpeg.org/ffmpeg.html) — Filter graph and pipeline design patterns
-- [MediaPipe Face Detector](https://developers.google.com/mediapipe/solutions/vision/face_detector) — Official docs confirming C++ deprecation, batch processing modes
-- [ONNX Runtime C++ Guide](https://onnxruntime.ai/docs/get-started/with-cpp.html) — Official integration patterns
-
-**Pitfalls:**
-- [Nim Memory Model](https://zevv.nl/nim-memory/) — GC behavior and FFI patterns
-- [ONNX Runtime Build Docs](https://onnxruntime.ai/docs/build/inferencing.html) — Cross-platform build requirements
-- [Face Recognition Challenges 2026](https://research.aimultiple.com/facial-recognition-challenges/) — False positive rates, quality issues
+- [NVIDIA FFmpeg Transcoding Guide](https://developer.nvidia.com/blog/nvidia-ffmpeg-transcoding-guide/) - GPU acceleration patterns, hwaccel flags
+- [OpenCV CUDA Module Documentation](https://docs.opencv.org/4.x/d2/dbc/cuda_intro.html) - CUDA integration for face detection
+- [FFmpeg 7.x Release Notes](https://www.phoronix.com/news/FFmpeg-CLI-Multi-Threaded) - Multi-threaded pipeline architecture
+- [IMG.LY FFmpeg Batch Processing](https://img.ly/blog/building-a-production-ready-batch-video-processing-server-with-ffmpeg/) - Producer-consumer patterns
+- [Chapter-Llama CVPR 2025](https://openaccess.thecvf.com/content/CVPR2025/papers/Ventura_Chapter-Llama_Efficient_Chaptering_in_Hour-Long_Videos_with_LLMs_CVPR_2025_paper.pdf) - Video chaptering algorithms
+- [Auphonic Automatic Chapters](https://auphonic.com/help/algorithms/speech_recognition.html) - Speaker diarization + chapters
+- [AWS SageMaker Checkpoints](https://docs.aws.amazon.com/sagemaker/latest/dg/model-checkpoints.html) - Checkpoint/resume patterns
+- [Linux Kernel V4L2 Decoder](https://docs.kernel.org/userspace-api/media/v4l/dev-stateless-decoder.html) - Buffer management
 
 ### Secondary (MEDIUM confidence)
-
-**Stack:**
-- [UniFace Library](https://yakhyo.github.io/uniface/) — Recent (Nov 2025) open-source face analysis, ONNX-optimized
-- [Best Speaker Diarization Models 2026](https://brasstranscripts.com/blog/speaker-diarization-models-comparison) — Validates Falcon claims vs alternatives
-- [nimffmpeg GitHub](https://github.com/mashingan/nimffmpeg) — Demonstrates FFmpeg binding pattern for Nim
-
-**Features:**
-- [OpusClip Reviews 2026](https://sendshort.ai/guides/opus-review/) — User feedback on feature quality and limitations
-- [Advanced Retention Editing](https://air.io/en/youtube-hacks/advanced-retention-editing-cutting-patterns-that-keep-viewers-past-minute-8) — Engagement patterns for video editing
-
-**Pitfalls:**
-- [Binary Size: Static vs Dynamic Linking](https://www.sandordargo.com/blog/2024/09/25/dynamic-vs-static-linking-binary-size) — Quantifies size explosion (22KB → 8.7MB for C++ with static linking)
-- [Efficient Video Face Recognition](https://pmc.ncbi.nlm.nih.gov/articles/PMC7959602/) — Frame selection strategies
-- [Beyond Views: Engagement Prediction](https://arxiv.org/pdf/1709.02541) — Academic research on engagement metrics
+- [FFmpeg Threads Performance Study](https://streaminglearningcenter.com/blogs/ffmpeg-command-threads-how-it-affects-quality-and-performance.html) - Thread count impact
+- [WhisperX Pipeline Guide](https://vogla.com/whisperx-transcription-pipeline-guide/) - Speaker diarization options
+- [Whisper.cpp Speaker Diarization](https://picovoice.ai/blog/whisper-cpp-speaker-diarization/) - Tinydiarize integration
+- [NVIDIA RTX 4K AI Performance](https://blogs.nvidia.com/blog/rtx-ai-garage-ces-2026-open-models-video-generation/) - Memory optimization patterns
+- [Nim ARC/ORC Documentation](https://nim-lang.org/araq/destructors.html) - GC alternatives for FFI
+- [MuleSoft Batch Error Handling](https://mulesy.com/error-handling-in-batch-job/) - Error isolation patterns
 
 ### Tertiary (LOW confidence, needs validation)
-
-- [Learner Engagement Analysis](https://arxiv.org/html/2412.00429v1) — Recent (Dec 2024) research on engagement detection, but focused on educational videos (may not generalize)
-- [opencv_lite GitHub](https://github.com/zihaomu/opencv_lite) — Bundles compatible ONNX Runtime (v1.14-1.22) but unclear if maintained or production-ready
-- [Delving Deep into Engagement Prediction](https://arxiv.org/html/2410.00289v1) — Short-form video engagement, cold start problem validation needed for honeyclip domain
+- TOML vs YAML vs JSON comparison (dev.to) - Configuration format selection
+- ComfyUI VRAM management (GitHub) - GPU memory patterns
+- Video segmentation methods (DagShub blog) - ML-based segmentation options
 
 ---
-*Research completed: 2026-02-01*
+*Research completed: 2026-02-05*
 *Ready for roadmap: yes*

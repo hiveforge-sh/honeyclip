@@ -1,501 +1,912 @@
-# Pitfalls Research
+# Domain Pitfalls: Adding Workflow & Performance Features
 
-**Domain:** Video Engagement Analysis with ML Integration
-**Researched:** 2026-02-01
-**Confidence:** MEDIUM-HIGH
+**Domain:** Video processing CLI (batch, GPU, 4K, chapter detection)
+**Project:** honeyclip v1.2
+**Researched:** 2026-02-05
 
 ## Critical Pitfalls
 
-### Pitfall 1: Face Alignment and Low-Quality Input Processing
+Mistakes that cause rewrites, major performance degradation, or system instability.
 
-**What goes wrong:**
-Face detection accuracy degrades severely with poor image quality, blur, pose variation, and reduced resolution. The most common failure mode is not the detection algorithm itself, but low-resolution crops, overly compressed frames, and poor face alignment (wrong bounding boxes, inconsistent landmarking).
+### Pitfall 1: GPU Memory Round-Trip During Hardware Acceleration
 
-**Why it happens:**
-Developers optimize for processing speed by aggressively downscaling video frames or using high compression rates without validating the impact on ML model accuracy. Video compression artifacts and low-resolution extraction seem acceptable visually but destroy ML model performance.
+**What goes wrong:** When using FFmpeg GPU acceleration for decode-filter-encode pipelines, frames are copied from GPU to system RAM after decode, then copied back to GPU for filtering/encoding. This creates PCIe bandwidth saturation and defeats the purpose of GPU acceleration.
 
-**How to avoid:**
-- Establish minimum resolution thresholds for face detection (typically 80x80 pixels minimum per face)
-- Test face detection accuracy across different video compression levels before choosing default encoding settings
-- Implement quality checks on extracted frames before passing to ML models
-- Use landmark-based alignment verification before accepting detection results
-- Document the quality-performance tradeoff in user-facing documentation
+**Why it happens:** Missing the `-hwaccel_output_format cuda` (NVIDIA) or platform-specific equivalent flag causes FFmpeg to implicitly perform hardware-to-software transfer (hwdownload) after decoding. This is not documented prominently and seems optional.
 
-**Warning signs:**
-- Face detection works well on test videos but fails on user-provided content
-- Inconsistent detection rates across different video sources
-- High false positive rates on compressed videos
-- Detection accuracy varies significantly with video bitrate
+**Consequences:**
+- Up to 2x throughput degradation compared to optimized GPU pipeline
+- PCIe bandwidth becomes the bottleneck, not decode/encode speed
+- System memory pressure from uncompressed frame buffers
+- No performance benefit from GPU acceleration despite using hwaccel
 
-**Phase to address:**
-Phase 1 (Foundation) - Establish quality gates before ML processing begins
+**Prevention:**
+```nim
+# BAD: Decoded frames copied to system RAM
+ffmpeg -hwaccel cuda -i input.mp4 ...
 
-**Sources:**
-- [Top 5 Facial Recognition Challenges & Solutions in 2026](https://research.aimultiple.com/facial-recognition-challenges/)
-- [Face Recognition Pipeline Clearly Explained](https://medium.com/backprop-labs/face-recognition-pipeline-clearly-explained-f57fc0082750)
+# GOOD: Frames stay in GPU memory
+ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i input.mp4 ...
+```
 
----
+For platform-specific implementations:
+- **NVIDIA CUDA:** `-hwaccel cuda -hwaccel_output_format cuda`
+- **AMD (DX9):** `-hwaccel_output_format dxva2_vld`
+- **AMD (DX11):** `-hwaccel_output_format d3d11`
+- **macOS VideoToolbox:** `-hwaccel videotoolbox` (no explicit output format needed, but verify with `-init_hw_device videotoolbox`)
 
-### Pitfall 2: Memory Management at FFI Boundaries (Nim/C ML Libraries)
+**Detection:**
+- Monitor PCIe bandwidth during processing (expect minimal if GPU-only)
+- Check system memory usage (should not spike with uncompressed frames)
+- Profile with `nvidia-smi` (CUDA) or Activity Monitor (macOS) - GPU memory should hold decoded frames
+- Throughput significantly below expected GPU performance
 
-**What goes wrong:**
-Memory leaks, crashes, or undefined behavior occur at the boundary between Nim's garbage-collected memory and C/C++ ML libraries (OpenCV, ONNX Runtime) that use manual memory management. ref types passed to C libraries get garbage collected while still in use, causing segfaults.
-
-**Why it happens:**
-Nim's garbage collector runs unpredictably (usually during memory allocation), and developers assume garbage collection won't happen while C code is executing. String and seq types are allocated from a thread-local heap, but C libraries expect stable memory addresses across thread boundaries.
-
-**How to avoid:**
-- Use `GC_ref` to extend lifetime of garbage-collected types before passing to C
-- Call `GC_unref` after C code finishes with the reference
-- Use manual allocation (`create`, `alloc`, `dealloc`) for single-threaded FFI scenarios
-- Use shared allocation (`createShared`, `allocShared`, `deallocShared`) for cross-thread usage
-- Wrap all FFI calls in RAII-style Nim objects that manage C resource lifetimes
-- Never assume ref type addresses remain stable without explicit GC pinning
-
-**Warning signs:**
-- Intermittent crashes that don't reproduce consistently
-- Segfaults that only happen under high memory pressure
-- Different behavior in debug vs release builds
-- Crashes that occur after processing multiple videos but not the first
-
-**Phase to address:**
-Phase 1 (Foundation) - Establish FFI memory management patterns before integrating multiple ML libraries
+**Prevention strategy:**
+1. **Phase: GPU Acceleration Basics** - Document platform-specific hwaccel flags in architecture decision record
+2. Verify GPU-resident pipeline with profiling before implementing filters
+3. Create unit test that checks memory transfer patterns with ffprobe
+4. Add compile-time validation that FFmpeg was built with correct hwaccel support
 
 **Sources:**
-- [The Nim memory model](https://zevv.nl/nim-memory/)
-- [Interop with other languages - The Status Nim style guide](https://status-im.github.io/nim-style-guide/interop.html)
-- [Wrapping C libraries in Nim](https://peterme.net/wrapping-c-libraries-in-nim.html)
+- [NVIDIA FFmpeg Transcoding Guide](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/ffmpeg-with-nvidia-gpu/index.html)
+- [FFmpeg AMF HW Acceleration](https://github.com/GPUOpen-LibrariesAndSDKs/AMF/wiki/FFmpeg-and-AMF-HW-Acceleration)
+- [Using FFmpeg with NVIDIA GPU Acceleration](https://developer.nvidia.com/blog/nvidia-ffmpeg-transcoding-guide/)
 
 ---
 
-### Pitfall 3: Binary Size Explosion from Static Linking ML Libraries
+### Pitfall 2: Thread Count Misconfiguration for Hybrid CPU/GPU Workloads
 
-**What goes wrong:**
-Adding ML inference libraries (ONNX Runtime, OpenCV) via static linking causes binary size to balloon from ~10MB to 100MB+ per platform, making cross-compilation and distribution prohibitively expensive. A simple C++ program with static linking grows from 22KB to 8.7MB (400x increase).
+**What goes wrong:** Using default thread count (all CPU cores) while also running GPU-accelerated encoding causes context-switching overhead, cache thrashing, and CPU starvation for critical system tasks. Conversely, using too few threads for CPU-only fallback paths severely degrades performance.
 
 **Why it happens:**
-ML libraries bundle massive symbol tables, multiple backend implementations (CPU, GPU, various instruction sets), and embedded model formats. Static linking includes unused code paths. For mlpack, boost::serialization alone adds 600KB, and the total binary reaches 4.7MB even after optimization.
+- FFmpeg defaults to `thread_count = 0` (auto-detect all cores)
+- GPU encoding only uses 15-20% CPU, but FFmpeg still allocates full thread pool
+- Higher thread counts (>8) create transient quality issues in encoders
+- Developers assume "more threads = better performance" without profiling
 
-**How to avoid:**
-- Disable unnecessary functional modules during cross-compilation (see ONNX Runtime build options)
-- Use dynamic linking for ML libraries on platforms where you control the runtime environment
-- For Windows cross-compilation, evaluate if ML features should be dynamically loaded plugins
-- Strip debug symbols and use aggressive compiler optimizations (`-Os`, LTO)
-- Consider model-specific builds: only include backends needed for specific features
-- Document binary size in build artifacts and set up CI warnings when size thresholds are exceeded
+**Consequences:**
+- CPU saturation at 100% while GPU sits at 20% utilization (wasted resources)
+- System becomes unresponsive during batch processing
+- 30-50% performance loss from cache thrashing
+- Quality degradation in encoded output (transient artifacts)
+- macOS/Windows systems starve UI thread, causing beachballs/hangs
 
-**Warning signs:**
-- Build artifacts exceed 100MB per platform
-- Cross-compilation times exceed 30 minutes
-- Users report long download times
-- Binary size doubles with each new ML feature added
+**Prevention:**
+```nim
+# Current honeyclip decoder setup (src/av.nim:53)
+result.thread_count = 0  # Auto-detect CPU cores
 
-**Phase to address:**
-Phase 1 (Foundation) - Establish build architecture and linking strategy before adding multiple ML libraries
+# BETTER: Dynamic thread allocation based on GPU availability
+when defined(enable_cuda) or defined(macosx):  # GPU-accelerated platforms
+  result.thread_count = min(4, countProcessors())  # Limit to 4 threads
+else:  # CPU-only fallback
+  result.thread_count = 0  # Use all available cores
+```
+
+**Production recommendations from research:**
+- **GPU encode:** 4-8 threads maximum (research shows higher counts hurt quality)
+- **CPU-only encode:** 1 thread per encode instance for best quality/throughput balance
+- **4K content:** Scales efficiently to 8-16 threads only on CPU-only path
+- **Batch processing:** Reserve 1-2 cores for system tasks (don't use all cores)
+
+**Detection:**
+- CPU usage at 100% with low GPU utilization (imbalanced workload)
+- System becomes unresponsive during processing
+- Encoding quality issues (visible artifacts in output)
+- FFmpeg progress output shows thread contention (decode stalls)
+
+**Prevention strategy:**
+1. **Phase: GPU Acceleration Basics** - Add runtime thread count selection based on hwaccel availability
+2. Add CLI flag `--threads` for override (default to smart detection)
+3. Create benchmark suite comparing thread counts (2, 4, 8, 16) with quality metrics
+4. Document thread recommendations in ARCHITECTURE.md per resolution/platform
+5. Monitor CPU/GPU utilization during integration tests
+
+**Integration with honeyclip:**
+- Modify `initDecoder()` in `src/av.nim` to accept thread configuration
+- Add thread policy to MediaInfo struct to persist per-file decisions
+- Batch processor must share thread policy across files to prevent over-subscription
 
 **Sources:**
-- [Binary size: should we use static or dynamic linking?](https://www.sandordargo.com/blog/2024/09/25/dynamic-vs-static-linking-binary-size)
-- [What do you think of boost dependencies in mlpack?](https://github.com/mlpack/mlpack/issues/2440)
-- [A Practical Guide to C++ Model Inference Based on ONNX Runtime](https://www.oreateai.com/blog/a-practical-guide-to-c-model-inference-based-on-onnx-runtime/7cb1f93bd02e133681d71eb7ee223185)
+- [FFmpeg Threads Command Performance](https://streaminglearningcenter.com/blogs/ffmpeg-command-threads-how-it-affects-quality-and-performance.html)
+- [How Thread Count Impacts Quality and Cost](https://streaminglearningcenter.com/encoding/how-thread-count-impacts-video-encoding-quality-throughput-and-cost.html)
+- [FFmpeg 7.1 multi-threading](https://www.phoronix.com/news/FFmpeg-CLI-Multi-Threaded)
+- [Multi-Threaded GPU Encoding Guide](https://hostkey.com/blog/12-multi-threaded-video-encoding-on-a-professional-gpu/)
 
 ---
 
-### Pitfall 4: False Positive Rate in Production Video Analysis
+### Pitfall 3: 4K Frame Buffer Accumulation Without Backpressure
 
-**What goes wrong:**
-Face detection systems produce 85% false positive rates in real-world deployments (Metropolitan Police finding), causing useless engagement scores, wasted compute on non-faces, and user distrust. False positives are higher in women than men, and higher in elderly/young compared to middle-aged adults, with disproportionate impact on Asian and African American faces.
+**What goes wrong:** Decode queue fills faster than filter/encode queue can drain. With 4K content, each uncompressed frame is 32MB (3840x2160 RGBA). A queue of 30 frames = 960MB. Multiple concurrent files = multi-GB memory spike leading to OOM kills.
 
 **Why it happens:**
-Models trained on high-quality datasets fail on real-world video with motion blur, partial occlusions, varying lighting, and extreme poses. Default detection thresholds optimized for precision (low false negatives) sacrifice specificity (high false positives). Scene changes in video cause temporal false positives when sliding window approaches don't account for context.
+- FFmpeg's `av_read_frame()` continuously populates packet queue
+- No built-in backpressure mechanism between decode and encode stages
+- Nim's GC doesn't track C-allocated frame buffers (allocated via `av_frame_alloc()`)
+- Developers focus on throughput, not memory ceiling
+- 4K content increases frame buffer size 4x vs 1080p (8MB → 32MB per frame)
 
-**How to avoid:**
-- Implement Scene Change Indicator (SCI) to reduce false positives in temporal sliding windows
-- Calibrate detection thresholds on representative user video, not benchmark datasets
-- Use multi-frame consensus: require face detection across N consecutive frames before accepting
-- Implement demographic fairness testing across race, gender, and age groups
-- Add quality scoring to detections: reject low-confidence matches even if they pass threshold
-- Log false positive rate as a key metric and expose it to users
+**Consequences:**
+- Out-of-memory (OOM) killer terminates process mid-batch
+- Swap storm on systems with insufficient RAM (10x slowdown)
+- Partial output files with no checkpoint/resume capability
+- Silent failure on GPU memory allocation (CUDA OOM)
+- macOS memory pressure causes system-wide slowdown
 
-**Warning signs:**
-- User reports of faces detected in backgrounds, objects, or patterns
-- Engagement scores calculated for videos with no people
-- Detection rates vary wildly across different user demographics
-- Performance degrades when switching from test videos to production data
+**Prevention:**
+```nim
+# BAD: Unbounded decode queue
+while av_read_frame(formatCtx, packet) >= 0:
+  decodePacket(packet)
+  av_packet_unref(packet)
 
-**Phase to address:**
-Phase 2 (Face Detection) - Test and calibrate before releasing engagement features that depend on accurate face detection
+# GOOD: Bounded queue with backpressure
+const MaxQueuedFrames = 8  # Limit based on resolution
+var queuedFrames = 0
+
+while av_read_frame(formatCtx, packet) >= 0:
+  # Block if encode queue is full
+  while queuedFrames >= MaxQueuedFrames:
+    if not tryDrainEncodeQueue():
+      sleep(10)  # Yield to encoder thread
+
+  decodePacket(packet)
+  queuedFrames.inc
+  av_packet_unref(packet)
+```
+
+**Queue size recommendations:**
+- **1080p:** 16 frames max (128MB)
+- **4K:** 8 frames max (256MB)
+- **8K:** 4 frames max (256MB)
+- **Batch processing:** Divide limits by concurrent file count
+
+**Detection:**
+- Memory usage spikes then crashes (OOM)
+- System swap usage increases during processing
+- GPU memory allocation failures (CUDA error 2: "out of memory")
+- Processing slows down before crash (swap storm)
+- `dmesg` shows OOM killer events (Linux)
+
+**Prevention strategy:**
+1. **Phase: 4K Memory Optimization** - Implement bounded frame queue with configurable depth
+2. Add memory pressure monitoring (check available RAM before decode)
+3. Dynamic queue sizing based on frame dimensions: `queueDepth = min(16, 256MB / frameSize)`
+4. Use `av_frame_unref()` immediately after consuming frame (don't hold references)
+5. Test with `ulimit -v` (Linux) to simulate memory constraints
+
+**Integration with honeyclip:**
+- Current `InputContainer` (src/av.nim) reads packets synchronously (good!)
+- Batch processor must enforce memory budget across all concurrent files
+- Add `MemoryBudget` type with current usage tracking
+- Preview generation (`src/render/previews.nim`) likely needs explicit limits
+
+**Platform-specific considerations:**
+- **Linux:** OOM killer has no grace period - hard kill
+- **macOS:** Memory pressure subsystem throttles allocations (slower but survives)
+- **Windows:** Virtual memory manager similar to Linux but more forgiving
+- **CUDA:** GPU OOM is immediate hard failure (no recovery)
 
 **Sources:**
-- [The Challenges of AI-Based Face Recognition](https://regulaforensics.com/blog/challenges-of-ai-based-face-recognition/)
-- [Reducing false positive rate with Scene Change Indicator](https://pmc.ncbi.nlm.nih.gov/articles/PMC10182539/)
-- [Accuracy and Fairness of Facial Recognition in Police Images](https://arxiv.org/html/2505.14320v1)
+- [OpenClaw CUDA OOM Errors](https://openclaw-ai.org/guides/fix-openclaw-cuda-oom-errors)
+- [ComfyUI VRAM Memory Management](https://github.com/RandomInternetPreson/ComfyUI_LTX-2_VRAM_Memory_Management)
+- [Low-VRAM GPU Optimization](https://medium.com/the-ai-mindscape/optimizing-gpu-usage-on-low-vram-machines-6-practical-steps-to-dodge-oom-errors-2957c779f3e0)
+- [Linux Kernel Stateless Decoder Buffer Management](https://docs.kernel.org/userspace-api/media/v4l/dev-stateless-decoder.html)
 
 ---
 
-### Pitfall 5: Engagement Scoring Metric Misalignment
+### Pitfall 4: Batch Processing Without Checkpoint/Resume Capability
 
-**What goes wrong:**
-Engagement algorithms prioritize vanity metrics (view count, total watch time) over actual engagement quality, leading to misleading scores. Duration-based prediction models overestimate engagement for long videos and underestimate for short videos due to bimodal distribution. A 20-minute video with 50% retention shows strong engagement, but naive algorithms mark it as poor performance.
+**What goes wrong:** Multi-hour batch jobs fail midway through (OOM, power loss, disk full, Ctrl+C). Without checkpointing, the entire batch must restart from file 1, wasting hours of compute and potentially missing deadlines.
 
 **Why it happens:**
-Developers port platform-specific algorithms (YouTube, TikTok) without understanding domain differences. TikTok requires 75% completion for algorithmic boost, but that threshold doesn't translate to educational or documentary content. Teams measure what's easy to measure (duration) rather than what matters (satisfaction, attention quality).
+- Developers implement batch as simple loop over files
+- State (which files completed) only exists in memory
+- No interrupt signal handlers
+- Assumption that jobs will always complete successfully
+- Focus on happy path, not failure recovery
 
-**How to avoid:**
-- Define engagement metrics specific to honeyclip's use case (likely tutorial/screencast/presentation videos)
-- Use completion rate relative to video length category, not absolute percentages
-- Weight multi-sentence comments higher than passive metrics (if social features exist)
-- Implement segmented analysis: beginning/middle/end retention curves, not just total duration
-- Test engagement scores against human judgment on diverse video types
-- Document what "engagement" means in your domain and validate it matches user expectations
+**Consequences:**
+- 100-file batch at 30min/file = 50 hours wasted on failure at file 99
+- User frustration ("I had 5% left and it crashed!")
+- Resource waste (re-processing already completed files)
+- Production pipelines become unreliable
+- Manual tracking of completion becomes error-prone
 
-**Warning signs:**
-- High-quality educational videos score lower than short entertainment clips
-- Engagement scores don't correlate with user reports of "good" videos
-- Algorithm performs well on benchmarks but poorly on user content
-- Scores fluctuate wildly with small changes in video length
+**Prevention:**
+```nim
+# Checkpoint file format (.honeyclip-batch-state.json)
+type BatchCheckpoint = object
+  batchId: string            # Hash of input file list
+  startTime: DateTime
+  completedFiles: seq[string]  # Absolute paths
+  failedFiles: Table[string, string]  # path -> error message
+  totalFiles: int
 
-**Phase to address:**
-Phase 3 (Engagement Scoring) - Define domain-specific metrics before implementing algorithms
+proc processBatch(files: seq[string], outputDir: string) =
+  let checkpointPath = outputDir / ".honeyclip-batch-state.json"
+  var checkpoint = loadOrCreateCheckpoint(checkpointPath, files)
+
+  # Install signal handler for graceful shutdown
+  setControlCHook(proc() {.noconv.} =
+    checkpoint.save(checkpointPath)
+    quit(130)  # Exit code 130 = interrupted
+  )
+
+  for file in files:
+    if file in checkpoint.completedFiles:
+      echo &"Skipping {file} (already completed)"
+      continue
+
+    try:
+      processFile(file, outputDir)
+      checkpoint.completedFiles.add(file)
+      checkpoint.save(checkpointPath)  # Checkpoint after each file
+    except CatchableError as e:
+      checkpoint.failedFiles[file] = e.msg
+      checkpoint.save(checkpointPath)
+      # Continue to next file (don't abort entire batch)
+
+  # Clean up checkpoint on successful completion
+  if checkpoint.failedFiles.len == 0:
+    removeFile(checkpointPath)
+```
+
+**Resume behavior:**
+```bash
+# Initial run (interrupted at file 50/100)
+$ honeyclip batch *.mp4 --out rendered/
+Processing: file001.mp4... OK
+Processing: file002.mp4... OK
+...
+Processing: file050.mp4... ^C (user interrupted)
+
+# Resume run (skips files 1-50)
+$ honeyclip batch *.mp4 --out rendered/
+Found existing batch checkpoint (50/100 completed)
+Skipping: file001.mp4 (already completed)
+...
+Skipping: file050.mp4 (already completed)
+Processing: file051.mp4... OK
+```
+
+**Detection:**
+- Users report re-processing files after interruption
+- Complaints about long-running jobs not being resumable
+- Feature requests for "resume from where it left off"
+- Support tickets about wasted compute time
+
+**Prevention strategy:**
+1. **Phase: Batch Processing Core** - Design checkpoint schema before implementing batch loop
+2. Save checkpoint after EACH file completes (not at end of batch)
+3. Include batch ID (hash of input files) to detect changed inputs
+4. Store both completed and failed files (don't retry failures without user action)
+5. Provide `--force-reprocess` flag to ignore checkpoint
+6. Add `--resume` flag that errors if no checkpoint found (explicit user intent)
+
+**Integration with honeyclip:**
+- Batch command doesn't exist yet (new feature for v1.2)
+- Checkpoint format should match export formats (src/exports/) for consistency
+- Use JSON for checkpoint (human-readable, editable if needed)
+- Store in output directory (not input directory - may be read-only)
+- Consider XDG cache directory for ephemeral state ($XDG_CACHE_HOME/honeyclip/)
+
+**Edge cases to handle:**
+- Input file list changes between runs (detect via batch ID hash)
+- Output directory deleted/moved (checkpoint references missing files)
+- Partial file output (file completed in checkpoint but output missing - corrupted?)
+- Multiple concurrent batch jobs (use unique checkpoint names)
 
 **Sources:**
-- [Beyond Views: Measuring and Predicting Engagement in Online Videos](https://arxiv.org/pdf/1709.02541)
-- [Delving Deep into Engagement Prediction of Short Videos](https://arxiv.org/html/2410.00289v1)
-- [LinkedIn Algorithm 2026: Text vs Video Strategy](https://growleads.io/blog/linkedin-algorithm-2026-text-vs-video-reach/)
+- [HTCondor Checkpointing Jobs](https://chtc.cs.wisc.edu/uw-research-computing/checkpointing)
+- [Northeastern NURC Checkpointing](https://rc-docs.northeastern.edu/en/explorer-main/best-practices/checkpointing.html)
+- [AWS SageMaker Checkpoints](https://docs.aws.amazon.com/sagemaker/latest/dg/model-checkpoints.html)
+- [Batch Error Handling](https://oneuptime.com/blog/post/2026-01-30-batch-processing-error-handling/view)
 
 ---
 
-### Pitfall 6: Cold Start Problem for New Content
+### Pitfall 5: Chapter Detection Confidence Without Speaker Diarization
 
-**What goes wrong:**
-Engagement prediction fails catastrophically for new creators or videos with limited history. The cold start problem arises from sampling bias in initial interactions, resulting in noisy and inaccurate predictions. Channels with only 1-2 videos in training data are systematically disadvantaged, creating negative feedback loops.
+**What goes wrong:** Transcript-based chapter detection creates boundaries based on topic changes alone. Without speaker diarization, chapters split mid-conversation when topic changes occur naturally in dialogue. Result: 50+ micro-chapters instead of 8-10 meaningful segments.
 
 **Why it happens:**
-ML models trained on established channels with rich interaction history cannot generalize to sparse data. New creators lack the historical patterns (viewer retention curves, engagement rates, audience demographics) that models rely on.
+- Whisper provides high-quality transcription (7.75% WER on mixed audio) but no speaker labels
+- Developers use LLM or rule-based topic detection on raw transcript
+- Topic shifts during conversation appear as new chapters
+- No distinction between "speaker changed topics" vs "new speaker introduced new topic"
+- Assumption that sentence boundaries = chapter boundaries
 
-**How to avoid:**
-- Implement content-based features that don't require historical data (scene complexity, audio quality, face prominence)
-- Use hybrid approach: content features for new videos, historical patterns for established creators
-- Set minimum confidence thresholds: don't report engagement scores until sufficient data exists
-- Provide "bootstrapping mode" that uses generic baselines for first N videos
-- Document cold start limitations clearly to users
-- Consider transfer learning from similar content categories
+**Consequences:**
+- Chapter count explosion (90-minute video → 60 chapters instead of 8)
+- Chapters split mid-sentence during topic pivots
+- Poor user experience (chapters are navigation tool, not sentence index)
+- False confidence in chapter accuracy (algorithm thinks it's correct)
+- Manual post-processing required to merge micro-chapters
 
-**Warning signs:**
-- Engagement scores for first video differ dramatically from second video of same quality
-- New user videos show extreme variance in predicted engagement
-- Model confidence metrics reveal high uncertainty but scores are reported anyway
-- Users report that engagement analysis is "useless" until they've created many videos
+**Example failure case:**
+```
+[0:00-2:30] Host: "Today we'll discuss React hooks..."  [Chapter: Intro]
+[2:30-5:00] Host: "But first, let's talk about the history of React..."  [NEW CHAPTER: History?]
+[5:00-8:00] Host: "...which brings us back to hooks."  [NEW CHAPTER: Hooks again?]
+```
 
-**Phase to address:**
-Phase 3 (Engagement Scoring) - Design algorithm to handle sparse data from the start
+Without speaker diarization, the algorithm sees three topic transitions. With diarization, it recognizes continuous speech by same speaker = single chapter.
+
+**Prevention:**
+```nim
+# BAD: Topic detection alone
+proc detectChapters(transcript: Transcript): seq[Chapter] =
+  let topicBoundaries = detectTopicChanges(transcript)  # Sentence-level
+  return topicBoundaries.map(b => Chapter(start: b.time))
+
+# BETTER: Speaker-aware chapter detection
+proc detectChapters(transcript: Transcript, diarization: Diarization): seq[Chapter] =
+  # Merge speaker diarization with transcript
+  let annotatedTranscript = mergeWithSpeakers(transcript, diarization)
+
+  # Only create chapter boundaries when:
+  # 1. Speaker changes AND topic changes, OR
+  # 2. Same speaker but long silence (>3s) AND topic shift
+  var chapters: seq[Chapter]
+  for i, segment in annotatedTranscript:
+    let speakerChanged = (i > 0 and segment.speaker != annotatedTranscript[i-1].speaker)
+    let topicChanged = detectTopicChange(segment, annotatedTranscript[i-1])
+    let longPause = segment.silence > 3.0
+
+    if (speakerChanged and topicChanged) or (longPause and topicChanged):
+      chapters.add(Chapter(start: segment.time, title: segment.topic))
+
+  return chapters
+```
+
+**Speaker diarization integration:**
+- Whisper.cpp added experimental support via `tinydiarize` (2026)
+- WhisperX provides production-ready diarization pipeline
+- Falcon Speaker Diarization works offline with whisper.cpp
+
+**Detection:**
+- Chapter count significantly exceeds expected (>20 chapters for 60min video)
+- User feedback: "chapters are too granular"
+- Chapter duration variance is high (some 30s, some 10min)
+- Chapters split during monologues (should be single chapter)
+
+**Prevention strategy:**
+1. **Phase: Chapter Detection** - Implement speaker diarization BEFORE chapter detection algorithm
+2. Test on multi-speaker content (podcast, interview) not just monologues
+3. Validate chapter count against duration heuristic (90min video should have 6-12 chapters)
+4. Add confidence scores to chapters (low confidence = merge candidate)
+5. Provide `--min-chapter-duration` flag (default 2 minutes)
+6. Log chapter count and duration distribution for validation
+
+**Integration with honeyclip:**
+- Existing transcript support (`src/transcript/`) provides foundation
+- Speaker diarization belongs in `src/transcript/diarization.nim` (already exists!)
+- Chapter detection should be new `src/chapters/` module
+- whisper.cpp integration (`src/cmds/whisper.nim`) must output speaker labels
+
+**Quality gates:**
+- Monologue (1 speaker): Max 1 chapter per 5-10 minutes
+- Dialogue (2 speakers): Chapters aligned with speaker turns + topic
+- Multi-speaker (3+ speakers): Chapters when new speaker joins or leaves
 
 **Sources:**
-- [Delving Deep into Engagement Prediction of Short Videos](https://arxiv.org/html/2410.00289v1)
-- [Beyond Views: Measuring and Predicting Engagement](https://www.researchgate.net/publication/319622196_Beyond_Views_Measuring_and_Predicting_Engagement_in_Online_Videos)
+- [Auphonic Automatic Chapters](https://auphonic.com/help/algorithms/speech_recognition.html)
+- [WhisperX Transcription Pipeline](https://vogla.com/whisperx-transcription-pipeline-guide/)
+- [Whisper.cpp Speaker Diarization](https://picovoice.ai/blog/whisper-cpp-speaker-diarization/)
+- [WhisperX GitHub](https://github.com/m-bain/whisperX)
 
 ---
 
-### Pitfall 7: Frame Extraction Rate vs. Detection Accuracy Tradeoff
+## Moderate Pitfalls
 
-**What goes wrong:**
-Processing every frame wastes compute (30fps = 1800 frames/minute) but skipping too many frames misses important events. Developers either burn CPU on redundant processing or miss critical face detection opportunities during scene changes. Real-time analysis requires ≥24fps, creating impossible performance requirements for offline batch processing.
+Mistakes that cause delays, technical debt, or performance degradation (but recoverable).
+
+### Pitfall 6: macOS VideoToolbox Assuming Metal Availability
+
+**What goes wrong:** Code assumes all macOS systems support Metal-accelerated VideoToolbox. Older Macs (pre-2017) or macOS VMs don't have Metal, causing hard crashes when attempting hardware acceleration.
 
 **Why it happens:**
-No clear guidance exists on optimal frame sampling rates for face detection in pre-recorded video (vs real-time streams). Teams either process every frame to "be safe" or randomly sample frames without understanding detection accuracy impact.
+- Documentation says "VideoToolbox on macOS 10.8+" without mentioning Metal requirement
+- Metal is required for full VideoToolbox acceleration (tone-mapping, advanced filters)
+- Developers test on modern MacBooks (all have Metal) not older hardware
+- FFmpeg doesn't gracefully fallback when Metal is unavailable
 
-**How to avoid:**
-- Implement adaptive frame selection: key frame extraction based on scene changes and motion detection
-- Use K-best frame selection: analyze multiple frames, keep highest quality detections
-- For offline processing, target 1-5fps analysis rate, not real-time 24fps
-- Detect scene changes first, then densely sample around transitions, sparsely sample static scenes
-- Validate that selected frames maintain detection accuracy within acceptable threshold (e.g., <5% degradation vs all-frame processing)
-- Profile CPU usage and establish frame rate limits that prevent thermal throttling
+**Prevention:**
+```nim
+when defined(macosx):
+  proc hasMetalSupport(): bool =
+    # Check if Metal framework is available
+    let (output, exitCode) = gorgeEx("system_profiler SPDisplaysDataType | grep -i metal")
+    return exitCode == 0 and "Metal" in output
 
-**Warning signs:**
-- CPU utilization at 100% for entire video processing duration
-- Processing time scales linearly with video length regardless of content complexity
-- Battery drain complaints on laptop usage
-- Detection results identical for frames N and N+1 (indicating over-sampling)
-- Missing important events that occur between sampled frames
+  proc initHwAccel(): HwAccelConfig =
+    if hasMetalSupport():
+      result.method = HwAccelMethod.VideoToolbox
+      result.tonemap = ToneMapMethod.Metal
+    else:
+      # Fallback to CPU or VideoToolbox without tone-mapping
+      result.method = HwAccelMethod.VideoToolboxLegacy
+      result.tonemap = ToneMapMethod.None
+```
 
-**Phase to address:**
-Phase 2 (Face Detection) - Optimize frame extraction before scaling to engagement analysis
+**Detection:**
+- Crash with "Metal device not found" on older Macs
+- FFmpeg error "Cannot initialize videotoolbox" on macOS VMs
+- Feature requests from users on older hardware
+
+**Prevention strategy:**
+1. **Phase: GPU Acceleration Basics** - Add runtime Metal detection before enabling VideoToolbox
+2. Test on macOS VM (no Metal) and 2011-2016 Macs
+3. Provide clear error message if Metal required but unavailable
+4. Document minimum macOS hardware requirements (2017+ for full features)
 
 **Sources:**
-- [Efficient video face recognition based on frame selection](https://pmc.ncbi.nlm.nih.gov/articles/PMC7959602/)
-- [CNN based key frame extraction for face in video recognition](https://par.nsf.gov/servlets/purl/10087814)
-- [Facial Expression Recognition with Adaptive Frame Rate](https://proceedings.mlr.press/v202/savchenko23a/savchenko23a.pdf)
+- [Jellyfin Apple Hardware Acceleration](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/apple/)
+- [FFmpeg Apple Silicon Hardware Acceleration](https://codetv.dev/blog/hardware-acceleration-ffmpeg-apple-silicon)
 
 ---
 
-### Pitfall 8: GPU Acceleration Without Proper CPU Fallback
+### Pitfall 7: Batch Processing Error Cascade Without Isolation
 
-**What goes wrong:**
-Features that require GPU acceleration fail completely on systems without compatible GPUs, or worse, silently fall back to broken CPU implementations that produce incorrect results. Users get cryptic OpenCL errors or the tool crashes instead of gracefully degrading.
+**What goes wrong:** Batch processor shares state (cache, temp files, database connections) across files. One corrupted file causes state corruption that affects all subsequent files. Batch continues processing but produces invalid outputs silently.
 
 **Why it happens:**
-Developers test only on GPU-equipped machines and assume CPU fallback "just works." Libraries like cuml.accel have limitations causing fallback to scikit-learn CPU implementations, but these fallbacks may have different APIs or produce different results. The "graceful degradation" pattern masks underlying configuration problems.
+- Performance optimization: reuse cache/connections across files
+- Insufficient error isolation between batch items
+- Global state instead of per-file state
+- Error handling at batch level, not file level
 
-**How to avoid:**
-- Make GPU acceleration explicitly opt-in, not automatic with fallback
-- Test CPU-only execution on every platform, not just GPU paths
-- Document GPU requirements clearly and check for GPU availability at startup
-- Fail fast with clear error messages if GPU is required but unavailable
-- If implementing fallback, validate that CPU results match GPU results within tolerance
-- Consider CPU-first implementation: optimize CPU path, add GPU as optional speedup
-- For whisper.cpp model: document that CUDA is Linux-only (matches CLAUDE.md constraints)
+**Prevention:**
+```nim
+proc processBatch(files: seq[string]) =
+  for file in files:
+    # Isolate each file in try-finally block
+    try:
+      var fileCtx = createFileContext(file)  # Fresh state per file
+      defer: fileCtx.cleanup()  # Always cleanup
 
-**Warning signs:**
-- Users report "it works on my machine" but fails on others
-- Performance varies 10x+ between deployments without clear explanation
-- Error messages mention CUDA/OpenCL but user doesn't understand
-- Fallback silently produces different results than GPU path
-- CPU fallback performance is so slow it's unusable (minutes vs seconds)
+      processFile(fileCtx)
+    except CatchableError as e:
+      # Log error, continue to next file
+      logError(&"Failed to process {file}: {e.msg}")
+      continue  # Don't abort batch
+```
 
-**Phase to address:**
-Phase 1 (Foundation) - Establish GPU/CPU strategy before building features that depend on it
+**Prevention strategy:**
+1. **Phase: Batch Processing Core** - Design for isolation-first (optimize later)
+2. Use per-file context objects (no shared global state)
+3. Cleanup resources in `defer` blocks (ensures cleanup even on exception)
+4. Test with mixed valid/corrupted files to verify isolation
 
 **Sources:**
-- [GPU Progressive keeps falling back to CPU due to OpenCL Error](https://discussions.unity.com/t/gpu-progressive-keeps-falling-back-to-cpu-due-to-opencl-error/815457)
-- [Graceful JavaScript fallback when GPU not available](https://news.ycombinator.com/item?id=24027673)
-- [Resolve SVM Limitations in cuml.accel](https://github.com/rapidsai/cuml/issues/6872)
+- [MuleSoft Batch Error Handling](https://mulesy.com/error-handling-in-batch-job/)
+- [Azure Batch Error Handling](https://learn.microsoft.com/en-us/azure/batch/error-handling)
 
 ---
 
-### Pitfall 9: Cross-Platform ONNX/OpenCV Build System Complexity
+### Pitfall 8: Nim GC Not Tracking C-Allocated Frame Buffers
 
-**What goes wrong:**
-ONNX Runtime and OpenCV have conflicting build requirements across Windows/Linux/macOS. Windows requires Visual Studio 2022+ (earlier versions not supported), minimum Windows 10. Linux needs specific GCC versions (8.x and below not supported). macOS cross-compilation from Linux for Windows requires mingw-w64 but ONNX Runtime has limited MinGW support. Protobuf version conflicts between FFmpeg, ONNX Runtime, and OpenCV cause cryptic build failures.
+**What goes wrong:** FFmpeg frames allocated with `av_frame_alloc()` are not visible to Nim's GC. Even with `GC_ref()` calls, the GC doesn't know about the large frame data buffers, leading to memory bloat and eventual OOM.
 
 **Why it happens:**
-Each ML library evolved independently with different build system assumptions. ONNX Runtime's cross-compilation to ARM is poorly documented (32-bit requires cross-compilation due to memory constraints). OpenCV's CMake configuration with ONNX support fails to recognize ONNX even when properly configured.
+- `GC_ref()` only prevents GC of Nim wrapper object, not C data
+- Frame data buffer (32MB for 4K) is allocated by C code
+- Nim GC sees small 200-byte `AVFrame` struct, not 32MB buffer
+- Manual memory management required but often forgotten
 
-**How to avoid:**
-- Document minimum toolchain versions in CLAUDE.md before starting (GCC 9+, MSVC 2022+)
-- Uninstall conflicting protobuf versions before building ONNX Runtime
-- Test cross-compilation early: Windows cross-compile from Linux is critical for honeyclip workflow
-- Consider ONNX Runtime pre-built binaries instead of building from source for Windows
-- Use OpenCV-lite (opencv_lite project) which bundles compatible ONNX Runtime versions (v1.14-v1.22)
-- Set up Docker/container builds to ensure reproducible toolchain environments
-- Add CMake feature flags to disable ML features if build dependencies are unavailable
+**Prevention:**
+```nim
+type FrameWrapper = ref object
+  frame: ptr AVFrame
+  size: int  # Track buffer size for GC hints
 
-**Warning signs:**
-- Builds succeed on one platform but fail on another
-- CMake finds libraries but linker fails
-- Protobuf version errors during build
-- Cross-compilation takes 3+ hours (indicates redundant builds or missing cached artifacts)
-- Different developers get different build results from same source
+proc allocFrame(width, height: int): FrameWrapper =
+  result = FrameWrapper()
+  result.frame = av_frame_alloc()
+  result.size = width * height * 4  # RGBA estimate
 
-**Phase to address:**
-Phase 1 (Foundation) - Validate cross-platform builds before adding ML dependencies
+  # Hint to GC about external memory
+  when defined(gcDestructors):
+    GC_addCycleRoot(cast[pointer](result))
+  else:
+    GC_ref(result)
+    # Register external memory with GC
+    GC_setMaxPause(10)  # Force more frequent collection
+
+proc freeFrame(fw: FrameWrapper) =
+  if fw.frame != nil:
+    av_frame_free(addr fw.frame)
+    when not defined(gcDestructors):
+      GC_unref(fw)
+```
+
+**Better approach: Use --gc:arc or --gc:orc:**
+```nim
+# With ARC/ORC, use destructors instead of manual GC_ref/unref
+type FrameWrapper = object
+  frame: ptr AVFrame
+
+proc `=destroy`(fw: var FrameWrapper) =
+  if fw.frame != nil:
+    av_frame_free(addr fw.frame)
+
+proc allocFrame(): FrameWrapper =
+  result.frame = av_frame_alloc()
+  # No GC_ref needed - destructor handles cleanup
+```
+
+**Detection:**
+- Memory usage climbs without GC collecting
+- `av_frame_free()` called but memory not released
+- Process RSS continues growing despite cleanup code
+
+**Prevention strategy:**
+1. **Phase: 4K Memory Optimization** - Switch to --gc:arc/orc for deterministic cleanup
+2. Wrap all FFmpeg objects in ref types with destructors
+3. Test with memory profiler (Valgrind, Instruments, heaptrack)
+4. Add memory usage assertions in tests
+
+**Integration with honeyclip:**
+- Current code uses default GC (refc)
+- Good pattern: `defer: avcodec_free_context(addr codecCtx)` in media.nim
+- Should apply same pattern to all AVFrame allocations
+- Consider --gc:orc migration for v1.2 (better for multimedia workloads)
 
 **Sources:**
-- [Build for inferencing - ONNX Runtime](https://onnxruntime.ai/docs/build/inferencing.html)
-- [How to enable ONNX Runtime Windows GPU version into OpenCV CMake flag?](https://github.com/opencv/opencv/issues/26689)
-- [Cross compilation of onnxruntime for ARMv7](https://github.com/microsoft/onnxruntime/issues/21439)
-- [opencv_lite: OpenCV API with ONNX by ONNXRuntime](https://github.com/zihaomu/opencv_lite)
+- [Nim refc Documentation](https://nim-lang.github.io/Nim/refc.html)
+- [Nim Destructors](https://nim-lang.org/araq/destructors.html)
 
 ---
 
-### Pitfall 10: Model Quantization Accuracy Degradation
+### Pitfall 9: Preview Generation Creates Memory Pressure in Batch Mode
 
-**What goes wrong:**
-Quantizing face detection or engagement models from FP32 to INT8/INT4 to reduce binary size and inference time causes accuracy degradation. Poorly calibrated quantization leads to 25%+ accuracy loss. Users get faster but unreliable results, undermining trust in the tool.
+**What goes wrong:** Generating previews for batch processing keeps decoded frames in memory for thumbnail extraction. With 100 videos × 10 thumbnails × 32MB/frame = 32GB memory usage spike.
 
 **Why it happens:**
-Developers quantize models without validation on representative data. Default quantization settings optimize for model size/speed without testing accuracy impact. Poor calibration data selection (using test set instead of diverse real-world samples) is the most common cause of degradation.
+- Preview extraction seeks to specific timestamps, decodes frame, keeps in memory
+- Batch mode generates all previews before starting encode
+- No streaming preview generation (decode → thumbnail → discard)
 
-**How to avoid:**
-- Establish accuracy baselines with FP32 models before quantizing
-- Use quantization-aware training (QAT) if training models yourself, not just post-training quantization
-- Test quantized models on diverse video samples: different resolutions, compression levels, demographics
-- Document acceptable accuracy degradation thresholds (e.g., <3% for INT8, <5% for INT4)
-- Use SmoothQuant, FlatQuant, or ZeroQAT techniques for INT4 if needed
-- Provide option to download full-precision models for users who prioritize accuracy over speed
-- Include quantization validation in CI: fail builds if accuracy drops below threshold
+**Prevention:**
+```nim
+# BAD: Load all preview frames first
+var previewFrames: seq[ptr AVFrame]
+for timestamp in previewTimestamps:
+  previewFrames.add(seekAndDecode(timestamp))
+generateThumbnails(previewFrames)
 
-**Warning signs:**
-- Face detection accuracy drops from 95% to 70% after quantization
-- Engagement scores show high variance on similar content after model update
-- Users report model worked better in previous version
-- Quantized model performs well on test set but poorly on production data
-- Model size decreased 4x but accuracy decreased 20%+
+# GOOD: Streaming preview generation
+for timestamp in previewTimestamps:
+  let frame = seekAndDecode(timestamp)
+  generateThumbnail(frame, outputPath)
+  av_frame_free(addr frame)  # Immediate cleanup
+```
 
-**Phase to address:**
-Phase 2 (Face Detection) - Validate quantization before deploying models to users
+**Prevention strategy:**
+1. **Phase: Preview Generation** - Design for streaming (one frame at a time)
+2. Limit max concurrent preview extractions in batch mode
+3. Add `--preview-quality` flag (lower resolution = less memory)
+4. Consider preview cache with LRU eviction
+
+---
+
+### Pitfall 10: FFmpeg 7.x Parallel Pipeline Without Resource Limits
+
+**What goes wrong:** FFmpeg 7.x introduced parallel demux-decode-filter-encode-mux pipeline. Without resource limits, each file in batch mode spawns full pipeline, leading to thread explosion and memory exhaustion.
+
+**Why it happens:**
+- FFmpeg 7.x "most complex refactoring in decades" changed execution model
+- Each stage (demux, decode, filter, encode, mux) now runs in parallel
+- Multiple files × 5 stages × thread pool = hundreds of threads
+- No automatic resource scaling based on concurrent operations
+
+**Prevention:**
+```nim
+# Configure FFmpeg 7.x pipeline limits
+proc configurePipeline(fileCount: int): FFmpegConfig =
+  # Reserve resources per concurrent file
+  let threadsPerFile = max(1, totalCores div fileCount)
+
+  result.threads = threadsPerFile
+  result.filterThreads = max(1, threadsPerFile div 2)
+  result.decodingThreads = threadsPerFile
+
+  # Limit pipeline depth
+  result.maxQueuedFrames = if fileCount > 1: 4 else: 8
+```
+
+**Detection:**
+- Thread count exceeds CPU cores × 2 (check with `ps` or `top`)
+- Context switch rate very high (thousands per second)
+- CPU usage paradoxically drops during heavy load (thrashing)
+
+**Prevention strategy:**
+1. **Phase: Batch Processing Core** - Calculate per-file resource budget
+2. Test with FFmpeg 7.x CLI flags for pipeline tuning
+3. Monitor thread count during batch processing
+4. Add `--max-parallel` flag for user control
 
 **Sources:**
-- [Model Quantization: Concepts, Methods, and Why It Matters](https://developer.nvidia.com/blog/model-quantization-concepts-methods-and-why-it-matters/)
-- [We ran over half a million evaluations on quantized LLMs](https://developers.redhat.com/articles/2024/10/17/we-ran-over-half-million-evaluations-quantized-llms)
-- [LLM Quantization: BF16 vs FP8 vs INT4 in 2026](https://research.aimultiple.com/llm-quantization/)
+- [FFmpeg CLI Multi-Threading](https://news.ycombinator.com/item?id=38613219)
+- [FFmpeg Patches Multi-Threaded CLI](https://www.phoronix.com/news/FFmpeg-CLI-Multi-Threaded)
 
 ---
 
-## Technical Debt Patterns
+## Minor Pitfalls
 
-Shortcuts that seem reasonable but create long-term problems.
+Mistakes that cause annoyance but are fixable without major refactoring.
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Processing every video frame | Guaranteed not to miss events | 10-30x CPU waste, thermal throttling | Never - use adaptive frame selection |
-| Using cloud face detection APIs for prototyping | Fast initial implementation | Violates "no cloud" constraint, vendor lock-in | Only for proof-of-concept demos, never production |
-| Hard-coding detection thresholds from papers | Quick to implement | High false positive rates on real data | Only as initial values - must calibrate on user data |
-| Static linking all ML libraries | Simpler deployment | 100MB+ binaries, slow cross-compilation | Small single-platform tools, not cross-platform CLI |
-| Skipping demographic fairness testing | Faster development | Biased detection, potential PR disasters | Never for user-facing features |
-| Single-threaded video processing | Simple to debug | Can't utilize multi-core CPUs | Initial implementation - must parallelize for v1.0 |
-| Copying whisper.cpp integration pattern for all ML | Reuse existing code patterns | Memory management issues - whisper.cpp is audio, faces are video frames | Never - each library needs custom FFI wrapper |
-| Using LTO (Link-Time Optimization) for all builds | Smaller binaries | 5-10x slower compilation, harder debugging | Only for release builds, never development |
+### Pitfall 11: Chapter Title Generation Without Context Window
 
-## Integration Gotchas
+**What goes wrong:** LLM-based chapter title generation processes each chapter boundary in isolation. Without surrounding context, titles are generic ("Discussion continues", "More on topic X").
 
-Common mistakes when connecting to external ML libraries.
+**Prevention:**
+```nim
+# BAD: Single segment
+generateTitle(transcript[chapterStart..chapterEnd])
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| ONNX Runtime | Assuming CPU fallback works automatically | Explicitly test CPU-only builds, make GPU opt-in |
-| OpenCV | Using system OpenCV instead of building from source | Build OpenCV with specific ONNX Runtime version to avoid ABI conflicts |
-| whisper.cpp | Assuming CUDA works on all platforms | Document Linux-only CUDA support, provide CPU path for Windows/macOS |
-| Face detection models | Loading models from disk on every frame | Load once at startup, cache in memory, reuse across frames |
-| FFmpeg frame extraction | Converting every frame to RGB before analysis | Extract YUV, convert only frames that pass initial filters |
-| Nim GC with C++ libraries | Passing Nim strings directly to C++ | Copy to C-allocated buffer or use cstring with lifetime management |
-| Model file paths | Hard-coding absolute paths to models | Use relative paths from executable or environment variables |
-| Thread pools for video processing | Creating new threads per video | Initialize thread pool once, reuse for all videos |
+# GOOD: Include context
+let contextBefore = transcript[max(0, chapterStart-50)..chapterStart]
+let contextAfter = transcript[chapterEnd..min(len(transcript), chapterEnd+50)]
+generateTitle(contextBefore, transcript[chapterStart..chapterEnd], contextAfter)
+```
 
-## Performance Traps
-
-Patterns that work at small scale but fail as usage grows.
-
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Processing 4K video at full resolution | Slow processing, high memory usage | Downscale to 1080p or 720p for analysis, preserve original for output | >10 minute 4K videos |
-| Synchronous video processing | UI freezes, appears hung | Use background threads, show progress | Any video >1 minute |
-| Loading entire video into RAM | Fast seek, slow startup, OOM crashes | Stream frames, process in chunks | Videos >1GB |
-| Re-running face detection on cached frames | Wasted CPU on unchanged content | Hash frames, skip detection if hash matches previous run | Re-processing edited videos |
-| Global model singleton | Thread contention, serialized processing | Thread-local model instances or model pool | Batch processing multiple videos |
-| Unbounded output buffer | Memory grows linearly with video length | Streaming write to disk, fixed-size ring buffer | Videos >30 minutes |
-| Linear search through detected faces | O(n²) complexity for matching across frames | Spatial hash table or KD-tree for face positions | >100 faces per video |
-| Storing full-resolution face crops | Gigabytes of cached data | Store embeddings/features only, regenerate crops if needed | Videos with many faces |
-
-## Security Mistakes
-
-Domain-specific security issues beyond general software security.
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Loading untrusted ONNX models | Arbitrary code execution via malicious model files | Validate model signatures, sandbox model loading, use only trusted model sources |
-| Processing user videos without sanitization | FFmpeg codec vulnerabilities, malicious video files | Run FFmpeg in sandbox, validate container format before processing, set resource limits |
-| Exposing model file paths in error messages | Information disclosure about system layout | Use generic error messages, log details only to secure log files |
-| Caching face embeddings without encryption | Privacy violation if cache stolen | Encrypt cached embeddings at rest, clear cache on exit option |
-| Writing temporary frames to /tmp | Sensitive video frames readable by other users | Use user-specific temp directory with restricted permissions |
-| Logging detected face coordinates | Privacy violation in logs | Truncate or hash identifying information in logs |
-| Downloading models over HTTP | Man-in-the-middle attacks, poisoned models | Use HTTPS only, verify checksums/signatures |
-| Running FFmpeg with shell=True | Command injection via malicious filenames | Use subprocess with array arguments, never shell interpolation |
-
-## UX Pitfalls
-
-Common user experience mistakes in this domain.
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| No progress indication during processing | Users think tool is frozen, kill process | Show frame-by-frame progress, estimated time remaining |
-| Cryptic ML error messages | Users don't know if problem is video or tool | Detect common issues (no faces found, low quality) and provide actionable messages |
-| Requiring GPU without clear documentation | Tool fails with obscure errors | Detect GPU at startup, show clear message if required but missing |
-| Silent accuracy degradation | Users don't know when to trust results | Show confidence scores, warn when quality thresholds not met |
-| Processing videos in current directory | Clutters user workspace with temp files | Use dedicated cache directory, clean up automatically |
-| Binary 100MB+ downloads | Users abandon during download | Offer minimal builds, download models on-demand |
-| Engagement scores without context | Numbers are meaningless without baseline | Show percentile ranking, comparison to similar videos |
-| No way to verify face detection results | Users can't debug wrong results | Offer optional debug output with annotated frames |
-
-## "Looks Done But Isn't" Checklist
-
-Things that appear complete but are missing critical pieces.
-
-- [ ] **Face Detection:** Often missing demographic fairness validation - verify accuracy across race/gender/age groups, not just benchmark datasets
-- [ ] **Model Integration:** Often missing memory leak testing - run for 1000+ videos and monitor RSS growth
-- [ ] **Cross-compilation:** Often missing actual runtime testing on target platform - verify .exe works on Windows, not just that build succeeds
-- [ ] **Engagement Scoring:** Often missing cold start handling - verify behavior on videos from new creators with no history
-- [ ] **FFI Wrappers:** Often missing error propagation from C to Nim - verify Nim exceptions capture C errors, not just success paths
-- [ ] **Frame Extraction:** Often missing scene change detection - verify key events detected, not just uniform sampling
-- [ ] **GPU Acceleration:** Often missing CPU-only testing - verify works on systems without compatible GPU
-- [ ] **Model Quantization:** Often missing accuracy validation on production data - verify performance on real user videos, not test sets
-- [ ] **Progress Reporting:** Often missing cancellation handling - verify clean shutdown when user interrupts long-running processing
-- [ ] **Cache Management:** Often missing size limits - verify cache doesn't grow unbounded on large video libraries
-
-## Recovery Strategies
-
-When pitfalls occur despite prevention, how to recover.
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Binary size explosion | MEDIUM | 1. Profile binary to identify largest symbols. 2. Add CMake flags to disable unused backends. 3. Consider dynamic linking for largest libraries. 4. Use UPX compression for release binaries |
-| False positive rate in production | HIGH | 1. Collect production samples with ground truth. 2. Retrain or recalibrate models. 3. Implement multi-frame consensus. 4. Add user feedback mechanism to improve over time |
-| Memory leaks at FFI boundary | HIGH | 1. Use Valgrind/ASan to identify leak location. 2. Audit all GC_ref/GC_unref pairs. 3. Convert to RAII pattern. 4. Add memory regression tests to CI |
-| Cross-platform build failures | MEDIUM | 1. Set up CI for all target platforms. 2. Use Docker containers for reproducible builds. 3. Document exact toolchain versions. 4. Consider pre-built binaries for problematic libraries |
-| Engagement metric misalignment | LOW | 1. Gather user feedback on score quality. 2. A/B test alternative metrics. 3. Adjust weights based on correlation with user satisfaction. 4. Document metric definition changes in changelog |
-| Frame extraction too slow | LOW | 1. Profile to find bottleneck. 2. Implement adaptive sampling. 3. Add parallel frame decoding. 4. Use hardware-accelerated decoding if available |
-| Model quantization accuracy loss | MEDIUM | 1. Roll back to full-precision model. 2. Use QAT if possible. 3. Try alternative quantization techniques (SmoothQuant). 4. Offer both quantized and full models |
-| Cold start prediction failure | LOW | 1. Implement content-based fallback. 2. Set minimum confidence thresholds. 3. Show "insufficient data" message instead of bad predictions. 4. Document expected accuracy with N videos |
-
-## Pitfall-to-Phase Mapping
-
-How roadmap phases should address these pitfalls.
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Memory management at FFI boundaries | Phase 1: Foundation | Run 1000 videos through pipeline without RSS growth >10% |
-| Binary size explosion | Phase 1: Foundation | CI fails if binary exceeds 50MB per platform |
-| Cross-platform build complexity | Phase 1: Foundation | All platforms build and pass smoke tests in CI |
-| GPU acceleration without CPU fallback | Phase 1: Foundation | Unit tests pass on CPU-only CI runner |
-| Frame extraction rate vs accuracy | Phase 2: Face Detection | Accuracy within 5% of all-frame processing at 10% frame rate |
-| Face alignment and low quality input | Phase 2: Face Detection | Detection accuracy >90% on compressed user videos (not benchmarks) |
-| False positive rate in production | Phase 2: Face Detection | FPR <15% on diverse test set (Metropolitan Police was 85%) |
-| Model quantization accuracy degradation | Phase 2: Face Detection | Quantized model accuracy within 3% of FP32 baseline |
-| Engagement metric misalignment | Phase 3: Engagement Scoring | User survey shows >80% agreement with "good video" labels |
-| Cold start prediction problem | Phase 3: Engagement Scoring | Confidence scores <50% flagged for videos with <5 historical samples |
-| Speaker tracking false positives | Phase 4: Speaker Reframing | Multi-frame consensus reduces false positives by >50% vs single-frame |
-
-## Sources
-
-### Face Detection and Video Analysis
-- [Top 5 Facial Recognition Challenges & Solutions in 2026](https://research.aimultiple.com/facial-recognition-challenges/)
-- [Face Recognition Pipeline Clearly Explained](https://medium.com/backprop-labs/face-recognition-pipeline-clearly-explained-f57fc0082750)
-- [Efficient video face recognition based on frame selection](https://pmc.ncbi.nlm.nih.gov/articles/PMC7959602/)
-- [Reducing false positive rate with Scene Change Indicator](https://pmc.ncbi.nlm.nih.gov/articles/PMC10182539/)
-- [Accuracy and Fairness of Facial Recognition in Police Images](https://arxiv.org/html/2505.14320v1)
-- [The Challenges of AI-Based Face Recognition](https://regulaforensics.com/blog/challenges-of-ai-based-face-recognition/)
-
-### Video Engagement and Scoring
-- [Beyond Views: Measuring and Predicting Engagement in Online Videos](https://arxiv.org/pdf/1709.02541)
-- [Delving Deep into Engagement Prediction of Short Videos](https://arxiv.org/html/2410.00289v1)
-- [LinkedIn Algorithm 2026: Text vs Video Strategy](https://growleads.io/blog/linkedin-algorithm-2026-text-vs-video-reach/)
-
-### ML Integration and Deployment
-- [Model Quantization: Concepts, Methods, and Why It Matters](https://developer.nvidia.com/blog/model-quantization-concepts-methods-and-why-it-matters/)
-- [We ran over half a million evaluations on quantized LLMs](https://developers.redhat.com/articles/2024/10/17/we-ran-over-half-million-evaluations-quantized-llms)
-- [LLM Quantization: BF16 vs FP8 vs INT4 in 2026](https://research.aimultiple.com/llm-quantization/)
-- [ML Inference Runtimes in 2026: An Architect's Guide](https://medium.com/@digvijay17july/ml-inference-runtimes-in-2026-an-architects-guide-to-choosing-the-right-engine-d3989a87d052)
-
-### Cross-Platform Build Systems
-- [Build for inferencing - ONNX Runtime](https://onnxruntime.ai/docs/build/inferencing.html)
-- [How to enable ONNX Runtime Windows GPU version into OpenCV CMake flag?](https://github.com/opencv/opencv/issues/26689)
-- [Cross compilation of onnxruntime for ARMv7](https://github.com/microsoft/onnxruntime/issues/21439)
-- [opencv_lite: OpenCV API with ONNX by ONNXRuntime](https://github.com/zihaomu/opencv_lite)
-- [Binary size: should we use static or dynamic linking?](https://www.sandordargo.com/blog/2024/09/25/dynamic-vs-static-linking-binary-size)
-
-### Nim FFI and Memory Management
-- [The Nim memory model](https://zevv.nl/nim-memory/)
-- [Interop with other languages - The Status Nim style guide](https://status-im.github.io/nim-style-guide/interop.html)
-- [Wrapping C libraries in Nim](https://peterme.net/wrapping-c-libraries-in-nim.html)
-
-### Speaker Tracking and Automation
-- [AI Speaker Focus: Auto Framing for Video](https://www.kapwing.com/ai/auto-speaker-focus)
-- [Reducing false positive rate in real-time face recognition](https://pmc.ncbi.nlm.nih.gov/articles/PMC10182539/)
-
-### GPU Acceleration and Fallback
-- [GPU Progressive keeps falling back to CPU due to OpenCL Error](https://discussions.unity.com/t/gpu-progressive-keeps-falling-back-to-cpu-due-to-opencl-error/815457)
-- [Graceful JavaScript fallback when GPU not available](https://news.ycombinator.com/item?id=24027673)
-- [Resolve SVM Limitations in cuml.accel](https://github.com/rapidsai/cuml/issues/6872)
+**Prevention strategy:**
+1. **Phase: Chapter Detection** - Include 30-60 seconds before/after for context
+2. Validate titles aren't generic (check against blacklist: "continues", "more on")
+3. Provide fallback to timestamp-based titles if generation fails
 
 ---
-*Pitfalls research for: Video Engagement Analysis with ML Integration*
-*Researched: 2026-02-01*
+
+### Pitfall 12: GPU Model Selection Without Capability Detection
+
+**What goes wrong:** Code assumes all NVIDIA GPUs support same features. Older GPUs (Pascal, Maxwell) lack INT8 support, newer encoders (AV1), or tensor cores, causing initialization failures.
+
+**Prevention:**
+```nim
+when defined(enable_cuda):
+  proc detectGpuCapabilities(): GpuCapabilities =
+    let (output, _) = gorgeEx("nvidia-smi --query-gpu=compute_cap --format=csv,noheader")
+    let computeCapability = parseFloat(output.strip())
+
+    result.supportsTensorCores = computeCapability >= 7.0  # Volta+
+    result.supportsInt8 = computeCapability >= 6.1  # Pascal+
+    result.supportsAV1 = computeCapability >= 8.6  # Ada+
+
+    if not result.supportsTensorCores:
+      warn "GPU lacks Tensor Cores - ML features will be slow"
+```
+
+**Prevention strategy:**
+1. **Phase: GPU Acceleration Basics** - Runtime capability detection
+2. Graceful degradation (disable features not supported)
+3. Document minimum GPU requirements (Compute Capability 6.1+)
+
+---
+
+### Pitfall 13: Batch Progress Reporting Without ETA Calculation
+
+**What goes wrong:** Progress bar shows "Processing file 37/100" without time remaining. Users don't know if batch will finish in 10 minutes or 10 hours.
+
+**Prevention:**
+```nim
+type BatchProgress = object
+  completed: int
+  total: int
+  startTime: DateTime
+
+proc reportProgress(bp: var BatchProgress) =
+  let elapsed = now() - bp.startTime
+  let avgTimePerFile = elapsed.inSeconds / bp.completed
+  let remaining = (bp.total - bp.completed) * avgTimePerFile
+
+  echo &"[{bp.completed}/{bp.total}] ETA: {remaining.formatDuration()}"
+```
+
+**Prevention strategy:**
+1. **Phase: Batch Processing Core** - Calculate ETA from start
+2. Update ETA every file (moving average of last 10 files)
+3. Show both file count and time remaining
+
+---
+
+### Pitfall 14: Cross-Platform Path Handling in Batch Checkpoints
+
+**What goes wrong:** Checkpoint file stores absolute paths with Unix separators (`/Users/...`). Loading checkpoint on Windows fails because paths don't match (`C:\Users\...`).
+
+**Prevention:**
+```nim
+import std/os
+
+proc normalizePathForCheckpoint(path: string): string =
+  # Store relative to current directory when possible
+  try:
+    result = relativePath(path, getCurrentDir())
+  except:
+    # Fall back to absolute path
+    result = path.absolutePath()
+
+proc resolvePathFromCheckpoint(stored: string): string =
+  if stored.isAbsolute():
+    return stored
+  else:
+    return (getCurrentDir() / stored).normalizePathEnd()
+```
+
+**Prevention strategy:**
+1. **Phase: Batch Processing Core** - Store relative paths in checkpoint
+2. Normalize path separators on load
+3. Test checkpoint portability between platforms
+
+---
+
+## Phase-Specific Warnings
+
+Warnings organized by which phase they're most likely to surface in.
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| **GPU Acceleration Basics** | Missing hwaccel_output_format flag (Pitfall 1) | Add integration test that verifies GPU memory usage, not system RAM |
+| **GPU Acceleration Basics** | macOS Metal assumption (Pitfall 6) | Runtime detection with graceful fallback |
+| **GPU Acceleration Basics** | GPU capability detection (Pitfall 12) | Query compute capability before initialization |
+| **4K Memory Optimization** | Unbounded frame buffer queue (Pitfall 3) | Implement backpressure with resolution-based limits |
+| **4K Memory Optimization** | Nim GC not tracking C buffers (Pitfall 8) | Migrate to --gc:orc for deterministic cleanup |
+| **Batch Processing Core** | No checkpoint/resume (Pitfall 4) | Design checkpoint schema before implementing loop |
+| **Batch Processing Core** | Error cascade without isolation (Pitfall 7) | Per-file context with defer cleanup |
+| **Batch Processing Core** | FFmpeg 7.x thread explosion (Pitfall 10) | Calculate per-file resource budget |
+| **Batch Processing Core** | Progress without ETA (Pitfall 13) | Moving average ETA calculation |
+| **Batch Processing Core** | Cross-platform checkpoint paths (Pitfall 14) | Store relative paths |
+| **Chapter Detection** | No speaker diarization (Pitfall 5) | Implement diarization before chapter algorithm |
+| **Chapter Detection** | Generic chapter titles (Pitfall 11) | Include context window in title generation |
+| **Preview Generation** | Memory pressure in batch (Pitfall 9) | Streaming preview generation |
+| **All GPU Phases** | Thread count misconfiguration (Pitfall 2) | Dynamic thread allocation based on hwaccel |
+
+---
+
+## Pitfalls Honeyclip Has Already Overcome
+
+Document existing solutions to avoid regression.
+
+### Memory Management at Nim/C++ FFI Boundary
+
+**Solution in place:** Consistent use of `defer` blocks for cleanup
+```nim
+# src/media.nim:76
+var codecCtx = avcodec_alloc_context3(nil)
+discard avcodec_parameters_to_context(codecCtx, codecParameters)
+defer: avcodec_free_context(addr codecCtx)
+```
+
+**Why it worked:** Nim's `defer` guarantees cleanup even on exception paths.
+
+**Recommendation:** Apply same pattern to all new FFmpeg object allocations in v1.2 features.
+
+---
+
+### Binary Size from Static Linking
+
+**Solution in place:** MinSizeRel for ML libraries, aggressive codec pruning
+```nim
+# honeyclip.nimble: Explicit codec disable lists
+var disableDecoders: seq[string] = @[]
+var disableEncoders: seq[string] = @[]
+```
+
+**Why it worked:** Explicit control over linked codecs reduces binary bloat.
+
+**Recommendation:** For GPU features, only enable required codecs (h264_nvenc, hevc_nvenc, etc.)
+
+---
+
+### Cross-Platform Builds (CMake Compatibility)
+
+**Solution in place:** CMake policy version override for ONNX Runtime
+```bash
+# -DCMAKE_POLICY_VERSION_MINIMUM=3.5 for older CMakeLists.txt
+```
+
+**Why it worked:** Newer CMake versions removed compatibility with CMake < 3.5.
+
+**Recommendation:** Apply same policy override to any new ML library dependencies.
+
+---
+
+## Research Confidence Assessment
+
+| Pitfall Category | Confidence | Source Quality |
+|------------------|-----------|----------------|
+| GPU Memory Transfer (1) | HIGH | NVIDIA official docs, multiple sources |
+| Thread Misconfiguration (2) | HIGH | FFmpeg 7.x release notes, performance studies |
+| 4K Frame Buffer OOM (3) | MEDIUM | Linux kernel docs, real-world reports |
+| Checkpoint/Resume (4) | HIGH | Industry standard patterns, AWS/Azure docs |
+| Chapter Detection (5) | MEDIUM | Whisper ecosystem, diarization tools |
+| macOS VideoToolbox (6) | HIGH | Apple/Jellyfin official docs |
+| Batch Error Isolation (7) | HIGH | Enterprise batch processing patterns |
+| Nim GC with C FFI (8) | MEDIUM | Nim official docs (need Valgrind validation) |
+| Preview Memory (9) | LOW | Inferred from frame buffer patterns |
+| FFmpeg 7.x Pipeline (10) | MEDIUM | FFmpeg release notes, Hacker News discussion |
+| Generic Titles (11) | LOW | Common LLM pattern (not domain-specific) |
+| GPU Capabilities (12) | MEDIUM | NVIDIA docs, community reports |
+| Progress ETA (13) | HIGH | Standard UX pattern |
+| Path Handling (14) | HIGH | Cross-platform development best practice |
+
+---
+
+## Recommended Validation During Development
+
+For each phase, validate against corresponding pitfalls:
+
+### GPU Acceleration Basics
+1. Profile GPU memory usage (nvidia-smi, Activity Monitor)
+2. Verify frames stay GPU-resident (no system RAM spikes)
+3. Test on macOS without Metal (VM or old hardware)
+4. Measure throughput with different thread counts (2, 4, 8, 16)
+
+### 4K Memory Optimization
+1. Test with ulimit -v 4GB (simulate constrained memory)
+2. Process 4K file and monitor memory ceiling
+3. Validate frame queue never exceeds configured depth
+4. Test with --gc:orc and verify deterministic cleanup
+
+### Batch Processing Core
+1. Interrupt batch at 50% completion, verify resume
+2. Inject corrupted file mid-batch, verify isolation
+3. Measure thread count during batch (should not exceed cores × 2)
+4. Test checkpoint loading on different platform
+
+### Chapter Detection
+1. Validate chapter count against duration heuristic
+2. Test on monologue (1 speaker) - expect low chapter count
+3. Test on interview (2 speakers) - chapters should align with turns
+4. Verify speaker labels present in output
+
+### Preview Generation
+1. Generate previews for 10 files, monitor memory usage
+2. Verify frames discarded after thumbnail creation
+3. Test batch preview generation (should not accumulate frames)
+
+---
+
+## Sources Summary
+
+**Official Documentation:**
+- [NVIDIA FFmpeg Transcoding Guide](https://developer.nvidia.com/blog/nvidia-ffmpeg-transcoding-guide/)
+- [FFmpeg with NVIDIA GPU Acceleration](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.0/ffmpeg-with-nvidia-gpu/index.html)
+- [Jellyfin Hardware Acceleration](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/)
+- [Apple VideoToolbox](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/apple/)
+- [Linux Kernel V4L2 Decoder](https://docs.kernel.org/userspace-api/media/v4l/dev-stateless-decoder.html)
+- [Azure Batch Error Handling](https://learn.microsoft.com/en-us/azure/batch/error-handling)
+- [AWS SageMaker Checkpoints](https://docs.aws.amazon.com/sagemaker/latest/dg/model-checkpoints.html)
+
+**Performance Studies (2026):**
+- [FFmpeg Threads Performance](https://streaminglearningcenter.com/blogs/ffmpeg-command-threads-how-it-affects-quality-and-performance.html)
+- [Thread Count Impact on Quality](https://streaminglearningcenter.com/encoding/how-thread-count-impacts-video-encoding-quality-throughput-and-cost.html)
+- [Optimizing FFmpeg Performance](https://www.cincopa.com/learn/optimizing-ffmpeg-performance-threads-presets-and-tuning)
+- [How to Reduce CPU Usage](https://copyprogramming.com/howto/how-to-reduce-cpu-usage-of-ffmpeg)
+
+**ML/Transcription:**
+- [Auphonic Chapter Detection](https://auphonic.com/help/algorithms/speech_recognition.html)
+- [WhisperX Pipeline](https://vogla.com/whisperx-transcription-pipeline-guide/)
+- [Whisper.cpp Speaker Diarization](https://picovoice.ai/blog/whisper-cpp-speaker-diarization/)
+- [WhisperX vs Competitors](https://brasstranscripts.com/blog/whisperx-vs-competitors-accuracy-benchmark)
+
+**Memory Optimization:**
+- [CUDA OOM Errors](https://openclaw-ai.org/guides/fix-openclaw-cuda-oom-errors)
+- [Low-VRAM Optimization](https://medium.com/the-ai-mindscape/optimizing-gpu-usage-on-low-vram-machines-6-practical-steps-to-dodge-oom-errors-2957c779f3e0)
+- [ComfyUI VRAM Management](https://github.com/RandomInternetPreson/ComfyUI_LTX-2_VRAM_Memory_Management)
+
+**Batch Processing:**
+- [Batch Error Handling 2026](https://oneuptime.com/blog/post/2026-01-30-batch-processing-error-handling/view)
+- [HTCondor Checkpointing](https://chtc.cs.wisc.edu/uw-research-computing/checkpointing)
+- [MuleSoft Batch Error Handling](https://mulesy.com/error-handling-in-batch-job/)
+
+**FFmpeg Architecture:**
+- [FFmpeg 7.x Multi-Threading](https://news.ycombinator.com/item?id=38613219)
+- [FFmpeg CLI Multi-Threaded Patches](https://www.phoronix.com/news/FFmpeg-CLI-Multi-Threaded)
+- [Multi-Threaded GPU Encoding](https://hostkey.com/blog/12-multi-threaded-video-encoding-on-a-professional-gpu/)
+
+**Nim Language:**
+- [Nim refc Documentation](https://nim-lang.github.io/Nim/refc.html)
+- [Nim Destructors](https://nim-lang.org/araq/destructors.html)
+- [Nim asyncdispatch](https://nim-lang.org/docs/asyncdispatch.html)
+- [Nim Concurrency](https://nim-by-example.github.io/concurrency/)

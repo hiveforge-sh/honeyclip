@@ -1,303 +1,445 @@
-# Feature Research: Video Engagement Analysis Tools
+# Feature Landscape: v1.2 Workflow & Performance
 
-**Domain:** Video engagement analysis and auto-clipping tools
-**Researched:** 2026-02-01
-**Confidence:** HIGH
+**Domain:** Video CLI tools - batch processing, chapter detection, preview generation, GPU acceleration
+**Researched:** 2026-02-05
+**Confidence:** MEDIUM (verified patterns from ecosystem surveys, some WebSearch-only findings)
 
-## Feature Landscape
+**Context:** This research extends honeyclip's existing engagement analysis (v1.0-v1.1) with workflow and performance features for v1.2.
 
-### Table Stakes (Users Expect These)
+## Table Stakes
 
-Features users assume exist. Missing these = product feels incomplete or non-competitive.
+Features users expect from modern video CLI tools. Missing these = product feels incomplete.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Automatic transcription with timestamps** | Every major tool (OpusClip, Kapwing, YouTube, etc.) provides this. 97%+ accuracy is standard. Users expect word-level timestamps in SRT/VTT formats. | MEDIUM | Auto-editor already has whisper-cpp integration. Need to expose timestamped output in standard formats. Complexity: timestamp alignment, multi-language support. |
-| **Auto-caption generation** | Captions are table stakes for social media (accessibility, silent viewing). Tools generate stylized captions automatically. | LOW-MEDIUM | Extends transcription. Main work: text rendering over video with timing sync. Could use FFmpeg's subtitle filters. |
-| **Scene/moment detection** | All clipping tools automatically identify "key moments" or "scene changes". Users expect AI to find clip boundaries automatically. | MEDIUM-HIGH | Computer vision (scene detection) + audio analysis. OpenCV for visual, audio energy for transitions. Algorithm complexity moderate. |
-| **Multi-platform export (aspect ratios)** | Tools must support 16:9 (YouTube), 9:16 (TikTok/Reels), 1:1 (Instagram). Missing any = "why can't I post to X?" | LOW | Rendering at different aspect ratios. Auto-editor already handles this via FFmpeg. Just needs UI/config exposure. |
-| **Batch processing** | Users expect to upload one long video and get multiple clips out. Single-clip output feels incomplete. | LOW-MEDIUM | Already conceptually supported by honeyclip's clip detection. Need to formalize batch export workflow. |
-| **Preview before export** | Users want to see clips before spending time rendering. No preview = blind export, frustration. | MEDIUM | Requires generating preview timeline/thumbnails. Could use FFmpeg for quick low-res previews. |
+| **Batch: Template/preset system** | Content creators process multiple videos with same settings. Template system (YAML/JSON config) is standard pattern. | Medium | FFmpeg-batch uses YAML profiles defining operation type and parameters. HandBrake has presets. Users expect to save and reuse configurations. |
+| **Batch: Progress reporting** | When processing multiple files, users need visibility into overall progress (not just current file). | Low | GNU Parallel's `--progress` flag is standard. Show current file, N/M completed, estimated time remaining. |
+| **Batch: Error recovery** | When processing 50 videos overnight, one failure shouldn't stop everything. Failed jobs need isolation. | Medium | GNU Parallel's `--resume-failed` is expected. Maintain job log, skip completed files on restart. |
+| **Batch: Parallel processing** | Users expect batch processing to use all CPU cores, not process serially. | Low | FFmpeg-batch launches N processes up to CPU thread count. Shell scripts use `&` backgrounding or GNU Parallel. |
+| **Chapter: Transcript-based markers** | When transcripts exist (honeyclip has this), users expect automatic chapter generation from speech patterns. | Medium | Descript, Sonix auto-generate chapters from transcripts. Detect topic changes, speaker changes, long pauses. |
+| **Chapter: Scene change detection** | Adobe/DaVinci/Final Cut all have automatic scene detection. CLI tools need parity. | Low | FFmpeg has scene detection filter (`select='gt(scene,0.3)'`). Established feature powered by Adobe Sensei in NLEs. |
+| **Preview: Low-res proxy generation** | Editing workflows expect 720p or lower proxies for 4K+ source. Standard NLE pattern. | Low | FFmpeg proxy workflow: `scale=-1:720 -c:v libx264 -crf 18`. H.264 is universal format. ProRes/DNxHD also common. |
+| **Preview: Fast preview mode** | Users expect "quick preview" to generate faster than realtime for checking edits before full render. | Medium | Proxy uses lower resolution + faster preset. Target: 2-3x faster than realtime for 1080p→720p. |
+| **GPU: CUDA on Linux** | Linux content creators with NVIDIA GPUs expect CUDA acceleration for ML workloads. | Medium | OpenCV + CUDA is standard. 3-22x speedup for face detection reported. Requires CUDA toolkit at build time. Data transfer overhead can negate gains if not managed. |
+| **GPU: Metal on macOS** | macOS users expect Metal acceleration. Apple's default GPU API since 2014. | Medium | Metal Performance Shaders (MPS) for ML. Metal 4 (2025) has first-class ML support. Core Video Framework integration. |
+| **Memory: Streaming decode** | 4K video at 60fps = ~1GB/sec uncompressed. Chunked reading is mandatory, not optional. | Low | Already standard in FFmpeg/libav workflows. Decode frame-by-frame, process, discard. Never load full video to RAM. |
+| **Memory: Frame pooling** | Repeatedly allocating/freeing frame buffers causes fragmentation. Buffer reuse expected. | Medium | Tencent MPS uses memory pool reconstruction. Pre-allocate frame pool, reuse buffers across decode cycles. |
 
-### Differentiators (Competitive Advantage)
+## Differentiators
 
-Features that set the product apart. Not required, but valued and can justify choosing this tool over competitors.
+Features that set honeyclip apart. Not expected, but valuable when present.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Local processing (privacy-first)** | OpusClip, Kapwing, etc. all require cloud upload. Privacy-conscious users (corporate, healthcare, sensitive content) can't use them. Auto-editor's offline processing is a MAJOR differentiator. | LOW (already done) | Auto-editor already runs locally. Just needs to be marketed/highlighted. This is the killer feature vs cloud competitors. |
-| **Open-source and transparent** | Proprietary virality scores are black boxes. Users distrust them. Open algorithm = trust, customization, academic/research use. | LOW (philosophy) | Already open-source. Differentiator is making scoring algorithms transparent and user-auditable. |
-| **Engagement scoring using local signals** | Virality scores are popular (OpusClip's main feature) but require cloud data. Local scoring (audio energy, motion, speech rate, pauses) provides value without cloud dependency. | HIGH | Requires: (1) Audio analysis (RMS, zero-crossing), (2) Motion estimation (OpenCV optical flow), (3) Transcript features (word rate, pause detection), (4) Weighting/scoring algorithm. Research needed for scoring model. |
-| **Speaker reframing (vertical conversion)** | ReframeAnything™ is OpusClip's premium feature. AI tracks speaker and keeps them centered in vertical format. Critical for podcasts → TikTok. | HIGH | Requires: (1) Face/speaker detection per frame (Haar cascade or DNN), (2) Tracking across frames (KCF/CSRT), (3) Smart crop with smoothing. Computationally expensive. |
-| **No subscription lock-in** | Cloud tools require $29-99/month subscriptions. Auto-editor is free/donate. Appeals to indie creators, students, hobbyists. | N/A | Business model differentiator. One-time install vs recurring payment. |
-| **ClipAnything-style natural language search** | "Find all moments where speaker says X" or "show exciting moments". Uses transcript + multimodal analysis. Very powerful but rarely seen in local tools. | HIGH | Requires: (1) Transcript search (regex/fuzzy), (2) Semantic search (would need embeddings model like CLIP or sentence-transformers), (3) Query parsing. Ambitious but differentiating. |
-| **Hardware acceleration (CUDA support)** | Faster processing on NVIDIA GPUs. OpusClip claims 5-minute processing for 60-min video. Local tools need speed parity. | MEDIUM | Auto-editor already has ENABLE_CUDA flag for whisper. Extend to other processing (motion detection can use GPU). Performance differentiator. |
+| **Batch: Smart defaults from first file** | Instead of requiring template setup, auto-detect settings from first successful processing. | Medium | "Process folder like this file" - inspect first output, apply same settings to remaining files. Novel in CLI space. |
+| **Batch: Folder watch mode** | Auto-process new files dropped into watched directory. | High | Most CLI tools are one-shot. Adding watch mode enables unattended workflows. Requires inotify/FSEvents integration. Deferred to post-v1.2. |
+| **Chapter: Engagement-driven chapters** | Use existing engagement scores to set chapter boundaries at high-engagement moments. | Low | honeyclip already has engagement scores. Novel: chapters = engagement peaks, not just scene changes. |
+| **Chapter: Hook pattern chapters** | Chapters at detected hooks (questions, cliffhangers from v1.1). | Low | Leverage existing hook detection. "Chapter 1: How to optimize..." named from detected hook text. |
+| **Chapter: Multi-modal boundaries** | Combine transcript structure + scene changes + engagement drops for smarter boundaries. | Medium | Most tools use single signal. Combining all three = fewer false positives, better semantic boundaries. |
+| **Preview: Engagement-aware sampling** | Instead of uniform frame sampling, preview should sample high-engagement sections more densely. | Medium | Standard proxies are linear downsampling. Engagement-aware = preview shows "the good parts" better. |
+| **Preview: Multi-preview generation** | Generate multiple preview types: timeline scrubbing proxy, quality check preview, client review proxy. | High | NLEs separate "proxy media" from "quick preview". honeyclip could generate both in one pass. Deferred. |
+| **GPU: Automatic fallback** | When GPU unavailable, gracefully fall back to CPU without user intervention. | Low | Most tools require explicit CPU/GPU flags. Auto-detection = better UX. Check CUDA availability, Metal support at runtime. |
+| **GPU: Hybrid CPU+GPU pipeline** | Use GPU for face detection, CPU for everything else. Avoid data transfer overhead. | Medium | Best practice from CUDA research: keep data on GPU only for parallel workloads. CPU handles I/O, timeline building. Upload image once, process on GPU, download at end. |
+| **Memory: Adaptive resolution processing** | Detect available RAM, automatically reduce processing resolution for very large videos. | High | Novel feature. If 8K input + 8GB RAM, internally process at 4K, upscale at output. Transparent to user. Deferred to post-v1.2. |
+| **Memory: Progress checkpointing** | For extremely long videos (3hr+), save progress periodically so crash doesn't lose all work. | High | Very rare in video CLI tools. Enable 4hr render to resume from 3hr mark if interrupted. Deferred to post-v1.2. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+## Anti-Features
 
-Features that seem good but create problems. Document to prevent scope creep.
+Features to explicitly NOT build. Common mistakes in this domain.
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **Cloud virality score (connected to TikTok/YouTube data)** | Users want "guarantee" their clip will go viral based on real platform data. | (1) Requires cloud connection (kills privacy differentiator), (2) Platform APIs don't expose engagement predictors, (3) Creates false confidence ("95% virality" doesn't mean viral), (4) Ongoing maintenance as platforms change algorithms. | Provide LOCAL engagement score based on content features (hooks, pacing, motion). Frame as "content quality score" not "virality prediction". Users can A/B test. |
-| **Automatic B-roll from stock libraries** | Every tool (OpusClip, Kapwing, Jupitrr) auto-inserts stock footage. Seems valuable. | (1) Requires licensing/API access to stock libraries (Getty, Pexels, iStock), (2) Increases complexity, (3) Often looks generic/low-quality, (4) Users have their own B-roll preferences. | Let users import their own B-roll library and suggest insertion points. OR integration with free stock APIs (Pexels/Pixabay) as optional plugin, not core feature. |
-| **AI-generated video content (Sora/Veo integration)** | Tools like Kapwing now generate B-roll from text prompts using generative AI. Cutting-edge feature. | (1) Requires cloud API calls (expensive, privacy issue), (2) Quality inconsistent, (3) Often off-topic/hallucinated, (4) Adds massive scope, (5) Legal/copyright unclear. | Focus on analyzing/editing existing video. Let users generate elsewhere and import. Stay in "editor" lane, not "generator" lane. |
-| **Social media auto-posting/scheduling** | Tools like OpusClip include upload to TikTok/Instagram. Seems convenient. | (1) Platform APIs are unstable/deprecated frequently, (2) OAuth security burden, (3) Not core editing functionality, (4) Many dedicated tools exist (Buffer, Hootsuite). | Export optimized files. Let users upload via their preferred scheduling tool. Export templates for each platform. |
-| **Real-time live stream processing** | "Analyze my stream and create clips in real-time". Technically impressive. | (1) Completely different architecture (need streaming pipeline), (2) Resource intensive (can't buffer/analyze full context), (3) Niche use case, (4) Twitch/YouTube already provide this. | Focus on post-production analysis. Much higher quality results when analyzing complete video. |
-| **Collaborative editing / multi-user** | Cloud tools often have teams/sharing. Seems professional. | (1) Requires cloud infrastructure (kills local-first), (2) Complex sync/conflict resolution, (3) Most users are solo creators, (4) Security/permissions complexity. | Focus on single-user workflow. Users can share exported projects via version control if needed. |
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **GUI wrapper** | Breaks CLI-first philosophy. Maintenance burden of two interfaces. | Remain CLI-only. Users who want GUI can use DaVinci Resolve, Premiere. honeyclip is for automation. |
+| **Cloud rendering** | Violates local-first constraint. Adds API dependencies, costs, privacy concerns. | All processing stays local. For users who need cloud, they can wrap honeyclip in their own infrastructure. |
+| **Real-time preview playback** | Not a video player. Scope creep into VLC/mpv territory. | Generate preview files, let users play in their preferred player. Don't embed player. |
+| **Interactive chapter editing** | CLI doesn't support interactive UI well. Better suited to NLE integration. | Export chapters as markers to FCP/Premiere/Resolve where users can adjust interactively. |
+| **Custom codec support** | FFmpeg already handles 100+ codecs. Adding more = maintenance nightmare. | Trust FFmpeg's codec library. Focus on workflow, not codec engineering. |
+| **Distributed batch processing** | Multi-machine orchestration is complex, fragile. Out of scope for CLI tool. | Single-machine parallelization only. Users needing cluster processing can script honeyclip with Kubernetes/Nomad. |
+| **Video quality enhancement** | Upscaling, denoising, stabilization already exist in FFmpeg. Don't reimplement. | If users need enhancement, they preprocess with FFmpeg before honeyclip. Stay focused on engagement + editing. |
+| **Social media uploading** | Requires OAuth, API integration, platform-specific quirks. Scope creep. | Export files. Let users upload via platform tools or scripts. |
 
 ## Feature Dependencies
 
+Understanding what depends on what informs phase ordering.
+
 ```
-[Transcript Extraction]
-    ├──enables──> [Auto-captions]
-    ├──enables──> [Engagement Scoring: Speech Features]
-    └──enables──> [Natural Language Search]
+Existing Foundation (v1.0-v1.1):
+- FFmpeg bindings ✓
+- Transcript extraction ✓
+- Engagement scoring ✓
+- Speaker tracking ✓
+- ML infrastructure ✓
+- Hook detection ✓
 
-[Scene Detection]
-    └──enables──> [Batch Clip Export]
+v1.2 Dependencies:
 
-[Speaker Tracking]
-    └──requires──> [Face Detection]
-    └──enables──> [Auto-reframing (vertical)]
+Batch Processing:
+  └─ Template system (independent, no dependencies)
+     └─ Parallel execution (depends on template system)
+        └─ Progress reporting (depends on parallel execution)
+           └─ Error recovery (depends on progress tracking)
 
-[Engagement Scoring]
-    ├──requires──> [Audio Energy Analysis]
-    ├──requires──> [Motion Detection]
-    ├──requires──> [Transcript Features]
-    └──enables──> [Smart Clip Ranking]
+Chapter Detection:
+  └─ Scene change detection (independent, FFmpeg filter)
+  └─ Transcript-based chapters (depends on transcript extraction ✓)
+  └─ Engagement-driven chapters (depends on engagement scoring ✓)
+  └─ Hook pattern chapters (depends on hook detection ✓)
+  └─ Export chapter markers (independent, extends existing NLE export)
 
-[Motion Detection] ──conflicts-if-slow──> [Real-time Processing]
-    (Motion analysis is compute-heavy; can't be real-time without GPU)
+Preview Generation:
+  └─ Basic proxy generation (independent, FFmpeg only)
+     └─ Fast encode settings (depends on basic proxy)
+     └─ Engagement-aware sampling (depends on engagement scoring ✓)
+     └─ Multi-preview modes (depends on basic proxy) [DEFERRED]
+
+GPU Acceleration:
+  └─ CUDA face detection (independent, replaces CPU face detection)
+  └─ Metal face detection (independent, replaces CPU face detection)
+  └─ Automatic fallback (depends on GPU implementations)
+  └─ Hybrid pipeline (depends on GPU implementations)
+
+Memory Optimization:
+  └─ Streaming decode (already implemented in FFmpeg bindings ✓)
+  └─ Frame pooling (independent, memory management refactor)
+  └─ Adaptive resolution (depends on memory monitoring) [DEFERRED]
+  └─ Progress checkpointing (depends on frame pooling) [DEFERRED]
 ```
 
-### Dependency Notes
+## MVP Recommendation
 
-- **Transcript Extraction enables everything**: Captions, speech-based scoring, semantic search. Priority #1 foundation.
-- **Engagement Scoring requires multi-modal analysis**: Can't just use audio OR motion. Need all signals weighted together. Complex integration point.
-- **Speaker Tracking requires Face Detection**: Can use Haar cascades (fast, lower quality) or DNN (slow, better). Choice affects reframing quality.
-- **GPU acceleration affects feasibility**: Motion detection + speaker tracking at 4K can be slow on CPU. CUDA makes reframing practical.
+For v1.2 milestone, prioritize features with:
+1. High user value
+2. Low-medium implementation complexity
+3. Minimal dependencies
+4. Clear integration with existing features
 
-## MVP Definition
+**Must-have (table stakes):**
 
-### Launch With (v1) — Core Auto-Clipping
+1. **Batch: Template system** - Core requirement. Config files (TOML/JSON) defining processing settings.
+   - Format: TOML (Nim has `parsetoml` in stdlib) or JSON (stdlib `json`)
+   - Store: `--engage 70`, `--export premiere`, aspect ratios, etc.
+   - Load: `honeyclip batch --template my-template.toml /path/to/videos/`
 
-Minimum viable product for "OpusClip-like features in honeyclip". Validates local-first engagement analysis.
+2. **Batch: Parallel processing** - Users expect multi-core utilization.
+   - Implementation: Spawn N processes (one per CPU core), process N files concurrently
+   - Alternative: Nim's `std/threadpool` for in-process parallelization
+   - Start simple (process spawning), optimize later
 
-- [ ] **Transcript extraction with word-level timestamps** — Foundation for all text features. Export SRT/VTT.
-- [ ] **Auto-captions (basic styling)** — Render transcripts as stylized text over video. Critical for social media.
-- [ ] **Engagement scoring (audio + basic motion)** — Score clips 0-100 based on audio energy (RMS, dynamics) and frame difference motion. Simple heuristic, no ML needed yet.
-- [ ] **Scene detection for auto-clipping** — Detect clip boundaries using scene changes + silence detection (already partially exists). Export top N clips.
-- [ ] **Multi-aspect ratio export** — Render 16:9, 9:16, 1:1. Use FFmpeg scale/crop filters.
-- [ ] **Batch export workflow** — Process one video → output multiple ranked clips automatically.
+3. **Batch: Progress reporting** - Essential for long-running batch jobs.
+   - Display: File 3/10 | Current: video.mp4 | 45% complete | ETA 12m
+   - Use shared state or progress file for cross-process tracking
 
-**Rationale**: These features provide immediate value (auto-clipping with engagement ranking) while leveraging honeyclip's existing strengths (FFmpeg integration, local processing, silence detection). Differentiates via privacy/local-first. Avoids complex computer vision.
+4. **Chapter: Scene change detection** - FFmpeg filter, minimal code. High value, low complexity.
+   - FFmpeg: `select='gt(scene,0.3)'` filter detects scene changes
+   - Threshold tuning for different content types
+   - Output: Chapter markers at scene boundaries
 
-### Add After Validation (v1.x) — Enhanced Analysis
+5. **Chapter: Engagement-driven chapters** - Leverages existing scores. Novel differentiator.
+   - Algorithm: Detect local maxima in engagement scores
+   - Threshold: Chapter when engagement crosses 70+ or jumps 20+ points
+   - Combine with scene detection to avoid mid-scene chapters
 
-Features to add once core is working and users validate the concept.
+6. **Preview: Basic proxy generation** - FFmpeg scale + H.264 encode. Table stakes for 4K workflow.
+   - Resolution: Default 720p for 1080p+ source, 360p for 4K+ source
+   - Codec: H.264 with `fast` preset, CRF 22-26
+   - Target: 2-3x faster than realtime on modern CPU
+   - File naming: `[original]_proxy.[ext]`
 
-- [ ] **Improved engagement scoring** — Add transcript features (speech rate, pause patterns, keyword detection). Refine weighting based on user feedback.
-- [ ] **Speaker reframing (basic)** — Detect faces, track across frames, smart crop to 9:16 keeping speaker centered. Start with center-weighted crop if face detection fails.
-- [ ] **Preview mode** — Generate thumbnail strips or low-res previews before full render. Faster iteration.
-- [ ] **Custom scoring weights** — Let users adjust "audio weight: 0.4, motion weight: 0.3, speech weight: 0.3" etc. Power user feature.
-- [ ] **Clip editing UI** — Adjust clip start/end points, re-rank clips manually. Currently fully automatic might be too rigid.
-- [ ] **Multi-speaker support** — Speaker diarization using Pyannote.audio. Label clips by speaker. "Export all clips where Speaker 1 talks."
+7. **GPU: CUDA on Linux** - OpenCV already supports CUDA. Enable at compile time, detect at runtime.
+   - Build: Compile OpenCV with CUDA support (`-DWITH_CUDA=ON`)
+   - Runtime: Check for `libcuda.so`, fall back to CPU if unavailable
+   - Speedup: 3-22x for face detection (keep data on GPU to avoid transfer overhead)
 
-**Trigger**: Add when users say "scoring is inaccurate" or "I need more control". Focus on improving accuracy and customization.
+8. **GPU: Metal on macOS** - Metal Performance Shaders for face detection. Platform expectation.
+   - API: Metal 4 with MPS framework for ML operations
+   - Detection: `MTLCreateSystemDefaultDevice()` for Metal availability
+   - Integration: Core Video Framework for video-to-texture pipeline
 
-### Future Consideration (v2+) — Advanced Features
+9. **Memory: Frame pooling** - Essential for 4K+ without OOM. Pre-allocate buffer pool.
+   - Pool size: Based on resolution
+     - 1080p: ~8MB per RGB frame, pool of 10 frames = 80MB
+     - 4K: ~32MB per RGB frame, pool of 10 frames = 320MB
+   - Lifecycle: Pre-allocate at processing start, reuse throughout, free at end
 
-Features to defer until product-market fit is established and core features are polished.
+**Defer to post-v1.2:**
+- Folder watch mode (HIGH complexity, async monitoring, filesystem events)
+- Adaptive resolution processing (HIGH complexity, needs extensive testing)
+- Progress checkpointing (HIGH complexity, serialization challenges)
+- Multi-preview generation (MEDIUM value, can start with single proxy type)
+- Transcript-based chapters (MEDIUM complexity, needs NLP for topic detection)
+- Hook pattern chapters (MEDIUM complexity, needs hook extraction refinement)
 
-- [ ] **ClipAnything-style natural language search** — "Find all moments about topic X". Requires semantic embeddings (CLIP/sentence-transformers). Very powerful but complex.
-- [ ] **Advanced B-roll insertion points** — Suggest where to add B-roll based on transcript keywords or visual monotony. Don't generate/fetch B-roll, just suggest timecodes.
-- [ ] **Multi-track audio analysis** — Analyze music/SFX separately from speech. "Boost clips with strong music." Requires FFmpeg filter graphs for track separation.
-- [ ] **Export templates per platform** — Pre-configured settings for "TikTok (trending)", "YouTube Shorts (education)", "Instagram Reels (motivational)". Includes fonts, colors, pacing.
-- [ ] **GPU-accelerated optical flow motion** — Use CUDA/OpenCL for dense optical flow (much better motion understanding than frame diff). Enables better scoring + creative effects.
-- [ ] **Emotion detection** — Analyze speaker facial expressions or voice tone for emotional peaks. Requires ML models (FER+ or audio emotion classifiers).
+**Skip entirely (anti-features):**
+- GUI wrapper
+- Cloud rendering
+- Interactive editing
+- Social media uploading
+- Distributed processing
+- Real-time preview playback
 
-**Why defer**: These are nice-to-haves that add complexity. V1 needs to prove local engagement analysis works. These can be Phase 2 differentiators if V1 succeeds.
+## Implementation Notes
 
-## Feature Prioritization Matrix
+### Batch Processing
+**Template format:**
+```toml
+# template.toml
+[processing]
+engage_threshold = 70
+edit_method = "audio:0.03"
+margin = "0.2sec"
 
-| Feature | User Value | Implementation Cost | Priority | Blocking Dependencies |
-|---------|------------|---------------------|----------|---------------------|
-| Transcript extraction w/ timestamps | HIGH (foundation) | MEDIUM (whisper integration done, need timestamp export) | **P1** | None (whisper-cpp already integrated) |
-| Auto-captions | HIGH (required for social) | LOW-MEDIUM (FFmpeg subtitle filters) | **P1** | Transcript extraction |
-| Engagement scoring (basic) | HIGH (core differentiator) | MEDIUM (audio+motion analysis, scoring algorithm) | **P1** | None (can start with audio-only) |
-| Scene detection + auto-clipping | HIGH (defines "auto-clipping") | LOW (FFmpeg scene detect + existing silence logic) | **P1** | None |
-| Multi-aspect ratio export | HIGH (table stakes) | LOW (FFmpeg scale/crop) | **P1** | None |
-| Batch export | HIGH (expected behavior) | LOW (loop over clips) | **P1** | Scene detection |
-| Preview mode | MEDIUM (improves UX) | MEDIUM (fast encode or thumbnails) | **P2** | None |
-| Speaker reframing | MEDIUM-HIGH (differentiator but complex) | HIGH (face detect + tracking + crop smoothing) | **P2** | None (but benefits from GPU) |
-| Improved scoring (multi-modal) | MEDIUM (iteration on P1 feature) | MEDIUM (integrate transcript features) | **P2** | Transcript extraction, basic scoring |
-| Custom scoring weights | MEDIUM (power users) | LOW (config/UI) | **P2** | Basic scoring |
-| Speaker diarization | MEDIUM (niche but valuable) | MEDIUM-HIGH (Pyannote integration) | **P2** | Transcript extraction |
-| Natural language search | LOW-MEDIUM (cool but niche) | HIGH (embeddings model, search infra) | **P3** | Transcript extraction |
-| Advanced motion (optical flow) | LOW (optimization) | HIGH (GPU programming) | **P3** | GPU support, basic motion |
-| Emotion detection | LOW (experimental) | HIGH (ML model integration) | **P3** | Face detection or audio analysis |
-| B-roll suggestion | LOW (defer to future) | MEDIUM (keyword matching, timing logic) | **P3** | Transcript extraction |
+[export]
+format = "premiere"
+aspect_ratios = ["16:9", "9:16"]
 
-**Priority key:**
-- **P1: Must have for launch** — Core auto-clipping MVP. Without these, product doesn't deliver on promise.
-- **P2: Should have, add when possible** — Enhances core features. Add after MVP validation.
-- **P3: Nice to have, future consideration** — Advanced/experimental. Defer until product-market fit proven.
+[output]
+directory = "./processed"
+naming = "{filename}_processed.{ext}"
+```
 
-## Competitor Feature Analysis
+**Parallel execution strategy:**
+```nim
+# Option 1: Process spawning (simpler, start here)
+for i in 0..<numCPUs:
+  let process = startProcess("honeyclip", args=[videoFiles[i], ...])
+  processes.add(process)
 
-| Feature Category | OpusClip (cloud) | Kapwing (cloud) | Reap (cloud) | **Auto-Editor (local)** |
-|------------------|------------------|-----------------|--------------|------------------------|
-| **Transcription** | Auto (97% accurate) | Auto (AI-powered) | Auto (multi-signal) | ✅ Whisper (existing), need timestamp export |
-| **Auto-captions** | ✅ Dynamic, stylized | ✅ Animated styles | ✅ Multiple styles | **Planned** (FFmpeg subtitles) |
-| **Engagement scoring** | ✅ Virality Score (0-99, proprietary) | ❌ Not explicit | ✅ Engagement prediction | **Planned** (local signals: audio+motion+speech) |
-| **Scene detection** | ✅ AI clip detection | ✅ Smart moments | ✅ Multi-signal detection | ✅ Partial (silence detection), **expand to scene** |
-| **Speaker reframing** | ✅ ReframeAnything™ (premium) | ✅ Auto-reframe | ✅ Auto-reframe | **Planned** (face tracking + crop) |
-| **Multi-platform export** | ✅ 16:9, 9:16, 1:1 | ✅ All ratios | ✅ All ratios | ✅ Already supported, need UI |
-| **Batch export** | ✅ Multiple clips per video | ✅ Multi-clip | ✅ Multi-clip | **Planned** (auto-rank + export top N) |
-| **B-roll generation** | ✅ AI B-roll (stock libraries) | ✅ AI B-roll (Sora/stock) | ✅ Stock integration | ❌ **Anti-feature** (complexity, licensing) |
-| **Natural language search** | ✅ ClipAnything™ (prompt-based) | ✅ Semantic search | ❌ | **Future** (P3, semantic embeddings) |
-| **Speaker diarization** | ✅ Multi-speaker | ✅ Multi-speaker | ✅ Multi-speaker | **Planned** (Pyannote) |
-| **Privacy (local processing)** | ❌ Cloud-only | ❌ Cloud-only | ❌ Cloud-only | ✅ **MAJOR DIFFERENTIATOR** |
-| **Open-source** | ❌ Proprietary | ❌ Proprietary | ❌ Proprietary | ✅ **DIFFERENTIATOR** |
-| **Cost** | $29-99/month subscription | $24-120/month subscription | $29-69/month subscription | **Free/donations** |
+# Option 2: Thread pool (optimize later)
+import std/threadpool
+for video in videoFiles:
+  spawn processVideo(video, template)
+```
 
-### Key Takeaways from Competitor Analysis
+**Progress tracking:**
+- Shared SQLite database or JSON file for progress state
+- Each worker updates current file, percentage complete
+- Main thread aggregates and displays overall progress
 
-**What honeyclip must match (table stakes):**
-- Transcription with timestamps
-- Auto-captions
-- Scene-based auto-clipping
-- Multi-aspect ratio support
-- Batch/multi-clip export
+### Chapter Detection
+**Scene detection:**
+```nim
+# FFmpeg filter for scene detection
+let sceneFilter = "select='gt(scene,0.3)'"
+# Process and extract frame timestamps where scene changes occur
+# Convert to chapter markers
+```
 
-**Where honeyclip differentiates:**
-- **Local/offline processing** — No cloud upload, complete privacy. Corporate/sensitive use cases.
-- **Open-source & transparent** — Users can audit scoring algorithms, customize, contribute. Trust + flexibility.
-- **No subscription model** — One-time install vs $30-100/month recurring. Accessible to students/hobbyists.
-- **Hardware acceleration options** — CUDA support for faster processing. Cloud tools hide this; local tools can optimize.
+**Engagement chapters:**
+```nim
+# Pseudo-code
+let engagementPeaks = findLocalMaxima(engagementScores, minThreshold=70)
+let chapters = engagementPeaks.map(peak => Chapter(
+  timestamp: peak.time,
+  title: extractTitle(transcript, peak.time)
+))
+```
 
-**Where honeyclip can compete (not required but valuable):**
-- **Engagement scoring** — Match OpusClip's Virality Score with local signals. Transparency advantage (explain score components).
-- **Speaker reframing** — Match ReframeAnything with face tracking. Technically feasible with OpenCV.
+**Output format:**
+- Add chapters to MP4 metadata (FFmpeg supports this via `-metadata` flag)
+- Or export as separate file (chapters.txt) for NLE import
 
-**Where honeyclip should NOT compete:**
-- **B-roll generation** — Requires stock library licensing or generative AI APIs. Complex, expensive, not core value.
-- **Social media posting** — Platform integrations are fragile. Export optimized files; users upload via preferred tools.
-- **Real-time features** — Cloud tools have infrastructure advantage. Focus on high-quality post-production.
+### Preview Generation
+**Proxy generation command:**
+```bash
+# 1080p → 720p proxy
+ffmpeg -i input.mp4 -vf scale=-1:720 -c:v libx264 -preset fast -crf 23 output_proxy.mp4
 
-## Implementation Complexity Assessment
+# 4K → 720p proxy (faster, more efficient)
+ffmpeg -i input_4k.mp4 -vf scale=-1:720 -c:v libx264 -preset fast -crf 26 output_proxy.mp4
+```
 
-### Low Complexity (1-2 weeks, one developer)
-- Multi-aspect ratio export (FFmpeg params)
-- Basic auto-captions (FFmpeg subtitle burn-in)
-- Batch export workflow (loop + file naming)
-- Custom scoring weights (config file)
+**Speed target:**
+- 2-3x faster than realtime for 1080p → 720p on modern CPU
+- Uses faster encode preset (`fast` instead of `medium`)
+- Higher CRF (22-26) for smaller file size, acceptable quality loss for preview
 
-### Medium Complexity (2-4 weeks, one developer)
-- Transcript timestamp export (parse whisper output to SRT/VTT)
-- Audio energy analysis (RMS, dynamic range calculation)
-- Basic motion detection (frame difference, histogram comparison)
-- Scene detection integration (FFmpeg scene filter + threshold tuning)
-- Preview generation (FFmpeg fast encode or thumbnail strips)
+**Engagement-aware sampling:**
+```nim
+# Sample high-engagement sections at full framerate
+# Sample low-engagement sections at reduced framerate (every 5th frame)
+# Results in preview that shows "good parts" in more detail
+```
 
-### High Complexity (1-2 months, requires research/iteration)
-- Engagement scoring algorithm (multi-modal fusion, weight tuning, validation)
-- Speaker reframing (face detection, tracking, smooth crop with lookahead)
-- Speaker diarization (Pyannote integration, timeline alignment)
-- Natural language search (embeddings model, vector search, query parsing)
-- GPU-accelerated motion (optical flow, CUDA kernels)
-- Emotion detection (ML model integration, face/audio analysis)
+### GPU Acceleration
+**CUDA detection:**
+```nim
+when defined(linux):
+  proc cudaAvailable(): bool =
+    fileExists("/usr/local/cuda/lib64/libcuda.so") or
+    fileExists("/usr/lib/x86_64-linux-gnu/libcuda.so")
 
-### Recommendations for Phasing
-**Phase 1 (MVP)**: Low + medium complexity features only. Prove concept works.
-**Phase 2 (Iteration)**: Add high complexity features one at a time based on user feedback.
-**Phase 3 (Advanced)**: Experimental features like NL search, emotion detection.
+  if cudaAvailable():
+    useCudaFaceDetection()
+  else:
+    useCpuFaceDetection()
+```
 
-## Open Questions & Research Needs
+**Metal detection:**
+```nim
+when defined(macosx):
+  proc metalAvailable(): bool =
+    # Use Objective-C bridge to call Metal API
+    let device = MTLCreateSystemDefaultDevice()
+    result = device != nil
 
-### Scoring Algorithm Validation
-**Question**: How do we validate engagement scores without cloud data?
-**Options**:
-1. User feedback loop (thumbs up/down on scores)
-2. Retrospective analysis (users mark which clips actually performed well)
-3. Academic benchmarks (if any exist for short-form video engagement)
-4. A/B testing framework (export 2 versions, user reports which performed better)
+  if metalAvailable():
+    useMetalFaceDetection()
+  else:
+    useCpuFaceDetection()
+```
 
-**Recommendation**: Start with simple heuristics (loud audio + motion = engaging), add user feedback loop to refine weights over time. Frame as "content quality score" not "guaranteed virality".
+**Hybrid CPU+GPU strategy:**
+- Upload frame to GPU once
+- Run face detection on GPU (parallel across all faces in frame)
+- Track faces on GPU (minimal data transfer)
+- Download results only (bounding boxes, not full frames)
+- CPU handles I/O, timeline building, non-ML tasks
 
-### Face Detection Approach
-**Question**: Haar cascades (fast, CPU) or DNN (accurate, GPU)?
-**Tradeoff**: Haar is real-time on CPU but misses profiles/occlusions. DNN is slower but handles edge cases.
+### Memory Optimization
+**Frame pool implementation:**
+```nim
+type FramePool = object
+  frames: seq[ptr AVFrame]
+  available: seq[bool]
+  size: int
 
-**Recommendation**: Start with Haar for MVP (good enough for frontal talking heads, which is 80% of use case). Add DNN option later for users with GPU.
+proc newFramePool(resolution: tuple[w, h: int], count: int): FramePool =
+  result.size = count
+  for i in 0..<count:
+    let frame = av_frame_alloc()
+    # Pre-allocate buffer based on resolution
+    av_image_alloc(frame, resolution.w, resolution.h, AV_PIX_FMT_RGB24)
+    result.frames.add(frame)
+    result.available.add(true)
 
-### Speaker Diarization Library
-**Question**: Which library for multi-speaker detection?
-**Options**:
-1. **Pyannote.audio** — Best accuracy, Python, open-source. Requires PyTorch (large dependency).
-2. **Whisper + post-processing** — Whisper can tag speakers with fine-tuning, but not primary feature.
-3. **Simple audio clustering** — K-means on MFCC features. Fast but inaccurate.
+proc acquire(pool: var FramePool): ptr AVFrame =
+  for i, avail in pool.available:
+    if avail:
+      pool.available[i] = false
+      return pool.frames[i]
+  # All frames in use, allocate temporary (or wait)
 
-**Recommendation**: Pyannote.audio if multi-speaker is priority. Otherwise defer to v2.
+proc release(pool: var FramePool, frame: ptr AVFrame) =
+  for i, f in pool.frames:
+    if f == frame:
+      pool.available[i] = true
+      return
+```
 
-### Performance Targets
-**Question**: What processing speed is acceptable?
-**Benchmark**: OpusClip processes 60-min video in 5 minutes (12x real-time). Cloud advantage: multi-GPU.
+**Streaming decode verification:**
+- Ensure no full-video buffering in existing codebase
+- Process frame-by-frame: decode → process → encode/store → free
+- Never accumulate frames in memory beyond pool size
 
-**Target**: Aim for 2-4x real-time on CPU, 10x+ with GPU. Users tolerate slower processing for privacy benefit.
+## Complexity Estimates
 
-**Optimization**: Focus on GPU acceleration for motion/reframing (biggest bottlenecks).
+| Feature | Complexity | Estimated Time | Blocking Factors |
+|---------|------------|----------------|------------------|
+| Batch template system | Medium | 3-5 days | Config parsing, validation |
+| Batch parallel processing | Low | 2-3 days | Process spawning, coordination |
+| Batch progress reporting | Low | 1-2 days | State tracking, display |
+| Scene change detection | Low | 1-2 days | FFmpeg filter integration |
+| Engagement chapters | Medium | 3-4 days | Peak detection algorithm, tuning |
+| Basic proxy generation | Low | 1-2 days | FFmpeg command construction |
+| CUDA face detection | Medium | 5-7 days | OpenCV CUDA build, runtime detection |
+| Metal face detection | Medium | 5-7 days | Metal API bindings, MPS integration |
+| Frame pooling | Medium | 3-5 days | Memory management refactor |
+
+**Total estimate for v1.2 MVP:** 4-6 weeks
+
+## Open Questions
+
+### Batch Processing
+**Q:** What's the best template format for CLI users?
+**Options:**
+- TOML (human-readable, Nim stdlib support)
+- JSON (ubiquitous, but verbose)
+- YAML (popular but requires external lib)
+
+**Recommendation:** TOML for balance of readability and stdlib support.
+
+### Chapter Detection
+**Q:** How to name auto-generated chapters meaningfully?
+**Options:**
+1. "Chapter 1", "Chapter 2" (simple but uninformative)
+2. Extract nearby transcript text (complex, needs NLP)
+3. Use engagement level: "High Engagement Section"
+4. Combine scene type + timestamp: "Scene Change at 2:34"
+
+**Recommendation:** Start with timestamps, add transcript extraction in iteration.
+
+### GPU Acceleration
+**Q:** What speedup is realistic for face detection?
+**Benchmarks:**
+- CUDA: 3-22x reported speedup (varies by implementation)
+- Metal: Similar to CUDA on Apple Silicon
+- Overhead: Data transfer can negate gains for small images
+
+**Target:** Aim for 5-10x speedup. Measure actual performance, adjust expectations.
+
+### Memory Optimization
+**Q:** How many frames should be in the pool?
+**Tradeoff:**
+- Larger pool = more memory, less allocation overhead
+- Smaller pool = less memory, more contention
+
+**Recommendation:** 10 frames for 1080p, 5 frames for 4K, configurable via env var.
+
+## Performance Targets
+
+Based on ecosystem research and honeyclip's existing capabilities:
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| **Batch processing throughput** | N files in ~1/N time (perfect parallelization) | With N = CPU cores. Overhead from file I/O, GPU contention. |
+| **Proxy generation speed** | 2-3x faster than realtime for 1080p→720p | Faster preset + lower resolution. 60-min video → 20-30 min proxy. |
+| **GPU face detection speedup** | 5-10x vs CPU | CUDA/Metal vs existing CPU implementation. Accounts for transfer overhead. |
+| **Memory usage for 4K** | <1GB peak (with pooling) | Frame pool + decode buffers. No full-video loading. |
+| **Progress reporting latency** | Update every 1-2 seconds | Balance between responsiveness and overhead. |
 
 ## Sources
 
-### OpusClip & Virality Scoring
-- [Understand the Virality Score | Opus Clip Course](https://www.futurepedia.io/courses/opus-clip-ai/lessons/virality-score)
-- [What is the Virality Score on OpusClip?](https://help.opus.pro/docs/article/virality-score)
-- [OpusClip Review 2025: AI Auto-Clipping, Virality Score & Scheduler](https://skywork.ai/blog/opusclip-review-2025-ai-auto-clipping-virality-score-scheduler/)
-- [What is Opus Clips - Features, Pricing, and Best Alternatives (2026 Review)](https://bigvu.tv/blog/opus-clips-worth-the-hype)
-- [90 Days Deep in Opus Clip: A Full Review (2026)](https://sendshort.ai/guides/opus-review/)
+### Batch Processing
+- [Building a production-ready batch video processing server with FFmpeg](https://img.ly/blog/building-a-production-ready-batch-video-processing-server-with-ffmpeg/)
+- [Batch convert videos using FFmpeg - Shotstack](https://shotstack.io/learn/ffmpeg-batch-convert/)
+- [FFmpeg Batch AV Converter](https://sourceforge.net/projects/ffmpeg-batch/)
+- [Python Batch Processing with Joblib Parallel Loky Backends Scheduling 2026](https://johal.in/python-batch-processing-with-joblib-parallel-loky-backends-scheduling-2026/)
+- [AWS Batch 101: Guide to Scalable Batch Processing](https://cloudchipr.com/blog/aws-batch)
+- [Re-encoding with FFmpeg and GNU Parallel](https://sachachua.com/blog/2021/12/re-encoding-the-emacsconf-videos-with-ffmpeg-and-gnu-parallel/)
 
-### Video Clipping Tools & Features
-- [Top AI Clipping Tools in 2026](https://www.reap.video/blog/top-ai-clipping-tools-in-2026)
-- [How to Clip Videos Quickly: 2026's Best Free AI Tools](https://quso.ai/blog/how-to-clip-videos-quickly-best-free-ai-tools)
-- [Top 5 AI Clipping Tools in 2025: Turn Long Videos into Viral Clips](https://www.reap.video/blog/top-5-ai-clipping-tools-2025)
-- [Best AI Video Clipping Tools 2026: Auto-Clip Long Videos](https://alignify.co/tools/video-clipping)
+### Chapter Detection
+- [How To Get Scene Edit Detection in Premiere Pro 2026](https://filmora.wondershare.com/ai-efficiency/scene-edit-detection.html)
+- [Automatic chapter creation - VideoHelp Forum](https://forum.videohelp.com/threads/364795-Automatic-chapter-creation)
+- [What Is AI Video Discovery? An Updated Guide for 2026](https://www.momentslab.com/blog/what-is-ai-video-discovery-an-updated-guide-for-2026)
+- [12 Best Scene & Cut Detection Tools for Video Editors](https://www.opus.pro/blog/best-scene-cut-detection-tools-for-editors)
+- [Detect edit points using Scene Edit Detection - Adobe](https://helpx.adobe.com/after-effects/using/scene-edit-detection.html)
 
-### Speaker Reframing & Tracking
-- [AI Reframe | Auto video resizing in 1 click - OpusClip](https://www.opus.pro/ai-reframe)
-- [OpusClip Review 2025: AI Video Clipping & Social Repurposing](https://skywork.ai/blog/opusclip-review-2025-ai-video-clipping-social-repurposing/)
-- [AI Speaker Focus: Auto Framing for Video](https://www.kapwing.com/ai/auto-speaker-focus)
+### Preview Generation
+- [Updated: Complete Guide to Premiere Proxies & Proxy Workflows](https://blog.frame.io/2024/07/29/updated-guide-premiere-pro-proxies-and-proxy-workflows/)
+- [media-proxy: A media proxy server with FFmpeg support](https://github.com/nnstd/media-proxy)
+- [Correct workflow to use video proxy generated by ffmpeg](https://www.vegascreativesoftware.info/us/forum/correct-workflow-to-use-video-proxy-generated-by-ffmpeg--142440/)
+- [Video Post-Production Workflow Guide | Frame.io](https://workflow.frame.io/guide/proxy-codecs)
 
-### B-roll Generation
-- [AI B-Roll Generator - Add Dynamic B-Roll to Any Video - OpusClip](https://www.opus.pro/tools/ai-b-roll-generator)
-- [AI B-Roll Generator — Instant Video Footage](https://www.kapwing.com/ai/b-roll-generator)
-- [Best AI B-Roll Generators for Short-Form Video in 2026](https://www.opus.pro/blog/best-ai-b-roll-generators-short-form-video)
+### GPU Acceleration
+- [Build OpenCV with DNN and CUDA for GPU-Accelerated Face Detection](https://medium.com/@amosstaileyyoung/build-opencv-with-dnn-and-cuda-for-gpu-accelerated-face-detection-27a3cdc7e9ce)
+- [Comparative Study on Face Detection by GPU, CPU and OpenCV](https://link.springer.com/chapter/10.1007/978-3-030-37051-0_77)
+- [Metal for Video Processing: Harnessing Apple's GPU Power](https://medium.com/@shahin.cse.sust/metal-for-video-processing-harnessing-apples-gpu-power-for-stunning-visuals-a9ef8c7d143f)
+- [Accelerate machine learning with Metal - WWDC24](https://developer.apple.com/videos/play/wwdc2024/10218/)
+- [Metal Performance Shaders (MPS) in Swift](https://medium.com/@serkankaraa/metal-performance-shaders-mps-in-swift-high-performance-gpu-acceleration-c04e1c9ffde0)
 
-### Transcription & Captions
-- [Auto-Subtitle Generator — 99% Accurate (Free)](https://www.kapwing.com/subtitles)
-- [Introducing Stream Generated Captions, powered by Workers AI](https://blog.cloudflare.com/stream-automatic-captions-with-ai/)
-- [Auto Subtitle Generator - 99% Accurate AI Subtitles](https://www.happyscribe.com/subtitle-generator)
+### Memory Optimization
+- [NVIDIA RTX Accelerates 4K AI Video Gen With LTX-2](https://www.adwaitx.com/nvidia-rtx-4k-ai-video-generation-ltx-2-comfyui/)
+- [Open Source AI Tool Upgrades Speed Up LLM and Diffusion Models](https://developer.nvidia.com/blog/open-source-ai-tool-upgrades-speed-up-llm-and-diffusion-models-on-nvidia-rtx-pcs/)
+- [Memory-efficient Streaming VideoLLMs](https://arxiv.org/html/2504.13915v1)
+- [Real-Time Video Processing with WebCodecs and Streams](https://webrtchacks.com/real-time-video-processing-with-webcodecs-and-streams-processing-pipelines-part-1/)
+- [Optimizing Video Memory Usage with the NVDECODE API](https://developer.nvidia.com/blog/optimizing-video-memory-usage-with-the-nvdecode-api-and-nvidia-video-codec-sdk/)
 
-### Speaker Diarization
-- [12 Best Speaker Diarization Tools for Multi-Speaker Video](https://www.opus.pro/blog/best-speaker-diarization-tools-multi-speaker-video)
-- [Best Speaker Diarization Models Compared [2026]](https://brasstranscripts.com/blog/speaker-diarization-models-comparison)
-- [What is speaker diarization and how does it work? (Complete 2026 Guide)](https://www.assemblyai.com/blog/what-is-speaker-diarization-and-how-does-it-work)
-- [Top 8 speaker diarization libraries and APIs in 2025](https://www.assemblyai.com/blog/top-speaker-diarization-libraries-and-apis)
-- [Whisper and Pyannote: The Ultimate Solution for Speech Transcription](https://scalastic.io/en/whisper-pyannote-ultimate-speech-transcription/)
-
-### Engagement & Retention Analysis
-- [Short-Form Video Strategy That Actually Works in 2026](https://content-whale.com/blog/master-short-form-video-content-guide/)
-- [Short-Form Video Dominance: Mastering Reels, TikTok, and YouTube Shorts in 2026](https://almcorp.com/blog/short-form-video-mastery-tiktok-reels-youtube-shorts-2026/)
-- [How to increase video engagement and keep viewers hooked](https://podcastle.ai/blog/how-to-increase-video-engagement/)
-- [Advanced retention editing: cutting strategies to keep viewers hooked past 8 minutes](https://air.io/en/youtube-hacks/advanced-retention-editing-cutting-patterns-that-keep-viewers-past-minute-8)
-
-### Local/Offline Video Processing
-- [AI-Powered Video Analyzer (GitHub)](https://github.com/arashsajjadi/ai-powered-video-analyzer)
-- [OpenDataCam 2.0 – An open source tool to quantify the world](https://benedikt-gross.de/projects/opendatacam-2/)
-- [Video Analytics in 2026: Key Benefits & Uses Explained](https://www.omnilert.com/blog/video-analytics-key-benefits-and-uses)
+### Content Creator Workflows
+- [My Content Workflow Fully Explained: Modern Creator's Guide](https://medium.com/@jonhowardagency/my-content-workflow-fully-explained-my-modern-creators-guide-to-content-production-e110d3e97b64)
+- [AI Video Editing for YouTube 2026 Workflow Guide](https://www.vozo.ai/blogs/youtube/ai-video-editing-youtube-2026-guide)
+- [Social Media Content Creation Workflows 2026](https://socialrails.com/blog/social-media-content-creation-workflows)
 
 ---
-*Feature research for: Video engagement analysis and auto-clipping tools*
-*Researched: 2026-02-01*
-*Primary focus: Local-first OpusClip alternative for honeyclip*
+*Feature research for v1.2: Workflow & Performance features (batch, chapters, previews, GPU, memory)*
+*Researched: 2026-02-05*
+*Focus: CLI workflow patterns for content creators processing multiple videos*
