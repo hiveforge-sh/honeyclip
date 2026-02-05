@@ -113,50 +113,50 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BATCH-01 | TBD | Pending |
-| BATCH-02 | TBD | Pending |
-| BATCH-03 | TBD | Pending |
-| BATCH-04 | TBD | Pending |
-| BATCH-05 | TBD | Pending |
-| CHAP-01 | TBD | Pending |
-| CHAP-02 | TBD | Pending |
-| CHAP-03 | TBD | Pending |
-| CHAP-04 | TBD | Pending |
-| PREV-01 | TBD | Pending |
-| PREV-02 | TBD | Pending |
-| GPU-01 | TBD | Pending |
-| GPU-02 | TBD | Pending |
-| GPU-03 | TBD | Pending |
-| MEM-01 | TBD | Pending |
-| MEM-02 | TBD | Pending |
-| VIRAL-01 | TBD | Pending |
-| VIRAL-02 | TBD | Pending |
-| VIRAL-03 | TBD | Pending |
-| BRAND-01 | TBD | Pending |
-| BRAND-02 | TBD | Pending |
-| BRAND-03 | TBD | Pending |
-| BRAND-04 | TBD | Pending |
-| BROLL-01 | TBD | Pending |
-| BROLL-02 | TBD | Pending |
-| BROLL-03 | TBD | Pending |
-| BROLL-04 | TBD | Pending |
-| AUDIO-01 | TBD | Pending |
-| AUDIO-02 | TBD | Pending |
-| AUDIO-03 | TBD | Pending |
-| VOICE-01 | TBD | Pending |
-| VOICE-02 | TBD | Pending |
-| VOICE-03 | TBD | Pending |
-| SOCIAL-01 | TBD | Pending |
-| SOCIAL-02 | TBD | Pending |
-| SOCIAL-03 | TBD | Pending |
-| SOCIAL-04 | TBD | Pending |
-| SOCIAL-05 | TBD | Pending |
+| GPU-01 | Phase 15 | Pending |
+| GPU-02 | Phase 15 | Pending |
+| GPU-03 | Phase 15 | Pending |
+| MEM-01 | Phase 15 | Pending |
+| MEM-02 | Phase 15 | Pending |
+| BATCH-01 | Phase 16 | Pending |
+| BATCH-02 | Phase 16 | Pending |
+| BATCH-03 | Phase 16 | Pending |
+| BATCH-04 | Phase 16 | Pending |
+| BATCH-05 | Phase 16 | Pending |
+| VIRAL-01 | Phase 17 | Pending |
+| VIRAL-02 | Phase 17 | Pending |
+| VIRAL-03 | Phase 17 | Pending |
+| CHAP-01 | Phase 18 | Pending |
+| CHAP-02 | Phase 18 | Pending |
+| CHAP-03 | Phase 18 | Pending |
+| CHAP-04 | Phase 18 | Pending |
+| BRAND-01 | Phase 19 | Pending |
+| BRAND-02 | Phase 19 | Pending |
+| BRAND-03 | Phase 19 | Pending |
+| BRAND-04 | Phase 19 | Pending |
+| PREV-01 | Phase 20 | Pending |
+| PREV-02 | Phase 20 | Pending |
+| BROLL-01 | Phase 21 | Pending |
+| BROLL-02 | Phase 21 | Pending |
+| BROLL-03 | Phase 21 | Pending |
+| BROLL-04 | Phase 21 | Pending |
+| AUDIO-01 | Phase 22 | Pending |
+| AUDIO-02 | Phase 22 | Pending |
+| AUDIO-03 | Phase 22 | Pending |
+| VOICE-01 | Phase 23 | Pending |
+| VOICE-02 | Phase 23 | Pending |
+| VOICE-03 | Phase 23 | Pending |
+| SOCIAL-01 | Phase 24 | Pending |
+| SOCIAL-02 | Phase 24 | Pending |
+| SOCIAL-03 | Phase 24 | Pending |
+| SOCIAL-04 | Phase 24 | Pending |
+| SOCIAL-05 | Phase 24 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 38 total
-- Mapped to phases: 0
-- Unmapped: 38
+- Mapped to phases: 38
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-05*
-*Last updated: 2026-02-05 after initial definition*
+*Last updated: 2026-02-05 after v2.0 roadmap creation*

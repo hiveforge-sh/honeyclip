@@ -10,13 +10,14 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-05 — Milestone v2.0 started
+Phase: 15 - Performance Foundation
+Plan: None (roadmap just created)
+Status: Ready to plan Phase 15
+Last activity: 2026-02-05 — v2.0 roadmap created
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
+Progress v2.0: [                                                ] 0% (0/10 phases)
 
 ## Performance Metrics
 
@@ -31,7 +32,8 @@ Progress v1.1: [█████████████████████�
 |-----------|--------|-------|----------|---------|
 | v1.0 Engagement Analysis | 1-10 | 48 | 4 days | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | 1 day | 2026-02-05 |
-| **Total** | **14** | **58** | **5 days** | — |
+| v2.0 Workflow, Performance & AI | 15-24 | 0 | In progress | TBD |
+| **Total** | **24** | **58** | **5 days** | — |
 
 ## Accumulated Context
 
@@ -53,26 +55,31 @@ Major architectural decisions across milestones:
 - Per-module coverage threshold (test quality)
 - FFmetadata format (FFmpeg native metadata)
 
+**v2.0:**
+- TOML templates for batch processing (emerging decision)
+- GPU acceleration via CUDA/Metal (emerging decision)
+- Local-first AI with API fallback (emerging decision)
+
 ### Pending Todos
 
-None.
+None currently. Phase 15 planning starts next.
 
 ### Blockers/Concerns
 
 None — all tech debt items from v1.0 addressed in v1.1.
 
-**Note:** ML features (face detection) remain stubbed on Windows due to LTO issues with ML libraries. This is documented, not blocking.
+**Note:** ML features (face detection) remain stubbed on Windows due to LTO issues with ML libraries. GPU acceleration (Phase 15) will maintain this limitation.
 
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: v1.1 milestone completion
+Stopped at: v2.0 roadmap creation
 Resume file: None
-Next: /gsd:new-milestone for v2.0 (or take a break!)
+Next: `/gsd:plan-phase 15` to start Performance Foundation
 
-**Project Status: v1.1 SHIPPED**
+**Project Status: v2.0 ROADMAP DEFINED**
 
-All 58 plans across 14 phases complete. Engagement analysis platform with ML-powered features fully delivered. Tech debt closed.
+All 38 v2.0 requirements mapped to 10 phases (15-24). Ready to begin phase planning and execution.
 
 ---
-*Updated: 2026-02-05 after v1.1 milestone completion*
+*Updated: 2026-02-05 after v2.0 roadmap creation*
