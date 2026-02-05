@@ -216,12 +216,32 @@ let ffmpeg = Package(
 )
 
 # ML Libraries
+let libfacedetectionBaseArgs = @["-DBUILD_SHARED_LIBS=OFF", "-DDEMO=OFF"]
+
+# Platform-specific SIMD flags for libfacedetection
+proc getLibfacedetectionArgs(): seq[string] =
+  result = libfacedetectionBaseArgs
+  when defined(macosx):
+    # Check if running on Apple Silicon (ARM64)
+    let (arch, _) = gorgeEx("uname -m")
+    if arch.strip() == "arm64":
+      result.add("-DENABLE_AVX2=OFF")
+      result.add("-DENABLE_AVX512=OFF")
+      result.add("-DENABLE_NEON=ON")
+  elif defined(linux):
+    # Check architecture on Linux
+    let (arch, _) = gorgeEx("uname -m")
+    if arch.strip() in ["aarch64", "arm64"]:
+      result.add("-DENABLE_AVX2=OFF")
+      result.add("-DENABLE_AVX512=OFF")
+      result.add("-DENABLE_NEON=ON")
+
 let libfacedetection = Package(
   name: "libfacedetection",
   sourceUrl: "https://github.com/ShiqiYu/libfacedetection/archive/refs/tags/v3.0.tar.gz",
   sha256: "66dc6b47b11db4bf4ef73e8b133327aa964dbd8b2ce9e0ef4d1e94ca08d40b6a",
   buildSystem: "cmake",
-  buildArguments: @["-DBUILD_SHARED_LIBS=OFF", "-DDEMO=OFF"],
+  buildArguments: getLibfacedetectionArgs(),
 )
 
 let opencv = Package(
@@ -405,6 +425,8 @@ proc cmakeBuild(package: Package, buildPath: string, crossWindows: bool = false)
     "-DCMAKE_BUILD_TYPE=Release",
     "-DBUILD_SHARED_LIBS=OFF",
     "-DBUILD_STATIC_LIBS=ON",
+    # Required for CMake 3.27+ which removed compatibility with cmake_minimum_required < 3.5
+    "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
   ] & package.buildArguments
 
   # On Windows, use MinGW Makefiles instead of Visual Studio
@@ -717,8 +739,8 @@ proc ffmpegSetup(crossWindows: bool) =
           exec &"curl -O -L {package.mirrorUrl}"
         else:
           exec &"curl -O -L {package.sourceUrl}"
-        # Use full path because gorgeEx (used in getFileHash) doesn't respect withDir
-        checkHash(package, "ffmpeg_sources" / package.location)
+        # Use absolute path because gorgeEx behavior with withDir varies by platform
+        checkHash(package, absolutePath(package.location))
 
       var tarArgs = "xf"
       if package.location.endsWith("bz2"):
@@ -866,7 +888,34 @@ proc setupDeps() =
     toInstall.add("ninja")
 
   if toInstall.len > 0:
-    exec "pip install " & toInstall.join(" ")
+    when defined(macosx):
+      # macOS: use Homebrew
+      exec "brew install " & toInstall.join(" ")
+    elif defined(linux):
+      # Linux: detect package manager and install
+      # ninja is named ninja-build on Debian/Ubuntu
+      var linuxPackages = toInstall
+      for i, pkg in linuxPackages:
+        if pkg == "ninja":
+          linuxPackages[i] = "ninja-build"
+
+      if fileExists("/etc/debian_version"):
+        exec "sudo apt update && sudo apt install -y " & linuxPackages.join(" ")
+      elif fileExists("/etc/fedora-release") or fileExists("/etc/redhat-release"):
+        exec "sudo dnf install -y " & linuxPackages.join(" ")
+      elif fileExists("/etc/arch-release"):
+        # Arch uses 'ninja' not 'ninja-build'
+        exec "sudo pacman -Sy --noconfirm " & toInstall.join(" ")
+      else:
+        # Fallback to pip for unknown Linux distros
+        echo "Unknown Linux distribution, using pip to install dependencies..."
+        exec "pip install " & toInstall.join(" ")
+    elif defined(windows):
+      # Windows: use pip (meson/ninja are Python packages)
+      exec "pip install " & toInstall.join(" ")
+    else:
+      # Fallback
+      exec "pip install " & toInstall.join(" ")
 
 # ML Library Build Infrastructure
 
@@ -962,6 +1011,60 @@ proc writeCacheMetadata(package: Package, buildPath: string) =
 }}"""
   writeFile(cacheFile, cacheData)
 
+proc copyOnnxDependencies(onnxBuildDir: string, destLib: string) =
+  ## Copy ONNX Runtime dependencies that aren't installed by make install
+  ## These are required for static linking on macOS and Linux
+  echo "  [onnxruntime] Copying dependencies..."
+
+  # Core ONNX libraries
+  let coreLibs = [
+    (onnxBuildDir / "libonnx.a", destLib / "libonnx.a"),
+    (onnxBuildDir / "libonnx_proto.a", destLib / "libonnx_proto.a"),
+  ]
+  for (src, dest) in coreLibs:
+    if fileExists(src):
+      cpFile(src, dest)
+
+  # Dependencies in _deps subdirectories
+  let depsDir = onnxBuildDir / "_deps"
+
+  # nsync
+  let nsyncLib = depsDir / "google_nsync-build" / "libnsync_cpp.a"
+  if fileExists(nsyncLib):
+    cpFile(nsyncLib, destLib / "libnsync_cpp.a")
+
+  # protobuf
+  let protobufLib = depsDir / "protobuf-build" / "libprotobuf-lite.a"
+  if fileExists(protobufLib):
+    cpFile(protobufLib, destLib / "libprotobuf-lite.a")
+
+  # re2
+  let re2Lib = depsDir / "re2-build" / "libre2.a"
+  if fileExists(re2Lib):
+    cpFile(re2Lib, destLib / "libre2.a")
+
+  # cpuinfo
+  let cpuinfoLib = depsDir / "pytorch_cpuinfo-build" / "libcpuinfo.a"
+  if fileExists(cpuinfoLib):
+    cpFile(cpuinfoLib, destLib / "libcpuinfo.a")
+
+  # clog (cpuinfo dependency)
+  let clogLib = depsDir / "pytorch_clog-build" / "libclog.a"
+  if fileExists(clogLib):
+    cpFile(clogLib, destLib / "libclog.a")
+
+  # Abseil libraries - copy all from various subdirectories
+  let abslBuildDir = depsDir / "abseil_cpp-build" / "absl"
+  if dirExists(abslBuildDir):
+    # Find all .a files recursively in abseil build directory
+    let (findOutput, findCode) = gorgeEx(&"find {abslBuildDir} -name '*.a'")
+    if findCode == 0:
+      for line in findOutput.splitLines():
+        let libPath = line.strip()
+        if libPath.len > 0 and fileExists(libPath):
+          let libName = libPath.splitFile().name & ".a"
+          cpFile(libPath, destLib / libName)
+
 proc onnxBuild(buildPath: string, crossWindows: bool = false) =
   # ONNX Runtime requires special handling with build.sh
   if crossWindows:
@@ -980,11 +1083,41 @@ proc onnxBuild(buildPath: string, crossWindows: bool = false) =
       nproc = output.strip()
 
   # Run build.sh with minimal build configuration (static library)
-  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath}"
+  # CMAKE_POLICY_VERSION_MINIMUM=3.5 needed for CMake 3.27+ compatibility with older CMakeLists.txt in dependencies
+  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath} CMAKE_POLICY_VERSION_MINIMUM=3.5"
 
-  # Install libraries (build.sh creates build/Linux/MinSizeRel/)
-  withDir "build/Linux/MinSizeRel":
+  # Determine OS-specific build directory
+  var osBuildDir: string
+  when defined(macosx):
+    osBuildDir = "build/MacOS/MinSizeRel"
+  elif defined(linux):
+    osBuildDir = "build/Linux/MinSizeRel"
+  else:
+    echo "ERROR: Unsupported OS for ONNX Runtime build"
+    quit(1)
+
+  # Install libraries (build.sh creates build/<OS>/MinSizeRel/)
+  withDir osBuildDir:
     exec &"make install"
+
+  # Copy dependencies that make install doesn't handle
+  copyOnnxDependencies(osBuildDir, buildPath / "lib")
+
+  # Create wrapper header for convenient include path
+  let wrapperHeader = buildPath / "include" / "onnxruntime" / "onnxruntime_c_wrapper.h"
+  if not fileExists(wrapperHeader):
+    echo "  [onnxruntime] Creating wrapper header..."
+    writeFile(wrapperHeader, """// onnxruntime_c_wrapper.h - Wrapper header for ONNX Runtime C API
+// This file provides a convenient include path for honeyclip
+// Auto-generated by nimble makeml
+
+#ifndef ONNXRUNTIME_C_WRAPPER_H
+#define ONNXRUNTIME_C_WRAPPER_H
+
+#include "core/session/onnxruntime_c_api.h"
+
+#endif // ONNXRUNTIME_C_WRAPPER_H
+""")
 
 task makeml, "Build ML libraries from source":
   echo "Building ML libraries (libfacedetection, OpenCV, ONNX Runtime)..."
@@ -1023,7 +1156,8 @@ task makeml, "Build ML libraries from source":
           exec &"curl -O -L {package.mirrorUrl}"
         else:
           exec &"curl -O -L {package.sourceUrl}"
-        checkHash(package, "ml_sources" / package.location)
+        # Use absolute path because gorgeEx behavior with withDir varies by platform
+        checkHash(package, absolutePath(package.location))
 
       # Extract tarball if needed
       var tarArgs = "xf"
@@ -1202,7 +1336,8 @@ task makemlwin, "Build ML libraries for Windows cross-compilation":
           exec &"curl -O -L {package.mirrorUrl}"
         else:
           exec &"curl -O -L {package.sourceUrl}"
-        checkHash(package, "ml_sources" / package.location)
+        # Use absolute path because gorgeEx behavior with withDir varies by platform
+        checkHash(package, absolutePath(package.location))
 
       # Extract tarball if needed
       var tarArgs = "xf"

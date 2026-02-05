@@ -44,14 +44,27 @@ honeyclip example.mp4 --export premiere
 - For ML features: cmake, python3
 
 ```bash
-# Install dependencies and build FFmpeg (first time only, takes 1-2 hours)
+# Run bootstrap script to install system dependencies
+./bootstrap.sh
+
+# Build FFmpeg and codecs (first time only)
 nimble makeff
+
+# Build ML libraries (macOS/Linux only)
+nimble makeml
 
 # Build honeyclip
 nimble make
+
+# Download Whisper model for speech analysis
+mkdir -p ~/.cache/whisper
+curl -L -o ~/.cache/whisper/ggml-base.en.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
 ```
 
-**Windows users:** Run `nimble makeff` from **Git Bash**, not PowerShell or CMD. The FFmpeg build requires Unix tools (sed, make, etc.) that Git Bash provides.
+For better transcription accuracy, use a larger model: `ggml-small.en.bin` (~466MB) or `ggml-medium.en.bin` (~1.5GB).
+
+**Windows users:** Run `nimble makeff` from **Git Bash**, not PowerShell or CMD. The FFmpeg build requires Unix tools (sed, make, etc.) that Git Bash provides. ML features are not available on Windows.
 
 ## Editing Methods
 

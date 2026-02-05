@@ -89,8 +89,23 @@ The build deliberately disables unused FFmpeg codecs to reduce binary size. See 
 
 - Nim 2.2.2+
 - cmake, nasm, pkg-config
+- meson, ninja (for dav1d)
 - For Windows cross-compile: mingw-w64
 - For ML features: cmake, python3 (for ONNX Runtime build)
+
+### Quick Setup
+
+Run the bootstrap script to install all dependencies:
+
+```bash
+./bootstrap.sh
+```
+
+This script automatically detects your OS and installs:
+- **macOS**: Uses Homebrew (`brew install`)
+- **Linux**: Uses apt (Debian/Ubuntu), dnf (Fedora), or pacman (Arch)
+- **Windows**: Uses pip (run in Git Bash)
+- **Nim**: Via choosenim if not already installed
 
 ## Windows Native Build
 

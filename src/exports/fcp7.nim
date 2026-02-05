@@ -3,9 +3,7 @@ import std/strformat
 import std/tables
 import std/sets
 import std/os
-
-when defined(windows):
-  import std/strutils
+import std/strutils
 
 from std/math import ceil
 
