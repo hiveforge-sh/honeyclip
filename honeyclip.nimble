@@ -1033,14 +1033,18 @@ proc stripMLLibraries(buildPath: string) =
     # macOS: create .dSYM bundles with dsymutil, then strip -x
     # dsymutil extracts debug info into .dSYM bundle for crash reports
     echo "  Creating .dSYM debug symbol files..."
-    for libFile in walkFiles(libDir / "*.a"):
-      let dsymPath = libFile & ".dSYM"
-      let (dsymOut, dsymCode) = gorgeEx(&"dsymutil {libFile} -o {dsymPath}")
-      if dsymCode != 0:
-        echo &"    WARNING: dsymutil failed for {libFile.extractFilename}: {dsymOut}"
+    # Use find command since walkFiles is not available in NimScript
+    let (findOutput, findCode) = gorgeEx(&"find {libDir} -maxdepth 1 -name '*.a'")
+    if findCode == 0:
+      for libFile in findOutput.strip().splitLines():
+        if libFile.len > 0:
+          let dsymPath = libFile & ".dSYM"
+          let (dsymOut, dsymCode) = gorgeEx(&"dsymutil {libFile} -o {dsymPath}")
+          if dsymCode != 0:
+            echo &"    WARNING: dsymutil failed for {libFile.extractFilename}: {dsymOut}"
 
     echo "  Stripping libraries..."
-    let (output, code) = gorgeEx(&"find {libDir} -name '*.a' -exec strip -x {{}} \\;")
+    let (output, code) = gorgeEx(&"find {libDir} -maxdepth 1 -name '*.a' -exec strip -x {{}} \\;")
     if code != 0:
       echo &"  WARNING: Strip failed: {output}"
 
@@ -1048,14 +1052,18 @@ proc stripMLLibraries(buildPath: string) =
     # Linux: extract debug info with objcopy, then strip --strip-unneeded
     # Creates .debug files that can be used with gdb for debugging
     echo "  Creating .debug symbol files..."
-    for libFile in walkFiles(libDir / "*.a"):
-      let debugPath = libFile & ".debug"
-      let (debugOut, debugCode) = gorgeEx(&"objcopy --only-keep-debug {libFile} {debugPath}")
-      if debugCode != 0:
-        echo &"    WARNING: objcopy failed for {libFile.extractFilename}: {debugOut}"
+    # Use find command since walkFiles is not available in NimScript
+    let (findOutput, findCode) = gorgeEx(&"find {libDir} -maxdepth 1 -name '*.a'")
+    if findCode == 0:
+      for libFile in findOutput.strip().splitLines():
+        if libFile.len > 0:
+          let debugPath = libFile & ".debug"
+          let (debugOut, debugCode) = gorgeEx(&"objcopy --only-keep-debug {libFile} {debugPath}")
+          if debugCode != 0:
+            echo &"    WARNING: objcopy failed for {libFile.extractFilename}: {debugOut}"
 
     echo "  Stripping libraries..."
-    let (output, code) = gorgeEx(&"find {libDir} -name '*.a' -exec strip --strip-unneeded {{}} \\;")
+    let (output, code) = gorgeEx(&"find {libDir} -maxdepth 1 -name '*.a' -exec strip --strip-unneeded {{}} \\;")
     if code != 0:
       echo &"  WARNING: Strip failed: {output}"
 
@@ -1077,29 +1085,35 @@ proc reportMLLibrarySizes(buildPath: string): int =
   var totalSize = 0
   var sizesByCategory: seq[(string, int)] = @[]
 
-  for libFile in walkFiles(libDir / "*.a"):
-    when defined(macosx):
-      let (szOut, szCode) = gorgeEx(&"stat -f%z {libFile}")
-    else:
-      let (szOut, szCode) = gorgeEx(&"stat -c%s {libFile}")
+  # Use find command since walkFiles is not available in NimScript
+  let (findOutput, findCode) = gorgeEx(&"find {libDir} -maxdepth 1 -name '*.a'")
+  if findCode == 0:
+    for libFile in findOutput.strip().splitLines():
+      if libFile.len == 0:
+        continue
 
-    if szCode == 0:
-      let sizeBytes = parseInt(szOut.strip())
-      totalSize += sizeBytes
+      when defined(macosx):
+        let (szOut, szCode) = gorgeEx(&"stat -f%z {libFile}")
+      else:
+        let (szOut, szCode) = gorgeEx(&"stat -c%s {libFile}")
 
-      # Categorize by library type
-      let name = libFile.extractFilename
-      let category =
-        if name.startsWith("libopencv_"): "OpenCV"
-        elif name.startsWith("libonnx"): "ONNX Runtime"
-        elif name.startsWith("libabsl"): "Abseil"
-        elif name == "libfacedetection.a": "libfacedetection"
-        elif name.startsWith("libprotobuf"): "Protocol Buffers"
-        elif name.startsWith("libre2"): "RE2"
-        elif name.startsWith("libnsync"): "nsync"
-        else: "Other"
+      if szCode == 0:
+        let sizeBytes = parseInt(szOut.strip())
+        totalSize += sizeBytes
 
-      sizesByCategory.add((category, sizeBytes))
+        # Categorize by library type
+        let name = libFile.extractFilename
+        let category =
+          if name.startsWith("libopencv_"): "OpenCV"
+          elif name.startsWith("libonnx"): "ONNX Runtime"
+          elif name.startsWith("libabsl"): "Abseil"
+          elif name == "libfacedetection.a": "libfacedetection"
+          elif name.startsWith("libprotobuf"): "Protocol Buffers"
+          elif name.startsWith("libre2"): "RE2"
+          elif name.startsWith("libnsync"): "nsync"
+          else: "Other"
+
+        sizesByCategory.add((category, sizeBytes))
 
   # Aggregate by category
   var categoryTotals = initTable[string, int]()
@@ -1347,36 +1361,12 @@ task makeml, "Build ML libraries from source":
   else:
     echo "All ML libraries up to date (using cached builds)"
 
-  # Validate binary size
-  echo ""
-  echo "Checking ML library sizes..."
+  # Strip debug symbols from all ML libraries (creates .dSYM/.debug files first)
+  stripMLLibraries(buildPath)
 
-  if dirExists(buildPath / "lib"):
-    # Use du command to get size summary
-    when defined(macosx):
-      let (sizeOutput, sizeCode) = gorgeEx(&"du -sh {buildPath}/lib")
-      if sizeCode == 0:
-        echo &"Total ML library directory: {sizeOutput.split()[0]}"
-    else:
-      let (sizeOutput, sizeCode) = gorgeEx(&"du -sh {buildPath}/lib")
-      if sizeCode == 0:
-        echo &"Total ML library directory: {sizeOutput.split()[0]}"
-
-    # Check individual library files
-    for libFile in listFiles(buildPath / "lib"):
-      if libFile.endsWith(".a"):
-        when defined(macosx):
-          let (szOut, szCode) = gorgeEx(&"stat -f%z {libFile}")
-          if szCode == 0:
-            let sizeBytes = parseInt(szOut.strip())
-            let sizeMB = sizeBytes.float / (1024.0 * 1024.0)
-            echo &"  {libFile.extractFilename}: {sizeMB:.1f}MB"
-        else:
-          let (szOut, szCode) = gorgeEx(&"stat -c%s {libFile}")
-          if szCode == 0:
-            let sizeBytes = parseInt(szOut.strip())
-            let sizeMB = sizeBytes.float / (1024.0 * 1024.0)
-            echo &"  {libFile.extractFilename}: {sizeMB:.1f}MB"
+  # Validate ML library sizes
+  let totalSizeMB = reportMLLibrarySizes(buildPath)
+  validateMLLibrarySize(totalSizeMB)
 
   # Print ccache statistics
   printCcacheStats()
