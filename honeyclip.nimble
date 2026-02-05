@@ -216,7 +216,7 @@ let ffmpeg = Package(
 )
 
 # ML Libraries
-let libfacedetectionBaseArgs = @["-DBUILD_SHARED_LIBS=OFF", "-DDEMO=OFF"]
+let libfacedetectionBaseArgs = @["-DBUILD_SHARED_LIBS=OFF", "-DDEMO=OFF", "-DCMAKE_BUILD_TYPE=MinSizeRel"]
 
 # Platform-specific SIMD flags for libfacedetection
 proc getLibfacedetectionArgs(): seq[string] =
