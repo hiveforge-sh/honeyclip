@@ -18,6 +18,7 @@ import ../analyze/engagement_types
 import ../exports/[edl, presets, project, fcp7, fcp11, markers, aaf]
 import ../render/[previews, scoreviz]
 import ../reframe/crop
+import ../metadata/[types, parser, apply]
 
 type
   NLEFormat* = enum
@@ -74,6 +75,12 @@ proc main*(cArgs: seq[string]) =
   var scoreVizMode: ScoreVizMode = svmBoth
   var noMarkers: bool = false
 
+  # Metadata options
+  var metaTemplatePath: string = ""
+  var metaTitleOverride: string = ""
+  var metaAuthorOverride: string = ""
+  var metaCopyrightOverride: string = ""
+
   # Parse arguments
   var expecting: string = ""
   for rawKey in cArgs:
@@ -114,6 +121,12 @@ NLE Export:
   --no-markers          Skip timeline markers (engagement/scene/speaker)
   --no-graph            Skip score graph overlay track
   --no-text             Skip score text overlay track
+
+Metadata:
+  --meta-template PATH  Apply metadata template during export
+  --meta-title TEXT     Override title in template
+  --meta-author TEXT    Override author in template
+  --meta-copyright TEXT Override copyright in template
 
 Control:
   --dry-run             Show planned actions without executing
@@ -173,6 +186,14 @@ Examples:
         scoreVizMode = svmGraph
       elif scoreVizMode == svmText:
         includeScoreViz = false
+    of "--meta-template", "--meta":
+      expecting = "meta-template"
+    of "--meta-title":
+      expecting = "meta-title"
+    of "--meta-author":
+      expecting = "meta-author"
+    of "--meta-copyright":
+      expecting = "meta-copyright"
     else:
       if key.startsWith("--"):
         error &"Unknown option: {key}"
@@ -227,6 +248,18 @@ Examples:
         nleFormat = parseNLETarget(key)
         if nleFormat == nleNone:
           error &"Unknown NLE target: {key}. Use: premiere, fcpx, resolve, aftereffects, or format names (fcp7xml, fcpxml, edl, aaf)"
+        expecting = ""
+      of "meta-template":
+        metaTemplatePath = key
+        expecting = ""
+      of "meta-title":
+        metaTitleOverride = key
+        expecting = ""
+      of "meta-author":
+        metaAuthorOverride = key
+        expecting = ""
+      of "meta-copyright":
+        metaCopyrightOverride = key
         expecting = ""
 
   # Check for incomplete argument
@@ -297,6 +330,35 @@ Examples:
 
   if clips.len == 0:
     error "No clips found. Run 'honeyclip clips' first to detect clips, then use --project to load them."
+
+  # Load and process metadata template
+  var metadataFilePath: string = ""
+
+  if metaTemplatePath != "":
+    if not fileExists(metaTemplatePath):
+      error &"Metadata template not found: {metaTemplatePath}"
+
+    var metadataTemplate = loadTemplate(metaTemplatePath)
+
+    # Use inputPath (source video) for consistent variable substitution
+    # This ensures all clips from the same video share the same base metadata
+    metadataTemplate = substituteVariables(metadataTemplate, inputPath, metaAuthorOverride)
+
+    # Apply CLI overrides
+    var overrides = initTable[string, string]()
+    if metaTitleOverride != "":
+      overrides["title"] = metaTitleOverride
+    if metaAuthorOverride != "":
+      overrides["artist"] = metaAuthorOverride
+    if metaCopyrightOverride != "":
+      overrides["copyright"] = metaCopyrightOverride
+
+    if overrides.len > 0:
+      metadataTemplate = merge(metadataTemplate, overrides)
+
+    # Write ffmetadata file for FFmpeg
+    metadataFilePath = writeFFMetadataFile(metadataTemplate)
+    echo &"Loaded metadata template: {metaTemplatePath}"
 
   # NLE export mode
   if nleFormat != nleNone:
@@ -577,7 +639,8 @@ Examples:
     ))
 
   let results = batchExportMultiAspect(inputPath, exportClips, multiParams,
-    proc(completed, total: int) =
+    metadataPath = metadataFilePath,
+    onProgress = proc(completed, total: int) =
       conwrite(&"Exporting: {completed}/{total}")
   )
 
@@ -595,3 +658,7 @@ Examples:
 
   echo ""
   echo &"Exported {successCount}/{results.len} files to: {effectiveOutputDir}"
+
+  # Cleanup temp metadata file
+  if metadataFilePath != "" and fileExists(metadataFilePath):
+    removeFile(metadataFilePath)
