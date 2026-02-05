@@ -10,20 +10,20 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 11 of 13 (ML Library Size Optimization) — Not started
-Plan: 0 of ? in phase
-Status: v1.1 Polish phases created, ready to plan Phase 11
-Last activity: 2026-02-05 — v1.1 tech debt phases added to roadmap
+Phase: 14 of 14 (Media Metadata Management) — In progress
+Plan: 1 of 3 in phase
+Status: Foundation modules complete (types, parser, apply)
+Last activity: 2026-02-05 — Completed 14-01-PLAN.md (metadata foundation)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
-Progress v1.1: [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
+Progress v1.1: [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 8%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 48
+- Total plans completed: 49
 - Average duration: 3.2 min
-- Total execution time: 2.7 hours
+- Total execution time: 2.8 hours
 
 **By Phase:**
 
@@ -39,10 +39,11 @@ Progress v1.1: [░░░░░░░░░░░░░░░░░░░░░�
 | 08-multi-aspect-export-workflow | 5 | 9.3min | 1.9min |
 | 09-nle-integration-markers | 7 | 27.8min | 4.0min |
 | 10-cli-integration | 5 | 29min | 5.8min |
+| 14-media-metadata-management | 1 | 4.2min | 4.2min |
 
 **Recent Trend:**
-- Last 5 plans: 10-02 (7min), 10-03 (4min), 10-04 (7min), 10-05 (7min)
-- Trend: All phases complete - project delivered
+- Last 5 plans: 10-03 (4min), 10-04 (7min), 10-05 (7min), 14-01 (4min)
+- Trend: v1.1 Polish phase in progress
 
 *Updated after each plan completion*
 
@@ -235,6 +236,12 @@ Recent decisions affecting current work:
 - --verbose flag forces progress display even when output is piped (10-05)
 - TTY auto-detection: show prompts in terminal, silent when piped (unless --verbose) (10-05)
 - Enhanced error messages include actionable next steps with example commands (10-05)
+- JSON template format with global, video, audio metadata and chapters (14-01)
+- Variable substitution for VIDEO_TITLE, AUTHOR_NAME, YEAR, ISO_DATE, FILENAME (14-01)
+- Template discovery checks video directory first, then home directory (14-01)
+- Use "artist" not "author" field for MP4 compatibility (14-01)
+- FFmetadata INI format generation for FFmpeg -i metadata.txt (14-01)
+- Escape special chars (=, ;, #, \, newline) for ffmetadata format (14-01)
 
 ### Pending Todos
 
@@ -314,10 +321,14 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-05
-Stopped at: v1.1 Polish phases created
+Last session: 2026-02-05T13:20:06Z
+Stopped at: Completed 14-01-PLAN.md (metadata foundation)
 Resume file: None
-Next: Plan Phase 11 (ML Library Size Optimization)
+Next: Plan 14-02 (Meta command implementation)
 
 **Project Status: v1.0 COMPLETE, v1.1 IN PROGRESS**
-v1.0 Engagement Analysis complete (48 plans). v1.1 Polish milestone created with 3 phases for tech debt closure (size optimization, custom hooks, test coverage).
+v1.0 Engagement Analysis complete (48 plans). v1.1 Polish in progress: Phase 14 started (1/3 plans complete).
+
+### Roadmap Evolution
+
+- Phase 14 added: Media Metadata Management (JSON/YAML templates for copyright, author, custom tags, chapter markers)
