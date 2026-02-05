@@ -250,6 +250,7 @@ let opencv = Package(
   sha256: "b2171af5be6b26f7a06b1229948bbb2bdaa74fcf5cd097e0af6378fce50a6eb9",
   buildSystem: "cmake",
   buildArguments: @[
+    "-DCMAKE_BUILD_TYPE=MinSizeRel",
     "-DBUILD_SHARED_LIBS=OFF",
     "-DBUILD_LIST=core,imgproc,objdetect",
     "-DBUILD_opencv_apps=OFF",
@@ -257,6 +258,25 @@ let opencv = Package(
     "-DBUILD_DOCS=OFF",
     "-DBUILD_TESTS=OFF",
     "-DBUILD_PERF_TESTS=OFF",
+    # Explicitly disable unwanted modules (BUILD_LIST alone is insufficient)
+    "-DBUILD_opencv_calib3d=OFF",
+    "-DBUILD_opencv_features2d=OFF",
+    "-DBUILD_opencv_flann=OFF",
+    "-DBUILD_opencv_dnn=OFF",
+    "-DBUILD_opencv_gapi=OFF",
+    "-DBUILD_opencv_highgui=OFF",
+    "-DBUILD_opencv_ml=OFF",
+    "-DBUILD_opencv_video=OFF",
+    "-DBUILD_opencv_stitching=OFF",
+    "-DBUILD_opencv_videoio=OFF",
+    # NOTE: opencv_photo kept for future image preprocessing
+    # Disable unused 3rdparty dependencies
+    "-DWITH_CAROTENE=OFF",
+    "-DWITH_EIGEN=OFF",
+    "-DWITH_ADE=OFF",
+    "-DWITH_FLATBUFFERS=OFF",
+    "-DWITH_ITT=OFF",
+    # Disable system integrations
     "-DWITH_CUDA=OFF",
     "-DWITH_OPENCL=OFF",
     "-DWITH_IPP=OFF",
