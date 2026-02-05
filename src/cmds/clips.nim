@@ -166,7 +166,11 @@ Workflow:
     error "A video file is required. Usage: honeyclip clips file model [options]"
 
   if model == "":
-    error "A whisper model is required. Find models at: https://huggingface.co/ggerganov/whisper.cpp"
+    model = findWhisperModel()
+    if model == "":
+      error "No whisper model found. Download one to ~/.cache/whisper/ or specify path.\nFind models at: https://huggingface.co/ggerganov/whisper.cpp"
+    else:
+      echo &"Using whisper model: {extractFilename(model)}"
 
   if not fileExists(inputPath):
     error &"Input file not found: {inputPath}"

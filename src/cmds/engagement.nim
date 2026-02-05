@@ -133,6 +133,7 @@ proc main*(cArgs: seq[string]) =
   var useStdout: bool = false
   var compact: bool = false
   var noFaces: bool = false
+  var noTranscript: bool = false
   var isDebug: bool = false
   var quietMode: bool = false
   var verboseMode: bool = false
@@ -142,19 +143,20 @@ proc main*(cArgs: seq[string]) =
     let key = handleKey(rawKey)
     case key:
     of "--help", "-h":
-      echo """usage: honeyclip engage file model [options]
+      echo """usage: honeyclip engage file [model] [options]
 
 Analyze video engagement with audio, motion, speech, and face detection
 
 Arguments:
   file                    Input video file
-  model                   Whisper model for transcript extraction
+  model                   Whisper model (auto-detected from ~/.cache/whisper/)
 
 Options:
   -o, --output PATH       Output JSON path (default: input.engage.json)
   --summary               Print summary instead of writing JSON
   --stdout                Output JSON to terminal
   --no-faces              Skip face detection (faster)
+  --no-transcript         Skip transcript extraction (motion/faces only)
   --hooks PATH            Custom hook patterns JSON file
   --compact               Minified JSON output
   -q, --quiet             Suppress progress output
@@ -178,6 +180,8 @@ Options:
       compact = true
     of "--no-faces":
       noFaces = true
+    of "--no-transcript":
+      noTranscript = true
     of "-o", "--output":
       expecting = "output"
     of "--hooks":
@@ -200,22 +204,20 @@ Options:
 
   # Validate arguments
   if inputPath == "":
-    error "A video file is required. Usage: honeyclip engage file model [options]"
+    error "A video file is required. Usage: honeyclip engage file [model] [options]"
 
-  if model == "":
-    error "A whisper model is required. Find models at: https://huggingface.co/ggerganov/whisper.cpp"
+  if not noTranscript and model == "":
+    model = findWhisperModel()
+    if model == "":
+      error "No whisper model found. Download one to ~/.cache/whisper/ or specify path (or use --no-transcript).\nFind models at: https://huggingface.co/ggerganov/whisper.cpp"
+    else:
+      echo &"Using whisper model: {extractFilename(model)}"
 
   if not fileExists(inputPath):
     error &"Input file not found: {inputPath}"
 
-  if not fileExists(model):
-    error &"""Model not found: {model}
-
-Download whisper models from:
-  https://huggingface.co/ggerganov/whisper.cpp/tree/main
-
-Example:
-  curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"""
+  if not noTranscript and model != "" and not fileExists(model):
+    error &"Model not found: {model}\nDownload from: https://huggingface.co/ggerganov/whisper.cpp"
 
   if hooksPath != "" and not fileExists(hooksPath):
     error &"Hooks file not found: {hooksPath}"
@@ -240,21 +242,23 @@ Example:
   var bar = initBar(if showProgress: BarType.modern else: BarType.none)
   defer: bar.destroy()
 
-  # Step 1: Extract transcript with progress
-  let transcriptStart = epochTime()
-  if showProgress:
-    bar.start(100.0, "Extracting transcript")
+  # Step 1: Extract transcript with progress (unless --no-transcript)
   var transcript: Transcript
-  try:
-    transcript = extractTranscript(inputPath, model, "", "")
-  except IOError as e:
-    error &"Failed to extract transcript: {e.msg}"
-  if showProgress:
-    bar.`end`()
-  let transcriptTime = epochTime() - transcriptStart
+  var transcriptTime: float = 0.0
+  if not noTranscript:
+    let transcriptStart = epochTime()
+    if showProgress:
+      bar.start(100.0, "Extracting transcript")
+    try:
+      transcript = extractTranscript(inputPath, model, "", "")
+    except IOError as e:
+      error &"Failed to extract transcript: {e.msg}"
+    if showProgress:
+      bar.`end`()
+    transcriptTime = epochTime() - transcriptStart
 
-  if transcript.words.len == 0:
-    error "No transcript content extracted"
+    if transcript.words.len == 0:
+      warning "No transcript content extracted - scoring will use motion/faces only"
 
   # Step 2: Open container for analysis
   var container: InputContainer
@@ -289,7 +293,10 @@ Example:
   if showProgress and not showSummary and not useStdout:
     echo ""
     echo "Analysis complete"
-    echo &"  Transcript: {transcriptTime:.1f}s ({transcript.words.len} words)"
+    if not noTranscript:
+      echo &"  Transcript: {transcriptTime:.1f}s ({transcript.words.len} words)"
+    else:
+      echo "  Transcript: skipped (--no-transcript)"
     echo &"  Analysis: {analyzeTime:.1f}s ({timeline.segments.len} segments)"
     if timeline.hookCount > 0:
       echo &"  Hooks detected: {timeline.hookCount}"

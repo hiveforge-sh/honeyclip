@@ -137,22 +137,17 @@ Options:
     error "A media file is required. Usage: honeyclip transcript file model [options]"
 
   if model == "":
-    error "A whisper model is required. Find models at: https://huggingface.co/ggerganov/whisper.cpp"
+    model = findWhisperModel()
+    if model == "":
+      error "No whisper model found. Download one to ~/.cache/whisper/ or specify path.\nFind models at: https://huggingface.co/ggerganov/whisper.cpp"
+    else:
+      echo &"Using whisper model: {extractFilename(model)}"
 
   if not fileExists(inputPath):
     error &"Input file not found: {inputPath}"
 
   if not fileExists(model):
-    echo &"Model not found at: {model}"
-    echo "Download models from: https://huggingface.co/ggerganov/whisper.cpp"
-    echo ""
-    stdout.write("Download now? [y/n]: ")
-    stdout.flushFile()
-    let response = stdin.readLine().strip().toLowerAscii()
-    if response != "y" and response != "yes":
-      error "Model file required to continue"
-    # Note: Actual download implementation would go here
-    error &"Model download not implemented. Please download manually from: https://huggingface.co/ggerganov/whisper.cpp"
+    error &"Model not found: {model}\nDownload from: https://huggingface.co/ggerganov/whisper.cpp"
 
   if useStdout and format == "":
     error "--stdout requires --format (srt, vtt, or json)"

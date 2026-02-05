@@ -143,13 +143,17 @@ Workflow:
     error "A video file is required. Usage: honeyclip analyze file model [options]"
 
   if not noTranscript and model == "":
-    error "A whisper model is required (or use --no-transcript). Find models at: https://huggingface.co/ggerganov/whisper.cpp"
+    model = findWhisperModel()
+    if model == "":
+      error "No whisper model found. Download one to ~/.cache/whisper/ or specify path (or use --no-transcript).\nFind models at: https://huggingface.co/ggerganov/whisper.cpp"
+    else:
+      echo &"Using whisper model: {extractFilename(model)}"
 
   if not fileExists(inputPath):
     error &"Input file not found: {inputPath}"
 
   if not noTranscript and model != "" and not fileExists(model):
-    error &"Model not found: {model}"
+    error &"Model not found: {model}\nDownload from: https://huggingface.co/ggerganov/whisper.cpp"
 
   # Determine output paths
   let effectiveOutputDir = if outputDir != "": outputDir else: splitFile(inputPath).dir

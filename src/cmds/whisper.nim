@@ -68,7 +68,9 @@ Options:
   if inputPath == "":
     error "A media file is needed"
   if model == "":
-    error "A model is needed, you came find them here: https://huggingface.co/ggerganov/whisper.cpp"
+    model = findWhisperModel()
+    if model == "":
+      error "No whisper model found. Download one to ~/.cache/whisper/ or specify path.\nFind models at: https://huggingface.co/ggerganov/whisper.cpp"
   if queue < 1 or queue > 1000:
     error &"Invalid queue value: {queue}"
   if format notin ["text", "srt", "json"]:

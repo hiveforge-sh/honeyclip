@@ -1,7 +1,41 @@
-import std/[os, strutils, strformat]
+import std/[os, strutils, strformat, algorithm]
 from std/math import round, trunc, gcd
 
 import ../log
+
+# Whisper model priority (larger = better quality)
+const whisperModelPriority = [
+  "large-v3-turbo", "large-v3", "large-v2", "large-v1", "large",
+  "medium.en", "medium",
+  "small.en", "small",
+  "base.en", "base",
+  "tiny.en", "tiny"
+]
+
+proc findWhisperModel*(): string =
+  ## Auto-detect whisper model in ~/.cache/whisper/
+  ## Returns path to best available model, or empty string if none found
+  let whisperDir = getHomeDir() / ".cache" / "whisper"
+  if not dirExists(whisperDir):
+    return ""
+
+  # Collect all .bin files
+  var models: seq[string] = @[]
+  for file in walkFiles(whisperDir / "*.bin"):
+    models.add(file)
+
+  if models.len == 0:
+    return ""
+
+  # Find the best model by priority
+  for priority in whisperModelPriority:
+    for model in models:
+      let name = extractFilename(model).toLowerAscii()
+      if name.contains(priority):
+        return model
+
+  # Fallback to first available model
+  return models[0]
 
 func handleKey*(val: string): string =
   if val.startsWith("--") and val.len >= 3:

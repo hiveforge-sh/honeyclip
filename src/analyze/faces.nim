@@ -338,11 +338,11 @@ iterator facesPipeline*(processor: VideoProcessor,
   ## Yields:
   ##   Tuple of (frame, sceneScore, timestamp) for adaptive-rate frames
   ##
-  ## Filter chain: fps={maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={threshold}:s=1
-  ## - maxFps: Run at max rate, use sampler to skip frames
-  ## - scale: Resize for faster face detection
-  ## - format: BGR24 required by libfacedetection
-  ## - scdet: Scene change detection with threshold, s=1 enables score metadata output
+  ## Filter chain (adaptive based on available FFmpeg filters):
+  ## - fps: Frame rate limiting (if available, otherwise handled by sampler)
+  ## - scale: Resize for faster face detection (required)
+  ## - format: BGR24 required by libfacedetection (required)
+  ## - scdet: Scene change detection for adaptive sampling (if available)
 
   var packet = av_packet_alloc()
   var frame = av_frame_alloc()
@@ -366,8 +366,32 @@ iterator facesPipeline*(processor: VideoProcessor,
   if pixFmtName == nil:
     error &"Could not get pixel format name for format: {ord(pixelFormat)}"
 
-  # Build filter: run at maxFps, scale, format for face detection, scene detection
-  let filter = &"fps={sampler.maxFps},scale=-1:{targetHeight},format=bgr24,scdet=t={sampler.sceneThreshold}:s=1"
+  # Build filter chain dynamically based on available filters
+  # Check which optional filters are available in this FFmpeg build
+  let hasFpsFilter = avfilter_get_by_name("fps") != nil
+  let hasScdetFilter = avfilter_get_by_name("scdet") != nil
+
+  var filterParts: seq[string] = @[]
+
+  # fps filter - limits frame rate before processing (optional optimization)
+  if hasFpsFilter:
+    let fpsStr = if sampler.maxFps == float(int(sampler.maxFps)):
+                   $int(sampler.maxFps)
+                 else:
+                   let num = int(sampler.maxFps * 1000)
+                   &"{num}/1000"
+    filterParts.add(&"fps={fpsStr}")
+
+  # scale and format - required for face detection
+  filterParts.add(&"scale=-1:{targetHeight}")
+  filterParts.add("format=bgr24")
+
+  # scdet filter - scene change detection (optional, enables adaptive sampling)
+  if hasScdetFilter:
+    let scdetStr = formatFloat(sampler.sceneThreshold, ffDecimal, 1)
+    filterParts.add(&"scdet=t={scdetStr}:s=1")
+
+  let filter = filterParts.join(",")
 
   let (filterGraph, bufferSrc, bufferSink) = createFilterGraph(
     timeBase, pixFmtName, processor.codecCtx, filter

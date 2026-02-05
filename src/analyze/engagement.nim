@@ -278,17 +278,21 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
   ## Main engagement analysis API
   ## Combines audio, motion, speech, and face signals into engagement scores
 
-  # 1. Get audio signal
-  let audioSignal = audio(bar, container, path, tb, 0)
-  bar.`end`()
+  # 1. Get audio signal (if audio streams exist)
+  var audioSignal: seq[float32] = @[]
+  if container.audio.len > 0:
+    audioSignal = audio(bar, container, path, tb, 0)
+    bar.`end`()
 
-  # 2. Get motion signal
-  let motionSignal = motion(bar, container, path, tb, 0, 160, 1)
-  bar.`end`()
+  # 2. Get motion signal (if video streams exist)
+  var motionSignal: seq[float32] = @[]
+  if container.video.len > 0:
+    motionSignal = motion(bar, container, path, tb, 0, 160, 1)
+    bar.`end`()
 
-  # 3. Get face frames (if enabled)
+  # 3. Get face frames (if enabled and video exists)
   var faceFrames: seq[FrameFaces] = @[]
-  if useFaceDetection:
+  if useFaceDetection and container.video.len > 0:
     # Use default FaceAnalysisParams
     faceFrames = faces(bar, container, path, tb)
     bar.`end`()
@@ -309,8 +313,14 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
       sum += v
     avgAudioEnergy = sum / audioSignal.len.float32
 
-  # 6. Build segments from transcript
-  bar.start(float(transcript.segments.len + 1), "Calculating engagement scores")
+  # 6. Build segments from transcript (or create time-based segments if no transcript)
+  # Get effective duration from transcript or container
+  let effectiveDuration = if transcript.duration > 0:
+                            transcript.duration
+                          else:
+                            int64(container.duration * 1000)  # Convert seconds to ms
+
+  bar.start(float(max(transcript.segments.len, 1) + 1), "Calculating engagement scores")
   var segments: seq[EngagementSegment] = @[]
 
   # Score transcript segments (speech)
@@ -327,8 +337,8 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
     segmentIndex += 1
     bar.tick(segmentIndex)
 
-  # Score non-speech segments
-  let nonSpeechGaps = createNonSpeechSegments(transcript, transcript.duration, 2000)
+  # Score non-speech segments (or entire video if no transcript)
+  let nonSpeechGaps = createNonSpeechSegments(transcript, effectiveDuration, 2000)
   for gap in nonSpeechGaps:
     let seg = scoreSegment(
       gap.startMs, gap.endMs, "", @[],  # No text, no words
@@ -369,6 +379,12 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
         segments[i].hasHook = false
 
   # 9. Calculate timeline stats
+  # Use transcript duration if available, otherwise get from container
+  let videoDuration = if transcript.duration > 0:
+                        transcript.duration
+                      else:
+                        int64(container.duration * 1000)  # Convert seconds to ms
+
   var avgScore: float32 = 0.0f
   var hookCount = 0
   for seg in segments:
@@ -376,13 +392,13 @@ proc analyzeEngagement*(bar: Bar, container: InputContainer, path: string,
     if seg.hasHook:
       hookCount += 1
 
-  if transcript.duration > 0:
-    avgScore = avgScore / transcript.duration.float32
+  if videoDuration > 0:
+    avgScore = avgScore / videoDuration.float32
 
   # 10. Return timeline
   result = EngagementTimeline(
     segments: segments,
-    duration: transcript.duration,
+    duration: videoDuration,
     avgScore: avgScore,
     hookCount: hookCount,
     params: params
