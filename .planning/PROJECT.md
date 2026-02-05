@@ -46,9 +46,13 @@ Surface the most engaging moments from any video with a single command — trans
 
 ### Active
 
-<!-- Next milestone scope TBD -->
+<!-- v1.2 Workflow & Performance -->
 
-(None — all v1.x requirements shipped. Define new requirements for v2.0.)
+- [ ] Template-based batch processing (process folder with same settings)
+- [ ] Automatic chapter markers from transcript structure
+- [ ] Preview generation (quick low-res before full render)
+- [ ] GPU acceleration for face detection (CUDA on Linux, Metal on macOS)
+- [ ] Memory optimization for 4K+ content
 
 ### Out of Scope
 
@@ -109,5 +113,16 @@ The polish milestone (v1.1) addressed tech debt:
 | JSON schema for hooks | User extensibility without code changes | ✓ Good — shipped in v1.1 |
 | Per-module coverage threshold | Ensures no module drags down average | ✓ Good — shipped in v1.1 |
 
+## Current Milestone: v1.2 Workflow & Performance
+
+**Goal:** Enable efficient batch workflows and improve performance for high-resolution content.
+
+**Target features:**
+- Template-based batch processing for folder-level operations
+- Automatic chapter detection from transcript structure
+- Quick preview generation before full renders
+- GPU-accelerated face detection (Linux/macOS)
+- Memory-optimized 4K+ processing pipeline
+
 ---
-*Last updated: 2026-02-05 after v1.1 milestone*
+*Last updated: 2026-02-05 after v1.2 milestone started*

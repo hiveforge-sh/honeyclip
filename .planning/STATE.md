@@ -6,14 +6,14 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** Milestone v1.1 complete — ready for v2.0 planning
+**Current focus:** v1.2 Workflow & Performance
 
 ## Current Position
 
-Phase: 14 of 14 (all v1.x phases complete)
-Plan: N/A
-Status: Ready to plan next milestone
-Last activity: 2026-02-05 — v1.1 milestone shipped
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-05 — Milestone v1.2 started
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
