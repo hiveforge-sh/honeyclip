@@ -442,12 +442,22 @@ proc cmakeBuild(package: Package, buildPath: string, crossWindows: bool = false)
 
   var cmakeArgs = @[
     &"-DCMAKE_INSTALL_PREFIX={buildPath}",
-    "-DCMAKE_BUILD_TYPE=Release",
     "-DBUILD_SHARED_LIBS=OFF",
     "-DBUILD_STATIC_LIBS=ON",
     # Required for CMake 3.27+ which removed compatibility with cmake_minimum_required < 3.5
     "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
-  ] & package.buildArguments
+  ]
+
+  # Only add Release build type if package doesn't specify one
+  var hasBuildType = false
+  for arg in package.buildArguments:
+    if arg.contains("CMAKE_BUILD_TYPE"):
+      hasBuildType = true
+      break
+  if not hasBuildType:
+    cmakeArgs.add("-DCMAKE_BUILD_TYPE=Release")
+
+  cmakeArgs &= package.buildArguments
 
   # On Windows, use MinGW Makefiles instead of Visual Studio
   when defined(windows):
