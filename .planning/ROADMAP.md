@@ -7,7 +7,7 @@ This roadmap transforms honeyclip from a silence removal tool into a comprehensi
 ## Milestones
 
 - ✅ **v1.0 Engagement Analysis** — Phases 1-10 (ready for completion)
-- 🚧 **v1.1 Polish** — Phases 11-13 (tech debt closure)
+- 🚧 **v1.1 Polish** — Phases 11-14 (tech debt closure + metadata)
 
 ## Phases
 
@@ -35,6 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 11: ML Library Size Optimization** - Strip symbols, -Os optimization, remove unused OpenCV modules
 - [ ] **Phase 12: Custom Hook Patterns** - JSON schema for user-defined hook patterns, CLI flag
 - [ ] **Phase 13: Tracker Test Coverage** - Unit tests for Kalman filter, assignment algorithm, tracker
+- [ ] **Phase 14: Media Metadata Management** - JSON templates for copyright, author, custom tags, chapter markers; standalone `meta` command + export integration
 
 ## Phase Details
 
@@ -257,11 +258,28 @@ Plans:
   4. Test coverage for tracking modules exceeds 80%
 **Plans**: TBD
 
+### Phase 14: Media Metadata Management
+**Goal**: Apply copyright, author, and other standard media metadata in a customizable, repeatable way
+**Depends on**: Phase 8 (export workflow integration)
+**Requirements**: None (enhancement)
+**Success Criteria** (what must be TRUE):
+  1. User can define metadata templates in JSON config file (.honeyclip-meta.json)
+  2. Templates support standard fields (title, author, copyright, description, date) and extended fields (custom tags, chapter markers)
+  3. Standalone `honeyclip meta` command applies metadata to video/audio files
+  4. `--meta-template` flag integrates with export workflows to auto-apply metadata during rendering
+  5. CLI flags can override template values for one-off adjustments
+**Plans**: 3 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Metadata types, JSON parser, and ffmetadata generation
+- [ ] 14-02-PLAN.md — CLI meta command with template loading and FFmpeg application
+- [ ] 14-03-PLAN.md — Export command integration with --meta-template flag
+
 ## Progress
 
 **Execution Order:**
 - v1.0: Phases 1-10 (complete)
-- v1.1: Phases 11-13 (planned)
+- v1.1: Phases 11-14 (planned)
 
 ### v1.0 Engagement Analysis
 
@@ -285,3 +303,4 @@ Plans:
 | 11. ML Library Size Optimization | 0/2 | Planned | - |
 | 12. Custom Hook Patterns | 0/? | Not started | - |
 | 13. Tracker Test Coverage | 0/? | Not started | - |
+| 14. Media Metadata Management | 0/3 | Planned | - |
