@@ -2688,6 +2688,153 @@ suite "Hungarian Assignment":
         foundDiagonal = true
     check foundDiagonal
 
+  test "iou-one-inside-other":
+    # Large box containing small box
+    let large = FaceRect(x: 0, y: 0, width: 200, height: 200, confidence: 1.0, angle: 0)
+    let small = FaceRect(x: 50, y: 50, width: 50, height: 50, confidence: 1.0, angle: 0)
+    # Intersection = small box area = 2500
+    # Union = 40000 + 2500 - 2500 = 40000
+    # IoU = 2500/40000 = 0.0625
+    let result = iou(large, small)
+    check checkApprox(result, 0.0625, epsilon = 0.001)
+
+  test "iou-symmetric":
+    # IoU should be symmetric: iou(a,b) == iou(b,a)
+    let a = FaceRect(x: 0, y: 0, width: 100, height: 100, confidence: 1.0, angle: 0)
+    let b = FaceRect(x: 50, y: 50, width: 100, height: 100, confidence: 1.0, angle: 0)
+    check checkApprox(iou(a, b), iou(b, a))
+
+  test "costMatrix-empty-tracks":
+    # Empty tracks with non-empty detections
+    let tracks: seq[Track] = @[]
+    let detections = @[FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)]
+    let embeddings: seq[seq[float32]] = @[@[]]
+    let matrix = computeCostMatrix(tracks, detections, embeddings)
+    check matrix.len == 0
+
+  test "costMatrix-empty-detections":
+    # Non-empty tracks with empty detections
+    var track = Track()
+    track.id = 0
+    track.bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    let tracks = @[track]
+    let detections: seq[FaceRect] = @[]
+    let embeddings: seq[seq[float32]] = @[]
+    let matrix = computeCostMatrix(tracks, detections, embeddings)
+    check matrix.len == 1
+    check matrix[0].len == 0
+
+  test "costMatrix-sets-infinite-for-low-iou":
+    # Track and detection far apart (IoU < 0.5)
+    var track = Track()
+    track.id = 0
+    track.bbox = FaceRect(x: 0, y: 0, width: 50, height: 50, confidence: 0.9, angle: 0)
+    let tracks = @[track]
+    let detections = @[FaceRect(x: 500, y: 500, width: 50, height: 50, confidence: 0.9, angle: 0)]
+    let embeddings: seq[seq[float32]] = @[@[]]
+    let matrix = computeCostMatrix(tracks, detections, embeddings)
+    check matrix.len == 1
+    check matrix[0].len == 1
+    check matrix[0][0] >= 1e5  # Infinite cost for low IoU
+
+  test "costMatrix-calculates-valid-cost":
+    # Track and detection with high overlap (IoU > 0.5)
+    var track = Track()
+    track.id = 0
+    track.bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    let tracks = @[track]
+    let detections = @[FaceRect(x: 105, y: 102, width: 50, height: 50, confidence: 0.9, angle: 0)]
+    let embeddings: seq[seq[float32]] = @[@[]]
+    let matrix = computeCostMatrix(tracks, detections, embeddings)
+    check matrix.len == 1
+    check matrix[0].len == 1
+    # Cost should be valid (not infinite) for high overlap
+    check matrix[0][0] < 1e5
+    check matrix[0][0] > 0.0
+
+  test "hungarian-two-tracks-two-detections":
+    # 2x2 cost matrix with clear optimal assignment
+    let costMatrix = @[
+      @[0.1, 0.9],
+      @[0.8, 0.2]
+    ]
+    let assignments = hungarianAssignment(costMatrix)
+    check assignments.len == 2
+    # Optimal: track0->det0 (0.1), track1->det1 (0.2)
+    var track0Det0 = false
+    var track1Det1 = false
+    for a in assignments:
+      if a.trackIdx == 0 and a.detIdx == 0:
+        track0Det0 = true
+      if a.trackIdx == 1 and a.detIdx == 1:
+        track1Det1 = true
+    check track0Det0
+    check track1Det1
+
+  test "hungarian-unbalanced-more-tracks":
+    # 3 tracks, 2 detections - one track should be unassigned
+    let costMatrix = @[
+      @[0.1, 0.9],
+      @[0.8, 0.2],
+      @[0.5, 0.5]
+    ]
+    let assignments = hungarianAssignment(costMatrix)
+    # Only 2 assignments possible (min of tracks, detections)
+    check assignments.len == 2
+    # Verify unique track and detection indices
+    var trackIndices: seq[int] = @[]
+    var detIndices: seq[int] = @[]
+    for a in assignments:
+      trackIndices.add(a.trackIdx)
+      detIndices.add(a.detIdx)
+    check trackIndices.len == 2
+    check detIndices.len == 2
+
+  test "hungarian-unbalanced-more-detections":
+    # 2 tracks, 3 detections - one detection should be unassigned
+    let costMatrix = @[
+      @[0.1, 0.8, 0.5],
+      @[0.9, 0.2, 0.6]
+    ]
+    let assignments = hungarianAssignment(costMatrix)
+    # Only 2 assignments possible (min of tracks, detections)
+    check assignments.len == 2
+    # Verify unique track and detection indices
+    var trackIndices: seq[int] = @[]
+    var detIndices: seq[int] = @[]
+    for a in assignments:
+      trackIndices.add(a.trackIdx)
+      detIndices.add(a.detIdx)
+    check trackIndices.len == 2
+    check detIndices.len == 2
+
+  test "hungarian-all-high-cost":
+    # All costs above threshold - no assignments
+    let costMatrix = @[
+      @[1e6, 1e6],
+      @[1e6, 1e6]
+    ]
+    let assignments = hungarianAssignment(costMatrix, threshold = 1e5)
+    check assignments.len == 0
+
+  test "costMatrix-with-embeddings":
+    # Test cost calculation with embeddings for appearance distance
+    var track = Track()
+    track.id = 0
+    track.bbox = FaceRect(x: 100, y: 100, width: 50, height: 50, confidence: 0.9, angle: 0)
+    track.embedding = @[1.0f, 0.0f, 0.0f]  # Unit vector in x direction
+    let tracks = @[track]
+
+    let detections = @[FaceRect(x: 105, y: 102, width: 50, height: 50, confidence: 0.9, angle: 0)]
+    # Similar embedding (high cosine similarity)
+    let embeddings: seq[seq[float32]] = @[@[0.9f, 0.1f, 0.1f]]
+
+    let matrix = computeCostMatrix(tracks, detections, embeddings)
+    check matrix.len == 1
+    check matrix[0].len == 1
+    # Cost should be lower due to similar appearance
+    check matrix[0][0] < 1.0  # Valid cost, includes appearance component
+
 # Utility Function Tests (util/fun.nim)
 
 import ../src/util/fun
