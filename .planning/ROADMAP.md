@@ -2,12 +2,12 @@
 
 ## Overview
 
-This roadmap transforms honeyclip from a silence removal tool into a comprehensive video engagement platform. The v1.0 milestone (Phases 1-10) delivers ML-powered transcript extraction, multi-modal engagement scoring, speaker tracking with auto-reframing, and multi-aspect-ratio export with NLE integration. The v1.1 Polish milestone (Phases 11-13) addresses tech debt identified during audit: ML library size optimization, custom hook patterns, and test coverage improvements.
+This roadmap transforms honeyclip from a silence removal tool into a comprehensive video engagement platform. The v1.0 milestone (Phases 1-10) delivers ML-powered transcript extraction, multi-modal engagement scoring, speaker tracking with auto-reframing, and multi-aspect-ratio export with NLE integration. The v1.1 Polish milestone (Phases 11-14) addresses tech debt identified during audit: ML library size optimization, custom hook patterns, test coverage improvements, and media metadata management.
 
 ## Milestones
 
-- ✅ **v1.0 Engagement Analysis** — Phases 1-10 (ready for completion)
-- 🚧 **v1.1 Polish** — Phases 11-14 (tech debt closure + metadata)
+- ✅ **v1.0 Engagement Analysis** — Phases 1-10 (complete)
+- ✅ **v1.1 Polish** — Phases 11-14 (complete)
 
 ## Phases
 
@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 11: ML Library Size Optimization** - Strip symbols, -Os optimization, remove unused OpenCV modules
 - [x] **Phase 12: Custom Hook Patterns** - JSON schema for user-defined hook patterns, CLI flag
-- [ ] **Phase 13: Tracker Test Coverage** - Unit tests for Kalman filter, assignment algorithm, tracker
+- [x] **Phase 13: Tracker Test Coverage** - Unit tests for Kalman filter, assignment algorithm, tracker
 - [x] **Phase 14: Media Metadata Management** - JSON templates for copyright, author, custom tags, chapter markers; standalone `meta` command + export integration
 
 ## Phase Details
@@ -263,9 +263,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 13-01-PLAN.md — Kalman filter and assignment algorithm unit tests
-- [ ] 13-02-PLAN.md — Tracker integration tests with mock embeddings
-- [ ] 13-03-PLAN.md — Reframe module tests and CI coverage enforcement
+- [x] 13-01-PLAN.md — Kalman filter and assignment algorithm unit tests
+- [x] 13-02-PLAN.md — Tracker integration tests with mock embeddings
+- [x] 13-03-PLAN.md — Reframe module tests and CI coverage enforcement
 
 ### Phase 14: Media Metadata Management
 **Goal**: Apply copyright, author, and other standard media metadata in a customizable, repeatable way
@@ -311,5 +311,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 11. ML Library Size Optimization | 2/2 | Complete | 2026-02-05 |
 | 12. Custom Hook Patterns | 2/2 | Complete | 2026-02-05 |
-| 13. Tracker Test Coverage | 0/? | Not started | - |
+| 13. Tracker Test Coverage | 3/3 | Complete | 2026-02-05 |
 | 14. Media Metadata Management | 3/3 | Complete | 2026-02-05 |
