@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### v1.1 Polish (Tech Debt Closure)
 
 - [x] **Phase 11: ML Library Size Optimization** - Strip symbols, -Os optimization, remove unused OpenCV modules
-- [ ] **Phase 12: Custom Hook Patterns** - JSON schema for user-defined hook patterns, CLI flag
+- [x] **Phase 12: Custom Hook Patterns** - JSON schema for user-defined hook patterns, CLI flag
 - [ ] **Phase 13: Tracker Test Coverage** - Unit tests for Kalman filter, assignment algorithm, tracker
 - [x] **Phase 14: Media Metadata Management** - JSON templates for copyright, author, custom tags, chapter markers; standalone `meta` command + export integration
 
@@ -247,8 +247,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — JSON schema loading, validation, and file discovery
-- [ ] 12-02-PLAN.md — CLI integration with merging and output visibility
+- [x] 12-01-PLAN.md — JSON schema loading, validation, and file discovery
+- [x] 12-02-PLAN.md — CLI integration with merging and output visibility
 
 ### Phase 13: Tracker Test Coverage
 **Goal**: Add comprehensive unit tests for speaker tracking modules
@@ -305,6 +305,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 11. ML Library Size Optimization | 2/2 | Complete | 2026-02-05 |
-| 12. Custom Hook Patterns | 0/2 | Not started | - |
+| 12. Custom Hook Patterns | 2/2 | Complete | 2026-02-05 |
 | 13. Tracker Test Coverage | 0/? | Not started | - |
 | 14. Media Metadata Management | 3/3 | Complete | 2026-02-05 |
