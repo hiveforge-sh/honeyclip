@@ -72,13 +72,20 @@ This project adheres to the [Code of Conduct](CODE_OF_CONDUCT.md). By participat
    nimble make
    ```
 
-6. **Verify installation:**
+6. **Install Git hooks (recommended):**
+   ```bash
+   ./scripts/install-hooks.sh
+   ```
+   
+   This installs pre-commit hooks that validate code quality before committing. See [scripts/git-hooks/README.md](scripts/git-hooks/README.md) for details.
+
+7. **Verify installation:**
    ```bash
    ./honeyclip --help
    nimble test
    ```
 
-**Troubleshooting:** See [Troubleshooting](#troubleshooting) section below.
+**Troubleshooting:** See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common build issues.
 
 ---
 
@@ -114,10 +121,20 @@ git commit -m "Add feature: description
 - Bullet point of changes
 - Another change
 - Fixes #123"
+# Note: Pre-commit hook runs automatically (if installed)
 
 # 6. Push and create PR
 git push origin feature/your-feature-name
 ```
+
+**Pre-commit hooks:** If installed, the hook automatically runs before each commit to validate:
+- File size limits (no large binaries)
+- Secrets detection (no API keys)
+- Nim syntax check
+- Unit tests
+- Platform guard validation
+
+Skip the hook if needed: `git commit --no-verify` (use sparingly!)
 
 ### Commit Message Format
 
