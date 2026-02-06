@@ -97,12 +97,12 @@ fi
 print_header "Checking for secrets..."
 
 SECRET_PATTERNS=(
-  "password\s*=\s*['\"].*['\"]"
-  "api_key\s*=\s*['\"].*['\"]"
-  "secret\s*=\s*['\"].*['\"]"
-  "token\s*=\s*['\"].*['\"]"
-  "bearer\s+[a-zA-Z0-9_\-]+"
-  "-----BEGIN (RSA|DSA|EC|OPENSSH|PGP) PRIVATE KEY-----"
+  'password\s*=\s*['\''"].*['\''"]'
+  'api_key\s*=\s*['\''"].*['\''"]'
+  'secret\s*=\s*['\''"].*['\''"]'
+  'token\s*=\s*['\''"].*['\''"]'
+  'bearer\s+[a-zA-Z0-9_\-]+'
+  '-----BEGIN.*PRIVATE KEY-----'
 )
 
 SECRETS_FOUND=""
