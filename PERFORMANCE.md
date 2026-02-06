@@ -2,6 +2,22 @@
 
 This guide documents the performance and quality tradeoffs for all honeyclip settings, helping you choose the right balance between speed and output quality.
 
+## ⚠️ Important Note on Metrics
+
+**Performance estimates in this document are based on:**
+- Industry-standard codec comparisons (H.264 vs H.265, etc.)
+- Publicly documented benchmarks (Whisper models, FFmpeg presets)
+- Calculated values (frame sizes, bitrates)
+- General video processing experience
+
+**Not all values have been empirically measured on honeyclip specifically.** Actual performance will vary based on:
+- Input video characteristics (resolution, codec, complexity)
+- Hardware (CPU, RAM, disk speed)
+- Operating system (macOS/Linux/Windows)
+- System load and available resources
+
+**We welcome contributions** to measure and validate these metrics! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add benchmarks.
+
 ## Table of Contents
 
 - [Quick Reference](#quick-reference)
@@ -21,16 +37,20 @@ This guide documents the performance and quality tradeoffs for all honeyclip set
 
 ### Speed vs Quality Matrix
 
-| Setting | Speed | Quality | File Size | Use Case |
-|---------|-------|---------|-----------|----------|
+*Note: Speed estimates are approximate and vary significantly based on hardware and input characteristics.*
+
+| Setting | Speed (est.) | Quality | File Size | Use Case |
+|---------|--------------|---------|-----------|----------|
 | **Fast** | 10x realtime | Draft | 2x larger | Quick preview, iteration |
 | **Balanced** (default) | 2x realtime | Production | Optimal | Most workflows |
 | **Best** | 0.5x realtime | Archival | Smallest | Final delivery, broadcast |
 
-**Example:** 30-minute video
+**Example:** 30-minute video *(estimated, not measured)*
 - Fast: ~3 minutes processing
 - Balanced: ~15 minutes processing
 - Best: ~60 minutes processing
+
+*These are planned presets (Phase 22). Current version requires manual flag configuration.*
 
 ---
 
@@ -198,15 +218,17 @@ curl -L -o ~/.cache/whisper/ggml-medium.en.bin \
 
 ### Model Comparison
 
-| Model | Speed | Accuracy (WER) | Size | Use Case |
-|-------|-------|----------------|------|----------|
+*Speed and accuracy from [OpenAI Whisper documentation](https://github.com/openai/whisper). Actual speeds may vary.*
+
+| Model | Speed (approx.) | Accuracy (WER) | Size | Use Case |
+|-------|-----------------|----------------|------|----------|
 | **tiny** | ⚡⚡⚡ 32x realtime | ~10% error | 75 MB | Quick draft, testing |
 | **base** | ⚡⚡⚡ 16x realtime | ~7% error | 142 MB | Fast transcripts |
 | **small** | ⚡⚡ 6x realtime | ~5% error | 466 MB | Balanced (recommended) |
 | **medium** | ⚡ 2x realtime | ~4% error | 1.5 GB | Production quality |
 | **large** | 1x realtime | ~3% error | 2.9 GB | Maximum accuracy |
 
-**Example:** 30-minute podcast
+**Example:** 30-minute podcast *(estimated, hardware-dependent)*
 - base: ~2 minutes transcription
 - small: ~5 minutes transcription
 - medium: ~15 minutes transcription
@@ -350,8 +372,10 @@ honeyclip input-4k.mp4 --cut-out 30min,60min -o part2.mp4
 
 **Memory Usage Estimates:**
 
-| Resolution | Peak Memory | Notes |
-|------------|-------------|-------|
+*Based on uncompressed frame sizes and typical processing buffers. Not measured in honeyclip.*
+
+| Resolution | Peak Memory (est.) | Notes |
+|------------|-------------------|-------|
 | **720p** | ~1-2 GB | Comfortable on most machines |
 | **1080p** | ~2-4 GB | Default, well-optimized |
 | **4K** | ~8-12 GB | May require fragmentation |
