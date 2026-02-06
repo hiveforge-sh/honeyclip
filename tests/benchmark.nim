@@ -2,8 +2,11 @@
 ## 
 ## Measures real-world performance with quality validation.
 ## Run with: nimble bench
+##
+## Optional: Share results with the project (opt-in only)
+##   nimble bench -- --share
 
-import std/[monotimes, times, os, json, strutils, strformat, tables]
+import std/[monotimes, times, os, json, strutils, strformat, tables, osproc, parseopt]
 import std/hashes except hash  # Avoid conflict with checksums
 import checksums/md5
 
@@ -12,12 +15,15 @@ import ../src/media
 import ../src/log
 import ../src/ffmpeg
 import ../src/util/bar
+import quality_metrics
+import benchmark_sharing
 
 # Benchmark configuration
 const
   BenchmarkVideo = "resources/testsrc.mp4"
   BenchmarkResultsFile = "tests/benchmark_results.json"
   PerformanceThresholdPercent = 15  # Fail if >15% slower than baseline
+  BenchmarkOutputDir = "tests/benchmark_output"  # Temporary output files
 
 type
   BenchmarkResult = object
@@ -25,6 +31,8 @@ type
     durationMs: int64
     peakMemoryMB: float
     outputHash: string  # MD5 hash of output for quality validation
+    qualityPSNR: float  # PSNR compared to reference (dB)
+    qualitySSIM: float  # SSIM compared to reference (0-1)
     timestamp: string
     platform: string
 
@@ -164,6 +172,66 @@ proc benchTimeline(): BenchmarkResult =
     
     debug &"Timeline: {keptFrames}/{frameCount} frames kept"
 
+# Benchmark 4: End-to-end video processing with quality validation
+proc benchFullPipeline(): BenchmarkResult =
+  ## Full pipeline: Load video → Apply simple edit → Render → Validate quality
+  if not fileExists(BenchmarkVideo):
+    echo &"Skipping: {BenchmarkVideo} not found"
+    return BenchmarkResult()
+  
+  # Create output directory
+  if not dirExists(BenchmarkOutputDir):
+    createDir(BenchmarkOutputDir)
+  
+  let outputPath = BenchmarkOutputDir / "pipeline_output.mp4"
+  let referencePath = BenchmarkOutputDir / "pipeline_reference.mp4"
+  
+  result = runBenchmark("full_pipeline_with_quality") do():
+    # Step 1: Create reference (copy input)
+    if not fileExists(referencePath):
+      # Use honeyclip to create reference (passthrough, no edits)
+      # This ensures same encoding parameters for fair comparison
+      let refCmd = &"./honeyclip \"{BenchmarkVideo}\" -o \"{referencePath}\" --edit \"(not (and false true))\" 2>&1"
+      let (refOutput, refCode) = execCmdEx(refCmd)
+      if refCode != 0:
+        debug &"Reference creation failed: {refOutput}"
+        # Fall back to direct copy
+        copyFile(BenchmarkVideo, referencePath)
+    
+    # Step 2: Process video with simple edit (remove silence)
+    let editCmd = &"./honeyclip \"{BenchmarkVideo}\" -o \"{outputPath}\" --edit audio:0.04 2>&1"
+    let (editOutput, editCode) = execCmdEx(editCmd)
+    
+    if editCode != 0:
+      debug &"Video processing failed: {editOutput}"
+      return
+    
+    # Step 3: Calculate quality metrics (PSNR/SSIM)
+    if fileExists(outputPath) and fileExists(referencePath):
+      let metrics = calculateQualityMetrics(referencePath, outputPath)
+      
+      if metrics.valid:
+        echo &"    Quality: {formatMetrics(metrics)}"
+        result.qualityPSNR = metrics.psnr
+        result.qualitySSIM = metrics.ssim
+        
+        if not meetsQualityThreshold(metrics):
+          echo "    WARNING: Quality below threshold!"
+      else:
+        echo "    Quality metrics unavailable (FFmpeg with libavfilter needed)"
+        # Fall back to hash-based check
+        if hashBasedQualityCheck(referencePath, outputPath):
+          echo "    Hash-based quality check: PASSED"
+        else:
+          echo "    Hash-based quality check: FAILED (size difference)"
+      
+      # Calculate output hash for regression detection
+      result.outputHash = hashFile(outputPath)
+    
+    # Step 4: Cleanup (optional - keep files for manual inspection)
+    # removeFile(outputPath)
+    # removeFile(referencePath)
+
 # Load baseline results from previous runs
 proc loadBaseline(): Table[string, BenchmarkResult] =
   result = initTable[string, BenchmarkResult]()
@@ -181,7 +249,9 @@ proc loadBaseline(): Table[string, BenchmarkResult] =
           name: name,
           durationMs: entry["durationMs"].getInt(),
           peakMemoryMB: entry["peakMemoryMB"].getFloat(),
-          outputHash: entry["outputHash"].getStr(),
+          outputHash: entry.getOrDefault("outputHash").getStr(""),
+          qualityPSNR: entry.getOrDefault("qualityPSNR").getFloat(0.0),
+          qualitySSIM: entry.getOrDefault("qualitySSIM").getFloat(0.0),
           timestamp: entry["timestamp"].getStr(),
           platform: entry["platform"].getStr()
         )
@@ -197,6 +267,8 @@ proc saveResults(results: seq[BenchmarkResult]) =
     obj["durationMs"] = %result.durationMs
     obj["peakMemoryMB"] = %result.peakMemoryMB
     obj["outputHash"] = %result.outputHash
+    obj["qualityPSNR"] = %result.qualityPSNR
+    obj["qualitySSIM"] = %result.qualitySSIM
     obj["timestamp"] = %result.timestamp
     obj["platform"] = %result.platform
     jsonArray.add(obj)
@@ -233,6 +305,15 @@ proc compareToBaseline(results: seq[BenchmarkResult], baseline: Table[string, Be
     echo &"  Current:  {result.durationMs}ms ({percentChange:+.1f}%)"
     echo &"  Status:   {status}"
     
+    # Check quality regression
+    if result.qualityPSNR > 0.0 and base.qualityPSNR > 0.0:
+      let psnrDrop = base.qualityPSNR - result.qualityPSNR
+      if psnrDrop > 1.0:  # More than 1dB drop is concerning
+        echo &"  Quality:  PSNR dropped {psnrDrop:.2f}dB (was {base.qualityPSNR:.2f}dB, now {result.qualityPSNR:.2f}dB)"
+        allPassed = false
+      else:
+        echo &"  Quality:  PSNR {result.qualityPSNR:.2f}dB (OK)"
+    
     if status == "REGRESSION":
       allPassed = false
   
@@ -241,9 +322,27 @@ proc compareToBaseline(results: seq[BenchmarkResult], baseline: Table[string, Be
 
 # Main benchmark runner
 proc main() =
+  # Parse command-line arguments
+  var shareResults = false
+  var p = initOptParser()
+  
+  while true:
+    p.next()
+    case p.kind
+    of cmdEnd: break
+    of cmdShortOption, cmdLongOption:
+      if p.key in ["share", "s"]:
+        shareResults = true
+    of cmdArgument:
+      discard
+  
   echo "honeyclip Benchmark Suite"
   echo "=" .repeat(60)
   echo ""
+  
+  if shareResults:
+    echo "📊 Sharing enabled - You'll be prompted after benchmarks complete"
+    echo ""
   
   # Verify benchmark video exists
   if not fileExists(BenchmarkVideo):
@@ -255,20 +354,17 @@ proc main() =
   let baseline = loadBaseline()
   
   # Run benchmarks
-  var results: seq[BenchmarkResult] = @[]
-  
-  echo "Running benchmarks..."
-  echo ""
-  
+  var results: seq[BenchmarkResult]
   results.add(benchAudioAnalysis())
   results.add(benchMediaInfo())
   results.add(benchTimeline())
   
-  # TODO: Add more benchmarks:
-  # - Motion detection (requires filter graph setup)
-  # - Face detection (requires ML libraries)
-  # - Full pipeline with rendering
-  # - Export generation (NLE formats)
+  # Full pipeline with quality validation (optional, requires honeyclip binary)
+  if fileExists("./honeyclip") or fileExists("./honeyclip.exe"):
+    echo "\nRunning end-to-end quality validation..."
+    results.add(benchFullPipeline())
+  else:
+    echo "\nSkipping full pipeline benchmark (honeyclip binary not found)"
   
   echo ""
   
@@ -285,7 +381,63 @@ proc main() =
   if results.len > 0:
     saveResults(results)
   
-  echo "\nBenchmark suite completed successfully"
+  echo ""
+  echo "✓ Benchmarks complete!"
+  
+  # Optional: Share results with project (opt-in)
+  if shareResults:
+    echo ""
+    if promptForConsent():
+      # Create shareable report with system info
+      let resultsJson = newJArray()
+      for r in results:
+        var obj = newJObject()
+        obj["name"] = %r.name
+        obj["durationMs"] = %r.durationMs
+        obj["peakMemoryMB"] = %r.peakMemoryMB
+        if r.qualityPSNR > 0.0:
+          obj["qualityPSNR"] = %r.qualityPSNR
+        if r.qualitySSIM > 0.0:
+          obj["qualitySSIM"] = %r.qualitySSIM
+        resultsJson.add(obj)
+      
+      # Build settings (what codecs are enabled)
+      var settings = newJObject()
+      when defined(enable_vpx):
+        settings["vpx"] = %true
+      when defined(enable_svtav1):
+        settings["svtav1"] = %true
+      when defined(enable_hevc):
+        settings["hevc"] = %true
+      when defined(enable_whisper):
+        settings["whisper"] = %true
+      when defined(enable_ml):
+        settings["ml"] = %true
+      
+      let report = createBenchmarkReport(resultsJson, settings)
+      displayReportSummary(report)
+      
+      echo ""
+      stdout.write("Review looks good? Share now? (yes/no): ")
+      stdout.flushFile()
+      let confirm = stdin.readLine().strip().toLowerAscii()
+      
+      if confirm in ["yes", "y"]:
+        if shareReport(report, "file"):
+          echo ""
+          echo "🎉 Thank you for contributing benchmark data!"
+        else:
+          echo ""
+          echo "❌ Sharing failed. You can still share the report file manually."
+      else:
+        echo ""
+        echo "Sharing cancelled. You can run 'nimble bench --share' again later."
+    else:
+      echo ""
+      echo "Sharing cancelled. Your results remain private."
+  else:
+    echo ""
+    echo "Tip: Run 'nimble bench --share' to help the project by sharing your results (opt-in)"
 
 when isMainModule:
   main()

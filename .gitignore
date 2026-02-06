@@ -51,3 +51,4 @@ tests/*
 *.bak
 *.mp4
 help.txt
+tests/benchmark_output/
