@@ -42,6 +42,8 @@ tests/*
 !tests/resources/
 !tests/fixtures/
 !tests/fixtures/*.nim
+!tests/*.md
+!tests/benchmark_results.json
 
 # Misc generated
 *_ALTERED*

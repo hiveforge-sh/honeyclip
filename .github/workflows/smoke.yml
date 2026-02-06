@@ -69,6 +69,14 @@ jobs:
         run: nimble test
       - name: e2e Test
         run: python3 -m pip install av && python3 tests/test.py
+      - name: Benchmark
+        run: nimble bench
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ matrix.os }}
+          path: tests/benchmark_results.json
+          if-no-files-found: warn
 
   windows:
     runs-on: ubuntu-latest

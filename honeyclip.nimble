@@ -57,6 +57,14 @@ task test, "Run unit tests":
   else:
     exec &"nim c {flags} -r tests/unit"
 
+task bench, "Run performance benchmarks":
+  echo "Running performance benchmarks..."
+  when defined(windows):
+    let gcc = findWindowsGcc()
+    exec &"nim c {flags} --gcc.exe:\"{gcc}\" --gcc.linkerexe:\"{gcc}\" -r tests/benchmark"
+  else:
+    exec &"nim c {flags} -r tests/benchmark"
+
 task coverage, "Run tests with coverage (Linux only)":
   # Coverage via gcov/lcov is Linux-only
   when defined(linux):
