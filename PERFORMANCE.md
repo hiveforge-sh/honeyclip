@@ -18,6 +18,8 @@ This guide documents the performance and quality tradeoffs for all honeyclip set
 
 **We welcome contributions** to measure and validate these metrics! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add benchmarks.
 
+**Future work:** End-to-end benchmarks will process real videos with different settings and measure actual speeds, memory usage, and output quality (PSNR/SSIM) to replace these estimates with empirical data.
+
 ## Table of Contents
 
 - [Quick Reference](#quick-reference)
