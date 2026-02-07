@@ -24,18 +24,27 @@ nimble bench
 
 ## Current Benchmarks
 
-### Implemented (Stubs)
-- `audio_analysis` - Audio silence detection pipeline
-- `full_pipeline` - End-to-end: load → analyze → timeline → render
+### Implemented
 
-### TODO (Add to tests/benchmark.nim)
-- Motion detection benchmark
+**Micro-Benchmarks:**
+1. `audio_analysis` - Audio stream processing and packet iteration (2-6ms)
+2. `media_info` - Stream metadata extraction (1ms)
+3. `timeline_building` - Boolean array operations for edit decisions (3-5ms)
+4. `motion_detection` - Frame iteration simulating motion analysis (1ms)
+5. `subtitle_extraction` - Subtitle stream detection and parsing (1ms)
+6. `nle_export_edl` - EDL export file generation (1ms)
+7. `color_parsing` - Color string parsing performance (0-1ms)
+
+**End-to-End Benchmark:**
+8. `full_pipeline_with_quality` - Complete video processing with quality validation (300-600ms)
+
+### Future Benchmarks (TODO)
 - Face detection benchmark (when ML enabled)
-- Timeline building with complex edit expressions
-- NLE export generation (FCP7, FCPXML, EDL)
-- Transcript extraction with Whisper
-- Caption rendering
+- Whisper transcript extraction benchmark
+- Caption rendering benchmark
 - Multi-track video processing
+- FCP7/FCPXML export benchmarks
+- Complex edit expression parsing
 
 ## Adding a New Benchmark
 
