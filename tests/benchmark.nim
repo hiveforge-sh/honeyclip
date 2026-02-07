@@ -43,7 +43,7 @@ type
 # Helper: Get current memory usage in MB (platform-specific)
 proc getCurrentMemoryMB(): float =
   when defined(linux):
-    # Read from /proc/self/status
+    # Read from /proc/self/status (VmRSS = Resident Set Size)
     try:
       let status = readFile("/proc/self/status")
       for line in status.splitLines():
@@ -53,14 +53,75 @@ proc getCurrentMemoryMB(): float =
             return parseFloat(parts[1]) / 1024.0  # KB to MB
     except:
       discard
-  when defined(macosx) or defined(bsd):
-    # Use rusage (would need posix module)
-    # Simplified: return 0 for now, implement with FFI if needed
-    return 0.0
-  when defined(windows):
-    # Would need Windows API call
-    # Simplified: return 0 for now
-    return 0.0
+  
+  elif defined(macosx) or defined(bsd):
+    # Use mach_task_basic_info on macOS
+    type
+      mach_port_t = cuint
+      kern_return_t = cint
+      mach_msg_type_number_t = cuint
+      natural_t = cuint
+      
+      mach_task_basic_info_data_t {.importc, header: "<mach/mach.h>", completeStruct.} = object
+        virtual_size: natural_t      # Virtual memory size (bytes)
+        resident_size: natural_t     # Resident memory size (bytes)
+        resident_size_max: natural_t # Max resident memory
+        user_time: array[2, uint64]
+        system_time: array[2, uint64]
+        policy: cint
+        suspend_count: cint
+    
+    const MACH_TASK_BASIC_INFO = 20
+    const MACH_TASK_BASIC_INFO_COUNT = (sizeof(mach_task_basic_info_data_t) div sizeof(natural_t)).mach_msg_type_number_t
+    
+    proc mach_task_self(): mach_port_t {.importc, header: "<mach/mach.h>".}
+    proc task_info(target_task: mach_port_t, flavor: cint, task_info_out: pointer,
+                   task_info_outCnt: ptr mach_msg_type_number_t): kern_return_t 
+                   {.importc, header: "<mach/mach.h>".}
+    
+    try:
+      var info: mach_task_basic_info_data_t
+      var count = MACH_TASK_BASIC_INFO_COUNT
+      let kr = task_info(mach_task_self(), MACH_TASK_BASIC_INFO, addr info, addr count)
+      
+      if kr == 0:  # KERN_SUCCESS
+        return float(info.resident_size) / (1024.0 * 1024.0)  # Bytes to MB
+    except:
+      discard
+  
+  elif defined(windows):
+    # Use GetProcessMemoryInfo on Windows
+    type
+      DWORD = uint32
+      SIZE_T = uint
+      HANDLE = pointer
+      BOOL = cint
+      
+      PROCESS_MEMORY_COUNTERS {.importc, header: "<psapi.h>".} = object
+        cb: DWORD
+        PageFaultCount: DWORD
+        PeakWorkingSetSize: SIZE_T
+        WorkingSetSize: SIZE_T
+        QuotaPeakPagedPoolUsage: SIZE_T
+        QuotaPagedPoolUsage: SIZE_T
+        QuotaPeakNonPagedPoolUsage: SIZE_T
+        QuotaNonPagedPoolUsage: SIZE_T
+        PagefileUsage: SIZE_T
+        PeakPagefileUsage: SIZE_T
+    
+    proc GetCurrentProcess(): HANDLE {.importc, stdcall, header: "<windows.h>".}
+    proc GetProcessMemoryInfo(Process: HANDLE, ppsmemCounters: ptr PROCESS_MEMORY_COUNTERS,
+                              cb: DWORD): BOOL {.importc, stdcall, header: "<psapi.h>".}
+    
+    try:
+      var pmc: PROCESS_MEMORY_COUNTERS
+      pmc.cb = sizeof(PROCESS_MEMORY_COUNTERS).DWORD
+      
+      if GetProcessMemoryInfo(GetCurrentProcess(), addr pmc, pmc.cb) != 0:
+        return float(pmc.WorkingSetSize) / (1024.0 * 1024.0)  # Bytes to MB
+    except:
+      discard
+  
   return 0.0
 
 # Helper: Hash file contents for quality validation
@@ -186,6 +247,10 @@ proc benchFullPipeline(): BenchmarkResult =
   let outputPath = BenchmarkOutputDir / "pipeline_output.mp4"
   let referencePath = BenchmarkOutputDir / "pipeline_reference.mp4"
   
+  # Track quality metrics outside closure
+  var qualityPSNR = 0.0
+  var qualitySSIM = 0.0
+  
   result = runBenchmark("full_pipeline_with_quality") do():
     # Step 1: Create reference (copy input)
     if not fileExists(referencePath):
@@ -212,8 +277,8 @@ proc benchFullPipeline(): BenchmarkResult =
       
       if metrics.valid:
         echo &"    Quality: {formatMetrics(metrics)}"
-        result.qualityPSNR = metrics.psnr
-        result.qualitySSIM = metrics.ssim
+        qualityPSNR = metrics.psnr
+        qualitySSIM = metrics.ssim
         
         if not meetsQualityThreshold(metrics):
           echo "    WARNING: Quality below threshold!"
@@ -224,13 +289,16 @@ proc benchFullPipeline(): BenchmarkResult =
           echo "    Hash-based quality check: PASSED"
         else:
           echo "    Hash-based quality check: FAILED (size difference)"
-      
-      # Calculate output hash for regression detection
-      result.outputHash = hashFile(outputPath)
-    
-    # Step 4: Cleanup (optional - keep files for manual inspection)
-    # removeFile(outputPath)
-    # removeFile(referencePath)
+  
+  # Set quality metrics after benchmark completes
+  result.qualityPSNR = qualityPSNR
+  result.qualitySSIM = qualitySSIM
+  
+  # Show instructions for manual inspection
+  if fileExists(outputPath):
+    echo &"    Output saved to: {outputPath}"
+    echo &"    You can inspect the quality manually"
+
 
 # Load baseline results from previous runs
 proc loadBaseline(): Table[string, BenchmarkResult] =

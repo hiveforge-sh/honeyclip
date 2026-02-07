@@ -6,7 +6,7 @@
 ##
 ## Privacy-first: All sharing is OPT-IN and requires explicit consent.
 
-import std/[json, strformat, os, osproc, httpclient, times]
+import std/[json, strformat, os, osproc, httpclient, times, strutils, tables]
 import ../src/log
 
 type
@@ -254,11 +254,11 @@ proc promptForConsent*(): bool =
   return response in ["yes", "y"]
 
 # Share report (GitHub issue or dedicated endpoint)
-proc shareReport*(report: BenchmarkReport, method: string = "file"): bool =
-  case method
+proc shareReport*(report: BenchmarkReport, shareMethod: string = "file"): bool =
+  case shareMethod
   of "file":
     # Save to shareable file that user can upload manually
-    let reportPath = "benchmark_report_" & $now().format("yyyyMMdd_HHmmss") & ".json"
+    let reportPath = "benchmark_report_" & now().format("yyyyMMddHHmmss") & ".json"
     exportReportToFile(report, reportPath)
     
     echo ""
@@ -282,5 +282,5 @@ proc shareReport*(report: BenchmarkReport, method: string = "file"): bool =
     return false
   
   else:
-    echo &"Unknown sharing method: {method}"
+    echo &"Unknown sharing method: {shareMethod}"
     return false
