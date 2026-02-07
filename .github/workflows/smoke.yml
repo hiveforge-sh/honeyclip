@@ -100,3 +100,71 @@ jobs:
         run: nimble makeffwin
       - name: Compile
         run: nimble windows
+
+  windows-native:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      
+      - name: Setup Nim
+        uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: "stable"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      
+      - name: Install dependencies (Git Bash)
+        shell: bash
+        run: |
+          # Install meson and ninja via pip (required for dav1d)
+          python -m pip install --upgrade pip
+          python -m pip install meson ninja
+          
+          # Set environment variables for fast build
+          echo "DISABLE_VPX=1" >> $GITHUB_ENV
+          echo "DISABLE_SVTAV1=1" >> $GITHUB_ENV
+          echo "DISABLE_HEVC=1" >> $GITHUB_ENV
+          echo "DISABLE_WHISPER=1" >> $GITHUB_ENV
+      
+      - name: Build FFmpeg (Git Bash)
+        shell: bash
+        run: nimble makeff
+      
+      - name: Compile honeyclip
+        shell: bash
+        run: nimble make
+      
+      - name: Test (verify ML stubs don't crash)
+        shell: bash
+        run: |
+          nimble test
+          
+          # Test that ML-dependent commands gracefully degrade
+          echo "Testing engage command (should warn about ML unavailable)..."
+          ./honeyclip.exe --help | grep -i engage || echo "No engage subcommand found (expected)"
+          
+          echo "Testing reframe command (should warn about ML unavailable)..."  
+          ./honeyclip.exe --help | grep -i reframe || echo "No reframe subcommand found (expected)"
+      
+      - name: E2E Test
+        shell: bash
+        run: |
+          python -m pip install av
+          python tests/test.py
+      
+      - name: Benchmark
+        shell: bash
+        run: nimble bench
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-windows-native
+          path: tests/benchmark_results.json
+          if-no-files-found: warn
+

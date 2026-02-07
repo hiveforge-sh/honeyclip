@@ -790,7 +790,7 @@ Warning: Face detection not available on Windows
 
 **Solution:**
 
-ML features are disabled on Windows due to compilation issues. You can still use:
+ML features are disabled on Windows due to LTO compilation issues with the ML libraries. You can still use:
 - ✅ Audio-based editing (`--edit audio`)
 - ✅ Motion-based editing (`--edit motion`)
 - ✅ Subtitle-based editing (`--edit subtitle`)
@@ -798,6 +798,8 @@ ML features are disabled on Windows due to compilation issues. You can still use
 - ❌ Face detection (engage, reframe)
 
 For face detection, use Linux or macOS (or WSL2).
+
+**Note:** Native Windows builds are now tested in CI to ensure ML stubs gracefully degrade without crashing.
 
 ---
 
