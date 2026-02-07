@@ -52,3 +52,5 @@ tests/*
 *.mp4
 help.txt
 tests/benchmark_output/
+tests/performance_validation_output/
+tests/performance_validation_results.json

@@ -65,6 +65,14 @@ task bench, "Run performance benchmarks":
   else:
     exec &"nim c {flags} -r tests/benchmark"
 
+task validateperf, "Run end-to-end performance validation":
+  echo "Running performance validation suite..."
+  when defined(windows):
+    let gcc = findWindowsGcc()
+    exec &"nim c {flags} --gcc.exe:\"{gcc}\" --gcc.linkerexe:\"{gcc}\" -r tests/performance_validation"
+  else:
+    exec &"nim c {flags} -r tests/performance_validation"
+
 task coverage, "Run tests with coverage (Linux only)":
   # Coverage via gcov/lcov is Linux-only
   when defined(linux):
