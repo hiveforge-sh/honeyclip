@@ -34,14 +34,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ml_sources
-          key: ml-sources-${{ hashFiles('ae.nimble') }}
+          key: ml-sources-${{ hashFiles('honeyclip.nimble') }}
           restore-keys: |
             ml-sources-
       - name: Cache ML libraries
         uses: actions/cache@v4
         with:
           path: build
-          key: ml-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ae.nimble') }}
+          key: ml-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('honeyclip.nimble') }}
           restore-keys: |
             ml-build-${{ runner.os }}-${{ runner.arch }}-
       - name: Build ML libraries
@@ -167,14 +167,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ml_sources
-          key: ml-sources-windows-${{ hashFiles('ae.nimble') }}
+          key: ml-sources-windows-${{ hashFiles('honeyclip.nimble') }}
           restore-keys: |
             ml-sources-windows-
       - name: Cache ML libraries (Windows)
         uses: actions/cache@v4
         with:
           path: build
-          key: ml-build-windows-${{ hashFiles('ae.nimble') }}
+          key: ml-build-windows-${{ hashFiles('honeyclip.nimble') }}
           restore-keys: |
             ml-build-windows-
       - name: Build ML libraries (Windows)
