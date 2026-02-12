@@ -76,9 +76,13 @@ nimble coverage
 
 # Performance benchmarks
 nimble bench  # First run establishes baseline, subsequent runs detect regressions
+
+# Performance validation (E2E quality & speed tests)
+nimble validateperf
 ```
 
 **See `tests/BENCHMARK_QUICKSTART.md` for benchmark usage guide.**
+**See `tests/PERFORMANCE_VALIDATION.md` for validation suite documentation.**
 
 ### Build Feature Flags
 
@@ -287,73 +291,39 @@ See `.github/workflows/build.yml` for:
 - Runs on Ubuntu, macOS, and cross-compiled Windows
 - E2E tests with Python (`tests/test.py`)
 
-## Missing Infrastructure (Improvement Opportunities)
+## Benchmarking & Performance
 
-### Performance & Profiling
-**CRITICAL GAP:** No benchmarking infrastructure exists.
+The project has a comprehensive benchmarking infrastructure:
 
-**Note:** Nim has no standard benchmarking framework (unlike Rust's `cargo bench`). Manual timing with `std/monotimes` is the norm.
+- **Microbenchmarks** (`nimble bench`): Fast component-level benchmarks with regression detection
+  - Audio analysis, media info parsing, timeline building, etc.
+  - Baseline stored in `tests/benchmark_results.json`
+  - See `tests/BENCHMARK_QUICKSTART.md` for usage guide
+
+- **E2E validation** (`nimble validateperf`): Full pipeline quality & speed tests
+  - Real video processing workflows
+  - Quality validation (hash-based, PSNR where applicable)
+  - Performance thresholds for realistic workloads
+  - See `tests/PERFORMANCE_VALIDATION.md` for details
+
+### Future Profiling Improvements
 
 Recommended additions:
-1. **Custom benchmark task** (`nimble bench`):
-   - Create `tests/benchmark.nim` with manual timing harness
-   - Use `std/monotimes.getMonoTime()` for accurate measurements
-   - Test real video files from `resources/` directory
-   - Compare: Linux vs macOS vs Windows (cross-compile)
-   
-2. **Profiling workflow**:
+1. **Profiling workflow**:
    - Add `nimble profile` task: compile with `--profiler:on --stackTrace:on`
    - Document platform tools: Valgrind (Linux), Instruments (macOS), WPA (Windows)
    - Use `--define:memProfiler` for memory tracking
    - Profile against 4K video files (detect memory leaks)
 
-3. **Performance regression detection**:
-   - Store baseline metrics in `tests/benchmarks.json`
-   - CI compares current run vs baseline (fail if >15% slower)
-   - Track over time: plot trends in GitHub Actions artifacts
+2. **CI integration**:
+   - Run `nimble bench` in CI to detect regressions automatically
+   - Track performance trends over time (plot in GitHub Actions artifacts)
+   - Add `nimble validateperf` to CI matrix (currently manual)
 
-4. **Real-world benchmarks** (not microbenchmarks):
-   - Full pipeline: Load → Analyze → Timeline → Render
-   - Measure: total wall time, peak memory, CPU utilization
-   - Test with actual user scenarios (1080p 30min podcast, 4K 10min review)
-   - **Validate quality**: Compare output to reference (PSNR, SSIM, or hash check)
-   - **Test quality presets**: fast/balanced/best should meet minimum quality thresholds
-
-5. **Quality validation in benchmarks**:
-   - **Speed alone is meaningless** - verify output quality doesn't regress
-   - Hash-based validation: Output file matches known-good reference
-   - Visual quality metrics: PSNR >30dB, SSIM >0.95 for lossless edits
-   - Audio quality: Check preserved audio matches input (no artifacts)
-   - Format compliance: Validate NLE exports parse correctly in target editors
-
-Example benchmark structure:
-```nim
-import std/[monotimes, times, os, hashes]
-import ../src/[av, analyze/audio, timeline, render]
-
-const benchmarkVideo = "resources/test_1080p.mp4"
-const expectedOutputHash = 0x1234567890abcdef  # Known-good reference
-
-proc benchFullPipeline() =
-  let start = getMonoTime()
-  # Full pipeline here
-  let elapsed = (getMonoTime() - start).inMilliseconds
-  
-  # Validate quality (hash check for determinism)
-  let outputHash = hash(readFile("output.mp4"))
-  if outputHash != expectedOutputHash:
-    echo "ERROR: Output quality changed (hash mismatch)"
-    quit(2)
-  
-  echo "Pipeline: ", elapsed, "ms (quality validated)"
-  # Load baseline from JSON, compare
-  if elapsed > 5000:  # Example threshold
-    echo "WARNING: Slower than baseline (5000ms)"
-    quit(1)
-
-when isMainModule:
-  benchFullPipeline()
-```
+3. **Platform-specific benchmarks**:
+   - Compare performance across Linux, macOS, and Windows
+   - Measure impact of LTO and ML features on macOS/Linux vs Windows
+   - Benchmark CUDA path on Linux (when `ENABLE_CUDA=1`)
 
 ### Cross-Platform Validation
 **CURRENT:** Windows builds cross-compile from Linux (not tested on real Windows)
@@ -400,35 +370,19 @@ Recommended additions:
    nimble test          # Unit tests
    nimble windows       # Cross-compile check
    python3 tests/test.py # E2E tests
-   # Future: nimble bench  # Performance regression
+   nimble bench         # Performance regression check
    ```
 
-### Documentation Gaps
-**MISSING:** Performance tuning guide, architecture diagrams, troubleshooting playbook
+### Documentation Improvements
 
 Recommended additions:
-1. **PERFORMANCE.md**:
-   - **Quality vs Speed matrix**: Document tradeoffs for every setting
-     - Codec presets: ultrafast (10x faster, 2x larger) vs veryslow (1x, optimal size)
-     - Whisper models: base (5x faster) vs medium (2x accurate)
-     - Resolution: 1080p vs 4K processing time
-     - Face detection: confidence thresholds vs false positives
-   - Hardware acceleration setup (CUDA, Metal, VideoToolbox)
-   - Memory optimization for 4K+ video
-   - Profiling guide with examples
-   - **Quality validation**: How to verify output meets standards (PSNR, visual inspection)
-
-2. **ARCHITECTURE.md**:
+1. **More architecture diagrams**:
    - Pipeline flow diagram (visual)
    - FFmpeg binding patterns and safety rules
    - Expression parser internals (lexer → parser → evaluator)
    - Export format generators (how NLE XMLs are built)
 
-3. **TROUBLESHOOTING.md**:
-   - Common build failures (FFmpeg, ML libs)
-   - Platform-specific issues (Windows Git Bash, macOS LTO)
-   - Performance debugging (slow processing, high memory)
-   - CI failure patterns and fixes
+**Note:** `PERFORMANCE.md`, `ARCHITECTURE.md`, and `TROUBLESHOOTING.md` already exist with comprehensive guides.
 
 ### Caching Strategy
 **CURRENT:** FFmpeg/ML sources cached in CI, but rebuild times still long
