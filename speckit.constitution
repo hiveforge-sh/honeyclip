@@ -1,0 +1,391 @@
+# Speckit Constitution: honeyclip
+
+**Last Updated:** 2026-02-12  
+**Current Milestone:** v2.0 Workflow, Performance & AI Features  
+**Project Phase:** 15 - Performance Foundation (ready to plan)
+
+This document defines the foundational principles, constraints, and standards that govern all development on honeyclip. These rules are immutable unless explicitly updated through project review.
+
+---
+
+## Project Identity
+
+### Core Value Proposition
+Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
+
+### What This Is
+A content intelligence layer for video that extracts transcripts, scores engagement levels, detects optimal clip boundaries, and auto-reframes speakers for vertical output. Turns long-form videos into actionable insights and short-form-ready segments using local-only processing.
+
+### What This Is Not
+- ❌ Cloud-based SaaS platform
+- ❌ Real-time video processing service
+- ❌ Mobile application
+- ❌ GUI editor or NLE replacement
+- ❌ Team collaboration platform
+- ❌ Historical virality prediction system
+
+---
+
+## Immutable Constraints
+
+### Technology Stack
+**MUST:**
+- Primary language: Nim 2.2.2+
+- Video processing: FFmpeg (built from source)
+- ML runtime: Local models only (libfacedetection, OpenCV, ONNX Runtime)
+- Package manager: Nimble
+
+**MUST NOT:**
+- Add Node.js or Python as runtime dependencies (test/build tools OK)
+- Introduce cloud API requirements for core features
+- Replace FFmpeg with alternative media frameworks
+- Add GUI frameworks to core binary
+
+### Platform Support
+**MUST:**
+- Support Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), Windows
+- Maintain cross-platform compilation from Linux to Windows
+- Provide graceful degradation for platform-specific features
+
+**Windows Limitations (accepted):**
+- No LTO (GCC 11.1.0 ICE)
+- ML features stubbed out (face detection, ONNX)
+- Requires Git Bash for FFmpeg build
+
+### Processing Model
+**MUST:**
+- Process locally without cloud dependencies for core analysis
+- Work offline once models/dependencies installed
+- Accept cloud APIs only as optional fallback for AI features (v2.0+)
+
+**MUST NOT:**
+- Require internet connection for basic video editing
+- Send user video content to cloud services without explicit opt-in
+- Store user data on remote servers
+
+### Output Formats
+**MUST:**
+- Support standard formats: SRT, VTT, JSON for transcripts
+- Export to major NLE formats: FCP7, FCPXML, EDL, AAF
+- Generate industry-standard video codecs: H.264, H.265, VP9, AV1
+
+**MUST NOT:**
+- Introduce proprietary formats requiring honeyclip to read
+- Break compatibility with existing NLE import workflows
+
+---
+
+## Development Philosophy
+
+### 1. Cross-Platform First
+**Every feature must work on Windows, macOS, and Linux or gracefully degrade.**
+
+Implementation rules:
+- Test cross-compilation (`nimble windows`) before marking work complete
+- Use `when defined(windows)` / `when not defined(windows)` for platform-specific code
+- Provide clear error messages for unsupported features rather than silent failures
+- Windows is a first-class platform, not an afterthought
+
+### 2. Local-First Architecture
+**Prefer local computation over remote services.**
+
+Implementation rules:
+- Build dependencies from source for control and reproducibility
+- Bundle ML models locally (no model download at runtime for core features)
+- Avoid cloud dependencies for core functionality
+- Use local Python virtual environments (`.venv/`) for isolation
+
+### 3. Performance & Quality Balance
+**Speed is a feature, but quality is non-negotiable. Users need control over both.**
+
+Implementation rules:
+- Performance optimization must never degrade quality without explicit user choice
+- Expose quality/speed tradeoffs via presets: `--preset fast|balanced|best` (v2.0)
+- Document performance impact of quality settings
+- Use release builds (`-d:danger --panics:on`) with LTO for production
+- Profile hot paths before optimizing (measure, don't guess)
+- Prefer native FFmpeg operations over frame-by-frame processing in Nim
+
+### 4. Minimal Binary Size
+**FFmpeg is built with curated codec set to minimize binary size.**
+
+Implementation rules:
+- Disabled codecs listed in `honeyclip.nimble`
+- Feature flags control optional codecs: `DISABLE_VPX`, `DISABLE_SVTAV1`, `DISABLE_HEVC`
+- ML library optimization: MinSizeRel builds, symbol stripping
+- Target: <100MB binary size (enforced in CI)
+
+---
+
+## Code Standards
+
+### Naming Conventions
+- **Files:** `snake_case.nim` (e.g., `audio.nim`, `timeline.nim`)
+- **Functions:** `camelCase` for most procs (e.g., `parseColor()`, `initMediaInfo()`)
+  - Pure functions use `func` keyword, side-effect procedures use `proc`
+  - Mutation functions prefixed with `mut` (e.g., `mutMargin()`, `mutRemoveSmall()`)
+- **Types:** `PascalCase` (e.g., `VideoStream`, `MediaInfo`, `RGBColor`)
+- **Enum values:** lowercase (e.g., `actCut`, `actSpeed`, `nkNull`)
+- **Variables:** `camelCase` for locals, `snake_case` for FFmpeg interop fields
+
+### Error Handling
+- **Fatal errors:** Use `error(msg)` from `src/log.nim` - prints to stderr and exits with cleanup
+- **Warnings:** Use `warning(msg)` - prints to stderr but continues
+- **No custom exceptions** - Use Nim built-in exceptions and catch sparingly
+
+### Import Order
+1. Standard library (`import std/[...]`)
+2. Third-party libraries (`import tinyre`)
+3. Local modules (relative or implicit)
+4. Conditional imports (`when not defined(windows): import std/posix_utils`)
+
+### Public API
+- Public symbols marked with `*`: `proc error*(msg: string)`, `type VideoStream*`
+- Private symbols have no `*`
+- Module exports are explicit - no barrel files
+
+### FFmpeg Integration
+- FFmpeg bindings in `src/av.nim` use C interop types (`ptr AVFormatContext`, `cint`, `ptr uint8`)
+- Always check for `nil` after FFmpeg allocation calls
+- Explicit cleanup required (call `av_*_free()`)
+
+### Testing Requirements
+- Unit tests in `tests/unit.nim`
+- E2E tests in `tests/test.py`
+- Coverage target: 80% (enforced in CI for Linux builds)
+- Per-module coverage threshold: 80% (no module drags down average)
+
+---
+
+## Architecture Principles
+
+### Core Pipeline Flow
+All video processing follows this pipeline:
+1. **Media Input** (`src/av.nim`) - FFmpeg bindings read input media
+2. **Analysis** (`src/analyze/`) - Detect audio levels, motion, faces, or extract subtitles
+3. **Expression Evaluation** (`src/palet/`) - Parse and evaluate `--edit` expressions
+4. **Timeline Building** (`src/timeline.nim`) - Construct sequence of clips
+5. **Rendering** (`src/render/`) - Process and output final video/audio
+6. **Export** (`src/exports/`) - Generate NLE project files
+
+### Module Organization
+- **Entry point:** `src/main.nim` - Command dispatcher
+- **Subcommands:** `src/cmds/` - Individual command implementations
+- **Analysis:** `src/analyze/` - Audio/motion/face detection
+- **ML modules:** `src/ml/` - Face detection, ONNX, OpenCV
+- **Expression parser:** `src/palet/` - Lexer and parser for `--edit` expressions
+- **Exporters:** `src/exports/` - NLE format generators
+- **Renderers:** `src/render/` - Audio/video/caption processing
+- **Utilities:** `src/util/` - Helper functions
+
+### Subcommand Pattern
+New subcommands must:
+1. Create `src/cmds/{command}.nim`
+2. Export `proc main*(args: seq[string])`
+3. Register in `cmdHandlers` array in `src/main.nim`
+4. Add to `commands` array in `src/cli.nim`
+
+---
+
+## Quality Gates
+
+### Pre-Commit Checks
+All commits must pass:
+- File size check (no large files)
+- Secret detection (no API keys, private keys)
+- Debug code check (no commented debug statements)
+- TODO marker validation
+- Platform-specific code guards (proper `when defined()` usage)
+
+### CI/CD Requirements
+- Matrix builds: Ubuntu (x86_64, ARM64), macOS (Intel, Apple Silicon), Windows
+- Unit tests must pass on all platforms
+- E2E tests (Python) must pass
+- Coverage threshold: 80% (Linux only)
+- Binary size limit: 100MB hard limit
+
+### Smoke Tests
+Fast validation on every PR:
+- Disables heavy codecs (VP8/9, SVT-AV1, HEVC)
+- Runs on Ubuntu, macOS, and cross-compiled Windows
+- Validates cross-platform compatibility
+
+---
+
+## Roadmap & Planning Process
+
+### Milestone Structure
+- **v1.0:** Engagement Analysis (shipped 2026-02-04) - 10 phases, 48 plans
+- **v1.1:** Polish (shipped 2026-02-05) - 4 phases, 10 plans
+- **v2.0:** Workflow, Performance & AI Features (in progress) - 10 phases (15-24)
+
+### Phase Execution Model
+Each phase follows:
+1. **Research** (`XX-RESEARCH.md`) - Domain research before planning
+2. **Context** (`XX-CONTEXT.md`) - Current state analysis
+3. **Planning** (`XX-YY-PLAN.md`) - Task breakdown for each plan
+4. **Summary** (`XX-YY-SUMMARY.md`) - Completion report
+5. **Verification** (`XX-VERIFICATION.md`) - Goal achievement validation
+
+### Planning Files Location
+- Root roadmap: `.planning/ROADMAP.md`
+- Requirements: `.planning/REQUIREMENTS.md`
+- Project state: `.planning/STATE.md`
+- Milestones: `.planning/MILESTONES.md`
+- Phase details: `.planning/phases/{phase-name}/`
+- Codebase analysis: `.planning/codebase/`
+
+### Decision Log
+All architectural decisions recorded in `.planning/PROJECT.md` Key Decisions table.
+
+---
+
+## Known Technical Debt
+
+### Buffer Size Hardcoding
+- **Issue:** Fixed buffer sizes in FFmpeg bindings may overflow
+- **Impact:** Potential crashes with metadata exceeding limits
+- **Priority:** Medium
+- **Tracked in:** `.planning/codebase/CONCERNS.md`
+
+### Memory-Mapped Audio Cleanup
+- **Issue:** Temp .map files may accumulate on exception
+- **Impact:** Disk space leak on crashes
+- **Priority:** Medium
+- **Mitigation:** Relies on defer blocks and tempDir cleanup
+
+### Unsafe C String Handling
+- **Issue:** Multiple casts from Nim strings to cstring without null termination verification
+- **Impact:** Potential buffer overruns
+- **Priority:** High
+- **Fix approach:** Use Nim string utilities instead of raw C functions
+
+### Two-Pass Loudnorm Performance
+- **Issue:** EBU normalization requires full analysis then processing pass
+- **Impact:** 2x processing time for normalized audio
+- **Priority:** Low (inherent to loudnorm filter design)
+- **Improvement:** Cache measurement results per file
+
+---
+
+## Security Considerations
+
+### Argument Injection Risks
+- **yt-dlp extras:** User-supplied `--yt-dlp-extras` split on spaces
+- **Mitigation:** Uses `startProcess` with `poUsePath` (no shell)
+- **Recommendation:** Validate against whitelist of allowed flags
+
+### Path Traversal
+- **Export output:** `--output` parameter used directly in file operations
+- **Mitigation:** Nim file operations have protections
+- **Recommendation:** Add explicit path normalization
+
+### Expression Complexity
+- **Edit expressions:** User-supplied `--edit` evaluated through parser
+- **Mitigation:** Custom lexer (not regex, no ReDoS)
+- **Recommendation:** Add expression depth/size limits
+
+---
+
+## Performance Targets
+
+### Benchmarking Infrastructure
+- **Microbenchmarks:** `nimble bench` - Component-level with regression detection
+- **E2E validation:** `nimble validateperf` - Full pipeline quality & speed tests
+- **Baseline:** Stored in `tests/benchmark_results.json`
+- **Documentation:** `tests/BENCHMARK_QUICKSTART.md`, `tests/PERFORMANCE_VALIDATION.md`
+
+### Quality Preset Requirements (v2.0 Phase 22)
+- **Fast preset:** 10x realtime, PSNR >28dB, draft quality
+- **Balanced preset:** 2x realtime, PSNR >32dB, production-ready
+- **Best preset:** 0.5x realtime, PSNR >38dB, archival quality
+
+### GPU Acceleration (v2.0 Phase 15)
+- CUDA on Linux (optional)
+- Metal on macOS (optional)
+- CPU fallback always available
+- Quality must match CPU path (speed differs)
+
+---
+
+## Out of Scope (Permanent)
+
+These features will never be added:
+
+| Feature | Reason |
+|---------|--------|
+| Cloud engagement scoring | Core analysis must remain local-only |
+| Historical virality prediction | No training data available |
+| Real-time processing | Batch processing sufficient |
+| Mobile app | CLI tool only |
+| GUI wrapper | CLI-first, users wanting GUI use NLEs |
+| Distributed batch processing | Single-machine only |
+| Emotion detection from facial expressions | Model complexity |
+| Voice tone/sentiment analysis | Model complexity |
+| Team/collaboration features | Individual use tool |
+| Natural language search | Requires embedding infrastructure |
+
+---
+
+## Governance
+
+### Constitution Updates
+This document may only be updated by:
+1. Project maintainer with documented rationale
+2. Major milestone transition (v1.0 → v2.0)
+3. External constraint change (platform deprecation, security requirement)
+
+### Violation Handling
+Code that violates this constitution:
+1. Should not be merged
+2. Must be flagged in code review
+3. Requires explicit exception with documented justification
+
+### Exception Process
+To violate a constitution rule:
+1. Document reason in PR description
+2. Update this document if exception becomes permanent
+3. Add to "Known Exceptions" section if temporary
+
+---
+
+## Known Exceptions
+
+### Windows ML Features
+- **Rule violated:** Cross-platform first
+- **Justification:** LTO issues with ML libraries on MinGW
+- **Status:** Permanent (until LTO bug resolved)
+- **Mitigation:** Graceful degradation with clear error messages
+
+### Python in Test Suite
+- **Rule violated:** No Python runtime dependencies
+- **Justification:** PyAV provides E2E video validation
+- **Status:** Permanent (test-only, not runtime)
+- **Mitigation:** Clearly documented as dev dependency
+
+---
+
+## References
+
+- **Project definition:** `.planning/PROJECT.md`
+- **Requirements:** `.planning/REQUIREMENTS.md`
+- **Current roadmap:** `.planning/ROADMAP.md`
+- **Development guide:** `CONTRIBUTING.md`
+- **Architecture deep-dive:** `ARCHITECTURE.md`
+- **Performance tuning:** `PERFORMANCE.md`
+- **Troubleshooting:** `TROUBLESHOOTING.md`
+- **Copilot instructions:** `.github/copilot-instructions.md`
+- **Code conventions:** `.planning/codebase/CONVENTIONS.md`
+- **Known concerns:** `.planning/codebase/CONCERNS.md`
+- **Tech stack:** `.planning/codebase/STACK.md`
+
+---
+
+**This constitution was generated from:**
+- 14 completed phases (v1.0, v1.1)
+- 58 executed plans
+- 21,522 lines of Nim code
+- 4 days of intensive development
+- Comprehensive planning documentation in `.planning/`
+
+**Living document:** Updated as project evolves, but core principles remain immutable.
