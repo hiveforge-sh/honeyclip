@@ -44,13 +44,22 @@ A content intelligence layer for video that extracts transcripts, scores engagem
 ### Platform Support
 **MUST:**
 - Support Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), Windows
-- Maintain cross-platform compilation from Linux to Windows
+- **Maintain compatibility between macOS and Windows when necessary** - core features must work on both
+- Test cross-platform compilation regularly (`nimble windows` from Linux/macOS)
 - Provide graceful degradation for platform-specific features
+- Document platform limitations clearly in user-facing messages
 
-**Windows Limitations (accepted):**
-- No LTO (GCC 11.1.0 ICE)
-- ML features stubbed out (face detection, ONNX)
-- Requires Git Bash for FFmpeg build
+**Platform Parity Requirements:**
+- Core video editing (silence removal, timeline building, rendering) works identically on all platforms
+- CLI interface and arguments consistent across platforms
+- Export formats (NLE, video codecs) available on all platforms
+- Error messages indicate platform limitations (e.g., "ML features not available on Windows")
+
+**Windows Limitations (accepted with mitigation):**
+- No LTO (GCC 11.1.0 ICE) - binary larger but functional
+- ML features stubbed out (face detection, ONNX) - commands exist but skip ML processing
+- Requires Git Bash for FFmpeg build - documented in installation guide
+- These limitations do not break core video editing workflow
 
 ### Processing Model
 **MUST:**
@@ -78,13 +87,24 @@ A content intelligence layer for video that extracts transcripts, scores engagem
 ## Development Philosophy
 
 ### 1. Cross-Platform First
-**Every feature must work on Windows, macOS, and Linux or gracefully degrade.**
+**Every feature must work on Windows, macOS, and Linux or gracefully degrade. Maintain compatibility between macOS and Windows when necessary for core functionality.**
 
 Implementation rules:
+- **Test on both macOS and Windows** - core features must work on both platforms
 - Test cross-compilation (`nimble windows`) before marking work complete
-- Use `when defined(windows)` / `when not defined(windows)` for platform-specific code
+- Use `when defined(windows)` / `when not defined(windows)` / `when defined(macosx)` for platform-specific code
 - Provide clear error messages for unsupported features rather than silent failures
-- Windows is a first-class platform, not an afterthought
+- Windows and macOS are first-class platforms, not afterthoughts
+- Linux-specific optimizations (CUDA) must have macOS/Windows fallbacks
+- macOS-specific features (Metal) must have Windows/Linux fallbacks
+
+**Mac/Windows Compatibility Checklist:**
+- [ ] Core editing workflow tested on both platforms
+- [ ] CLI arguments work identically
+- [ ] File path handling (forward/backward slashes) tested
+- [ ] Line endings (CRLF/LF) handled correctly in generated files
+- [ ] Error messages indicate platform-specific limitations clearly
+- [ ] Documentation updated with platform-specific notes
 
 ### 2. Local-First Architecture
 **Prefer local computation over remote services.**
@@ -352,10 +372,15 @@ To violate a constitution rule:
 ## Known Exceptions
 
 ### Windows ML Features
-- **Rule violated:** Cross-platform first
+- **Rule violated:** Cross-platform first (Mac/Windows parity for ML features)
 - **Justification:** LTO issues with ML libraries on MinGW
 - **Status:** Permanent (until LTO bug resolved)
-- **Mitigation:** Graceful degradation with clear error messages
+- **Impact:** ML-powered features (`engage`, `reframe`, `clips`) skip face detection on Windows
+- **Mitigation:** 
+  - Commands still work, using non-ML signals (audio, motion, speech)
+  - Clear error messages indicate ML unavailable on Windows
+  - Core video editing unaffected
+  - Mac and Linux users get full ML features
 
 ### Python in Test Suite
 - **Rule violated:** No Python runtime dependencies
