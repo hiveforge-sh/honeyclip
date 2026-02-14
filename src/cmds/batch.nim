@@ -1,6 +1,6 @@
 import std/[strformat, strutils, os]
 import ../log
-import ../batch/[template, discover]
+import ../batch/[template, discover, runner, checkpoint]
 
 proc main*(cArgs: seq[string]) =
   var inputPath: string = ""
@@ -74,6 +74,16 @@ proc main*(cArgs: seq[string]) =
       echo &"  {f}"
     return
 
-  # For now, echo that batch processing is ready (runner comes in Plan 16-02)
-  echo &"[batch] Ready to process {files.len} files with {(if jobs == 0: \"auto\" else: $jobs)} worker(s)"
-  echo "[batch] Batch runner not yet implemented (see Plan 16-02)"
+  # Check resume without checkpoint
+  if resume and not hasCheckpoint(inputPath):
+    echo "[batch] No checkpoint found. Starting from scratch."
+
+  # Create batch config and run
+  let config = BatchConfig(
+    tmpl: tmpl,
+    inputPath: inputPath,
+    outputDir: if outputDir != "": outputDir else: tmpl.outputDir,
+    jobs: jobs,
+    resume: resume
+  )
+  runBatch(config)

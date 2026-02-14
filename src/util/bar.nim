@@ -199,3 +199,14 @@ proc destroy*(bar: Bar) =
   if bar.threadData != nil:
     bar.threadData.shouldStop.store(true)
     joinThread(bar.progressThread)
+
+proc startBatch*(bar: Bar, totalFiles: int, currentFile: int, filename: string, total: float) =
+  ## Start progress for a file within a batch
+  let basename = extractFilename(filename)
+  let title = &"[{currentFile}/{totalFiles}] {basename}"
+  bar.start(total, title)
+
+proc batchSummary*(totalFiles, completed, failed: int, elapsed: float) =
+  ## Print batch processing summary line
+  let elapsedMin = elapsed / 60.0
+  echo &"\n[batch] Complete: {completed + failed}/{totalFiles} files ({completed} succeeded, {failed} failed) in {elapsedMin:.1f} min"
