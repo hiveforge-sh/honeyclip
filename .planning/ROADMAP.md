@@ -108,6 +108,13 @@ Plans:
 
 **Requirements:** VIRAL-01, VIRAL-02, VIRAL-03
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 17-01-PLAN.md -- Virality types, component calculation, and ranking by virality score
+- [ ] 17-02-PLAN.md -- CLI output, JSON/EDL export, and project file virality fields
+- [ ] 17-03-PLAN.md -- Unit tests for virality scoring calculations
+
 **Success Criteria:**
 1. User sees engagement score (0-100) for each detected clip in output
 2. User sees score breakdown showing hook, flow, value, and trend components
