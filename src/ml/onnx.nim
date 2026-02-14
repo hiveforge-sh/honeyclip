@@ -39,6 +39,9 @@ when defined(windows):
   proc loadModel*(env: OrtEnv, modelPath: string): OrtSession =
     raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
 
+  proc loadModelWithProviders*(env: OrtEnv, modelPath: string, backend: string): OrtSession =
+    raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
+
   proc `=destroy`*(session: var OrtSession) =
     discard
 
@@ -71,6 +74,8 @@ else:
       CreateSession*: proc(env: pointer, modelPath: cstring, options: pointer,
                            session: ptr pointer): ptr OrtStatus {.cdecl.}
       ReleaseSession*: proc(session: pointer) {.cdecl.}
+      CreateSessionOptions*: proc(options: ptr pointer): ptr OrtStatus {.cdecl.}
+      ReleaseSessionOptions*: proc(options: pointer) {.cdecl.}
       CreateCpuMemoryInfo*: proc(allocType: cint, memType: cint,
                                  info: ptr pointer): ptr OrtStatus {.cdecl.}
       ReleaseMemoryInfo*: proc(info: pointer) {.cdecl.}
@@ -88,6 +93,17 @@ else:
       ReleaseStatus*: proc(status: ptr OrtStatus) {.cdecl.}
 
   proc OrtGetApiBase(): ptr OrtApiBase {.importc, header: "onnxruntime_c_wrapper.h".}
+
+  # Execution provider functions (standalone C functions, not in OrtApi table)
+  when defined(linux):
+    proc OrtSessionOptionsAppendExecutionProvider_CUDA_V2(
+      options: pointer, cudaOptions: pointer): ptr OrtStatus
+        {.importc, header: "onnxruntime_c_wrapper.h".}
+
+  when defined(macosx):
+    proc OrtSessionOptionsAppendExecutionProvider_CoreML(
+      options: pointer, flags: uint32): ptr OrtStatus
+        {.importc, header: "onnxruntime_c_wrapper.h".}
 
   # Global API pointer
   var g_ort: ptr OrtApi = nil
@@ -123,12 +139,69 @@ else:
       env.handle = nil
 
   proc loadModel*(env: OrtEnv, modelPath: string): OrtSession =
-    ## Load ONNX model from file path
+    ## Load ONNX model from file path (CPU only, backward compatible)
     let api = getApi()
     var handle: pointer
     let status = api.CreateSession(env.handle, modelPath.cstring, nil, addr handle)
     checkOrt(status)
     result.handle = handle
+
+  proc loadModelWithProviders*(env: OrtEnv, modelPath: string, backend: string): OrtSession =
+    ## Load ONNX model with execution provider support
+    ## Backend options: "cuda", "coreml", "cpu"
+    ## Falls back to CPU if provider initialization fails
+    let api = getApi()
+
+    # Create session options
+    var optionsHandle: pointer
+    let optStatus = api.CreateSessionOptions(addr optionsHandle)
+    checkOrt(optStatus)
+    defer:
+      if optionsHandle != nil:
+        api.ReleaseSessionOptions(optionsHandle)
+
+    # Append execution provider based on backend
+    case backend
+    of "cuda":
+      when defined(linux):
+        # Try to append CUDA execution provider
+        # If CUDA is not available, this will fail and we fall back to CPU
+        try:
+          let cudaStatus = OrtSessionOptionsAppendExecutionProvider_CUDA_V2(optionsHandle, nil)
+          if cudaStatus != nil:
+            # CUDA provider failed, continue without it (CPU fallback)
+            echo "[gpu] CUDA execution provider unavailable, falling back to CPU"
+            api.ReleaseStatus(cudaStatus)
+        except:
+          echo "[gpu] CUDA execution provider initialization failed, using CPU"
+      else:
+        echo "[gpu] CUDA not available on this platform, using CPU"
+
+    of "coreml":
+      when defined(macosx):
+        # Try to append CoreML execution provider
+        try:
+          let coremlStatus = OrtSessionOptionsAppendExecutionProvider_CoreML(optionsHandle, 0)
+          if coremlStatus != nil:
+            # CoreML provider failed, continue without it (CPU fallback)
+            echo "[gpu] CoreML execution provider unavailable, falling back to CPU"
+            api.ReleaseStatus(coremlStatus)
+        except:
+          echo "[gpu] CoreML execution provider initialization failed, using CPU"
+      else:
+        echo "[gpu] CoreML not available on this platform, using CPU"
+
+    of "cpu":
+      # No provider append needed, default is CPU
+      discard
+    else:
+      echo "[gpu] Unknown backend '", backend, "', using CPU"
+
+    # Create session with options
+    var sessionHandle: pointer
+    let sessStatus = api.CreateSession(env.handle, modelPath.cstring, optionsHandle, addr sessionHandle)
+    checkOrt(sessStatus)
+    result.handle = sessionHandle
 
   proc `=destroy`*(session: var OrtSession) =
     ## Automatic cleanup of OrtSession
