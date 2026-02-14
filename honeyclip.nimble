@@ -11,6 +11,7 @@ requires "nim >= 2.2.2"
 requires "checksums"
 requires "tinyre#77469f5"
 requires "nimpy >= 0.2.0"
+requires "toml_serialization"
 
 # Tasks
 import std/os
