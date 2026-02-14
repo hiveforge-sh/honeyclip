@@ -914,6 +914,118 @@ when defined(enable_ml):
       check COLOR_BGR2RGB.int == 4
       check COLOR_RGB2GRAY.int == 7
 
+# GPU Runtime Detection Tests
+# Tests GPU backend detection and platform-specific behavior
+import ../src/ml/gpu_runtime
+
+suite "GPU Runtime":
+  test "detectGpu returns valid backend":
+    let runtime = detectGpu()
+    # On any platform, should return a valid GpuBackend
+    check runtime.backend in {CPU, CUDA, CoreML}
+
+  test "detectGpu returns CPU on Windows":
+    when defined(windows):
+      let runtime = detectGpu()
+      check runtime.backend == CPU
+      check runtime.available == false
+      check runtime.deviceName == "CPU"
+
+  test "detectGpu deviceName is not empty":
+    let runtime = detectGpu()
+    check runtime.deviceName.len > 0
+
+  test "GpuBackend string representation":
+    check $CPU == "cpu"
+    check $CUDA == "cuda"
+    check $CoreML == "coreml"
+
+# Buffer Pool Tests
+# Tests frame buffer pooling for memory-efficient video processing
+import ../src/ml/buffer_pool
+
+suite "Buffer Pool":
+  test "newBufferPool creates pool with correct size":
+    var pool = newBufferPool(640, 480, 3, maxBuffers = 4)
+    check pool.maxBuffers == 4
+    check pool.frameSize == 640 * 480 * 3
+    check pool.acquiredCount == 0
+
+  test "acquire returns non-nil buffer":
+    var pool = newBufferPool(64, 64, 3, maxBuffers = 2)
+    let buf = pool.acquire()
+    check buf != nil
+    check buf.inUse == true
+    check buf.width == 64
+    check buf.height == 64
+    check buf.channels == 3
+    check pool.acquiredCount == 1
+    pool.release(buf)
+
+  test "release returns buffer to pool":
+    var pool = newBufferPool(64, 64, 3, maxBuffers = 2)
+    let buf = pool.acquire()
+    check pool.acquiredCount == 1
+    pool.release(buf)
+    check pool.acquiredCount == 0
+    check buf.inUse == false
+
+  test "acquire returns nil when pool exhausted":
+    var pool = newBufferPool(64, 64, 3, maxBuffers = 2)
+    let buf1 = pool.acquire()
+    let buf2 = pool.acquire()
+    let buf3 = pool.acquire()  # Should be nil
+    check buf1 != nil
+    check buf2 != nil
+    check buf3 == nil
+    check pool.acquiredCount == 2
+    pool.release(buf1)
+    pool.release(buf2)
+
+  test "acquire after release reuses buffer":
+    var pool = newBufferPool(64, 64, 3, maxBuffers = 1)
+    let buf1 = pool.acquire()
+    check buf1 != nil
+    pool.release(buf1)
+    let buf2 = pool.acquire()
+    check buf2 != nil
+    # Should get the same buffer back (reuse)
+    check buf2 == buf1
+    pool.release(buf2)
+
+  test "available tracks free buffers":
+    var pool = newBufferPool(64, 64, 3, maxBuffers = 3)
+    check pool.available() == 3
+    let buf1 = pool.acquire()
+    check pool.available() == 2
+    let buf2 = pool.acquire()
+    check pool.available() == 1
+    pool.release(buf1)
+    check pool.available() == 2
+    pool.release(buf2)
+    check pool.available() == 3
+
+  test "buffer data pointer is valid":
+    var pool = newBufferPool(64, 64, 3, maxBuffers = 1)
+    let buf = pool.acquire()
+    check buf != nil
+    check buf.data != nil
+    # Should be able to write to buffer without crash
+    buf.data[0] = 255'u8
+    buf.data[buf.capacity - 1] = 128'u8
+    check buf.data[0] == 255'u8
+    check buf.data[buf.capacity - 1] == 128'u8
+    pool.release(buf)
+
+  test "4K buffer pool size calculation":
+    # 4K BGR: 3840 * 2160 * 3 = 24,883,200 bytes (~24MB)
+    var pool = newBufferPool(3840, 2160, 3, maxBuffers = 1)
+    check pool.frameSize == 24_883_200
+    let buf = pool.acquire()
+    check buf != nil
+    check buf.capacity == 24_883_200
+    pool.release(buf)
+
 # Face Detection Tests
 # These tests validate face detection consensus and filtering algorithms
 # Import is conditional to avoid build failures when ML libs not available

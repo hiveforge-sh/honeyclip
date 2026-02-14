@@ -150,6 +150,14 @@ proc debug*(msg: string) =
     else:
       stderr.writeLine(&"Debug: {msg}")
 
+proc info*(msg: string) =
+  if not quiet:
+    conwrite("")
+    if not noColor:
+      stderr.styledWriteLine(fgCyan, "Info: ", resetStyle, msg)
+    else:
+      stderr.writeLine(&"Info: {msg}")
+
 proc warning*(msg: string) =
   if not quiet:
     conwrite("")
