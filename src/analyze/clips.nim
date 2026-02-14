@@ -39,6 +39,8 @@ type
     hasHook*: bool                 # Any segment has hook
     faceCount*: int                # Max faces in any segment
     rank*: int                     # Final rank (1 = best)
+    viralityScore*: float32                # Combined virality score (0-100)
+    viralityComponents*: ViralityComponents # Component breakdown
 
   ClipDetectionParams* = object
     ## Parameters for clip boundary detection and extraction

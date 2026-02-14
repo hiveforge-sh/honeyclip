@@ -23,6 +23,13 @@ type
     faceCount*: int              # Number of stable faces in segment
     speaker*: int                # Speaker index (-1 = unassigned, 0+ = speaker)
 
+  ViralityComponents* = object
+    ## Breakdown of virality score into four components
+    hook*: float32      # 0-100: First impression strength (first segment score + hasHook boost)
+    flow*: float32      # 0-100: Retention consistency (avg score - variance penalty)
+    value*: float32     # 0-100: Content quality signals (avg score + face presence boost)
+    trend*: float32     # 0-100: Authenticity/originality (hook pattern diversity)
+
   EngagementParams* = object
     ## Parameters for engagement analysis
     audioWeight*: float32        # Weight for audio signal (default 0.333)
