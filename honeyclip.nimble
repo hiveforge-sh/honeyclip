@@ -1328,7 +1328,7 @@ proc onnxBuild(buildPath: string, crossWindows: bool = false) =
 
   # Run build.sh with minimal build configuration (static library)
   # CMAKE_POLICY_VERSION_MINIMUM=3.5 needed for CMake 3.27+ compatibility with older CMakeLists.txt in dependencies
-  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --skip_tests --disable_exceptions --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath} CMAKE_POLICY_VERSION_MINIMUM=3.5"
+  exec &"./build.sh --config MinSizeRel --minimal_build extended --disable_ml_ops --skip_tests --disable_exceptions --build_shared_lib OFF --parallel {nproc} --cmake_extra_defines CMAKE_INSTALL_PREFIX={buildPath} CMAKE_POLICY_VERSION_MINIMUM=3.5"
 
   # Determine OS-specific build directory
   var osBuildDir: string
