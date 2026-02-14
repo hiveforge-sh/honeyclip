@@ -11,14 +11,14 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 17 - Virality Scoring
-Plan: 01/03
+Plan: 02/03
 Status: In Progress
-Last activity: 2026-02-14 — Plan 17-01 complete (virality scoring core logic)
+Last activity: 2026-02-14 — Plan 17-02 complete (virality CLI output and exports)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
 Progress v2.0: [████████████                                    ] 24% (2.33/10 phases)
-Progress Phase 17: [████████████████                                ] 33% (1/3 plans)
+Progress Phase 17: [████████████████████████████████                ] 66% (2/3 plans)
 
 ## Performance Metrics
 
@@ -40,13 +40,13 @@ Progress Phase 17: [████████████████            
 
 | Phase-Plan | Duration | Tasks | Files | Completed |
 |------------|----------|-------|-------|-----------|
-| 15-02 | 108s | 2 | 2 | 2026-02-13 |
 | 15-03 | 253s | 1 | 2 | 2026-02-14 |
 | 16-01 | 123s | 2 | 6 | 2026-02-14 |
 | 16-01 | 123s | 2 | 6 | 2026-02-14 |
 | 16-02 | 132s | 2 | 5 | 2026-02-14 |
 | 16-03 | 55s | 1 | 1 | 2026-02-14 |
 | 17-01 | 859s | 2 | 6 | 2026-02-14 |
+| 17-02 | 300s | 2 | 5 | 2026-02-14 |
 
 ## Accumulated Context
 
@@ -96,9 +96,9 @@ None — all tech debt items from v1.0 addressed in v1.1.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 17-01-PLAN.md
+Stopped at: Completed 17-02-PLAN.md
 Resume file: None
-Next: Plan 17-02 (Virality CLI Output)
+Next: Plan 17-03 (Virality API Endpoint)
 
 **Project Status: v2.0 IN PROGRESS**
 
@@ -110,10 +110,11 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15 and Phase 16 exec
 - Plan 16-02: Complete (Checkpoint/Resume and Parallel Batch Runner) ✓
 - Plan 16-03: Complete (Batch Processing Unit Tests) ✓
 - Plan 17-01: Complete (Virality Scoring Core Logic) ✓
+- Plan 17-02: Complete (Virality CLI Output and Exports) ✓
 
 **Phase 16 COMPLETE** - Batch processing foundation fully operational and tested.
 
-**Phase 17 IN PROGRESS** - Plan 17-01 complete. Four-component virality scoring (hook, flow, value, trend) with research-backed weights integrated into clip detection and ranking pipeline. Clips now ranked by virality score instead of raw engagement score.
+**Phase 17 IN PROGRESS** - Plans 17-01 and 17-02 complete. Four-component virality scoring (hook, flow, value, trend) with research-backed weights integrated into clip detection and ranking pipeline. Clips now ranked by virality score. CLI output displays virality scores with component breakdown. JSON/EDL exports include virality fields. Project files store virality scores with backward-compatible loading.
 
 ---
-*Updated: 2026-02-14 after Plan 17-01 execution*
+*Updated: 2026-02-14 after Plan 17-02 execution*
