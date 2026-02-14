@@ -12,6 +12,7 @@ requires "checksums"
 requires "tinyre#77469f5"
 requires "nimpy >= 0.2.0"
 requires "toml_serialization"
+requires "malebolgia"
 
 # Tasks
 import std/os
