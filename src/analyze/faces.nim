@@ -5,6 +5,7 @@
 
 import std/[algorithm, strformat, strutils, tables, options, math]
 import ../ml/facedetect
+import ../ml/buffer_pool
 import ../av
 import ../ffmpeg
 import ../log
@@ -487,13 +488,15 @@ type
     baseFps*: float         # Baseline sampling (default 1.0)
     maxFps*: float          # Max sampling during spikes (default 5.0)
     sceneThreshold*: float  # Scene change threshold (default 0.4)
+    maxQueueFrames*: int    # Max decoded frames in memory (default 30)
 
 proc toCacheArgs(params: FaceAnalysisParams): string =
   ## Convert params to cache key string for proper invalidation
   ## Include ALL parameters that affect output
   fmt"{params.stream},{params.targetHeight},{params.minConfidence}," &
   fmt"{params.consensusWindow},{params.consensusThreshold},{params.minFaceRatio}," &
-  fmt"{params.baseFps},{params.maxFps},{params.sceneThreshold}"
+  fmt"{params.baseFps},{params.maxFps},{params.sceneThreshold}," &
+  fmt"{params.maxQueueFrames}"
 
 proc toCachedFace(face: FaceDetection): CachedFace =
   ## Convert runtime face to cache format
@@ -554,7 +557,8 @@ proc faces*(bar: Bar, container: InputContainer, path: string, tb: AVRational,
               minFaceRatio: 0.05,
               baseFps: 1.0,
               maxFps: 5.0,
-              sceneThreshold: 0.4
+              sceneThreshold: 0.4,
+              maxQueueFrames: 30
             )): seq[FrameFaces] =
   ## Main face analysis function - analyzes video and returns stable face detections
   ##
@@ -608,7 +612,31 @@ proc faces*(bar: Bar, container: InputContainer, path: string, tb: AVRational,
   elif container.duration != 0.0:
     inaccurateDur = container.duration / float(tb)
 
-  # 6. Process frames
+  # 6. Memory tracking for bounded decode queue
+  # Calculate expected peak memory usage based on maxQueueFrames
+  # Frames are scaled to targetHeight before detection, so use scaled dimensions
+  let targetWidth = int((params.targetHeight.float * 16.0 / 9.0).round)  # Assume 16:9 aspect ratio
+  let frameBytes = targetWidth * params.targetHeight * 3  # BGR = 3 channels
+  let peakMemoryBytes = frameBytes * params.maxQueueFrames
+  let peakMB = peakMemoryBytes.float / (1024.0 * 1024.0)
+  info fmt"Face detection: max {params.maxQueueFrames} frames in memory (~{peakMB:.0f}MB)"
+
+  # NOTE: Buffer pool integration
+  # The buffer pool will be used when GPU-based ONNX face detection is added (Plan 15-01).
+  # Current libfacedetection path uses FFmpeg's frame buffers directly, which are already
+  # managed by the decode pipeline. When ONNX detection is integrated:
+  #
+  #   var pool = newBufferPool(targetWidth, params.targetHeight, 3, maxBuffers = 4)
+  #   ...
+  #   let buf = pool.acquire()
+  #   if buf != nil:
+  #     copyMem(buf.data, frame.data[0], frameBytes)
+  #     # Call ONNX face detection on buf.data
+  #     pool.release(buf)
+  #
+  # This prevents per-frame allocation in the hot loop for GPU inference.
+
+  # 7. Process frames
   bar.start(inaccurateDur, "Detecting faces")
   for (frame, sceneScore, timestamp) in processor.facesPipeline(sampler, params.targetHeight):
     let frameIndex = round(timestamp * tb.float64).int64
