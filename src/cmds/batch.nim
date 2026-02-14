@@ -1,6 +1,6 @@
 import std/[strformat, strutils, os]
 import ../log
-import ../batch/[template, discover, runner, checkpoint]
+import ../batch/[templates, discover, runner, checkpoint]
 
 proc main*(cArgs: seq[string]) =
   var inputPath: string = ""

@@ -1,6 +1,6 @@
 import std/[os, strformat, strutils, cpuinfo, times, osproc]
 import malebolgia
-import ./template
+import ./templates
 import ./checkpoint
 import ./discover
 import ../log
@@ -115,7 +115,7 @@ proc runBatch*(config: BatchConfig) =
     return
 
   # Determine worker count
-  let workers = if config.jobs == 0: countProcessors() else: config.jobs
+  let workers = if config.jobs == 0: cpuinfo.countProcessors() else: config.jobs
 
   # Determine output directory
   let outputDir = if config.outputDir != "": config.outputDir else: config.tmpl.outputDir
@@ -133,11 +133,11 @@ proc runBatch*(config: BatchConfig) =
     let chunkEnd = min(chunkStart + chunkSize, filesToProcess.len)
     let chunk = filesToProcess[chunkStart ..< chunkEnd]
 
-    var results: seq[BatchResult]
+    var results = newSeq[BatchResult](chunk.len)
     var m = createMaster()
     m.awaitAll:
-      for file in chunk:
-        m.spawn processOneFile(file, config.tmpl, inputRoot, outputDir) -> results
+      for i, file in chunk:
+        m.spawn processOneFile(file, config.tmpl, inputRoot, outputDir) -> results[i]
 
     # Update checkpoint after chunk
     for r in results:
