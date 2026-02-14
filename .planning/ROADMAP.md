@@ -56,6 +56,13 @@ Batch processing, GPU acceleration, AI features, and social publishing.
 
 **Requirements:** GPU-01, GPU-02, GPU-03, MEM-01, MEM-02
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 15-01-PLAN.md -- GPU runtime detection + ONNX execution provider support
+- [ ] 15-02-PLAN.md -- Frame buffer pooling + bounded decode queue
+- [ ] 15-03-PLAN.md -- Unit tests for GPU runtime and buffer pool
+
 **Success Criteria:**
 1. User can run face detection with CUDA on Linux without manual configuration
 2. User can run face detection with Metal on macOS without manual configuration
