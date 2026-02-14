@@ -11,20 +11,21 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 15 - Performance Foundation
-Plan: None (roadmap just created)
-Status: Ready to plan Phase 15
-Last activity: 2026-02-13 — Phase 01 gap closure (plan 01-05) executed and re-verified
+Plan: 02/03
+Status: Executing Phase 15
+Last activity: 2026-02-13 — Plan 15-02 (Frame Buffer Pooling) complete
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
 Progress v2.0: [                                                ] 0% (0/10 phases)
+Progress Phase 15: [████████████████                                ] 33% (1/3 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 59
-- Average duration: 3.6 min
-- Total execution time: ~3.5 hours
+- Total plans completed: 60
+- Average duration: 3.5 min
+- Total execution time: ~3.6 hours
 
 **Milestones:**
 
@@ -32,8 +33,14 @@ Progress v2.0: [                                                ] 0% (0/10 phase
 |-----------|--------|-------|----------|---------|
 | v1.0 Engagement Analysis | 1-10 | 49 | 4 days | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | 1 day | 2026-02-05 |
-| v2.0 Workflow, Performance & AI | 15-24 | 0 | In progress | TBD |
-| **Total** | **24** | **59** | **5 days** | — |
+| v2.0 Workflow, Performance & AI | 15-24 | 1 | In progress | TBD |
+| **Total** | **24** | **60** | **5 days** | — |
+
+**Recent Plans:**
+
+| Phase-Plan | Duration | Tasks | Files | Completed |
+|------------|----------|-------|-------|-----------|
+| 15-02 | 108s | 2 | 2 | 2026-02-13 |
 
 ## Accumulated Context
 
@@ -59,10 +66,12 @@ Major architectural decisions across milestones:
 - TOML templates for batch processing (emerging decision)
 - GPU acceleration via CUDA/Metal (emerging decision)
 - Local-first AI with API fallback (emerging decision)
+- Frame buffer pooling for memory efficiency (15-02: pre-allocated buffers, acquire/release semantics)
+- Bounded decode queue for OOM prevention (15-02: maxQueueFrames parameter)
 
 ### Pending Todos
 
-None currently. Phase 15 planning starts next.
+None currently. Phase 15 execution in progress (Plan 02 complete, Plan 03 next).
 
 ### Blockers/Concerns
 
@@ -73,14 +82,16 @@ None — all tech debt items from v1.0 addressed in v1.1.
 ## Session Continuity
 
 Last session: 2026-02-13
-Stopped at: Phase 01 gap closure complete, re-verified
+Stopped at: Plan 15-02 complete (Frame Buffer Pooling)
 Resume file: None
-Next: `/gsd:plan-phase 15` to start Performance Foundation
+Next: Execute Plan 15-03
 
-**Project Status: v2.0 ROADMAP DEFINED**
+**Project Status: v2.0 IN PROGRESS**
 
-All 38 v2.0 requirements mapped to 10 phases (15-24). Ready to begin phase planning and execution.
-Phase 01 gap closure (ONNX static linking) resolved 2026-02-13.
+All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15 execution in progress.
+- Plan 15-01: Not started
+- Plan 15-02: Complete (Frame Buffer Pooling) ✓
+- Plan 15-03: Not started
 
 ---
-*Updated: 2026-02-13 after Phase 01 gap closure execution*
+*Updated: 2026-02-13 after Plan 15-02 execution*
