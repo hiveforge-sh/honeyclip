@@ -82,6 +82,13 @@ Plans:
 
 **Requirements:** BATCH-01, BATCH-02, BATCH-03, BATCH-04, BATCH-05
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 16-01-PLAN.md -- TOML template parsing, file discovery, batch command skeleton
+- [ ] 16-02-PLAN.md -- Checkpoint/resume system, parallel runner, progress tracking
+- [ ] 16-03-PLAN.md -- Unit tests for batch processing modules
+
 **Success Criteria:**
 1. User can create TOML template file with processing settings
 2. User can run single command to process entire folder with template
