@@ -26,6 +26,7 @@ import ../src/render/scoreviz
 import ../src/metadata/types as metadataTypes
 import ../src/metadata/apply
 import ../src/analyze/hook_schema
+import ../src/batch/[template, discover, checkpoint]
 
 # Include test fixture utilities for tolerance-based assertions
 include fixtures/test_utils
@@ -3856,3 +3857,154 @@ suite "Performance Benchmarks":
 
     echo "Cost matrix 5x5 10k: " & $elapsed.int & "ms"
     check elapsed < 2000.0
+
+# Batch Processing Tests
+suite "Batch Template":
+  test "toArgs with all fields set":
+    let tmpl = BatchTemplate(
+      edit: "audio",
+      margin: "0.2s",
+      whenSilent: "cut()",
+      whenNormal: "nil()",
+      outputFormat: "mp4",
+      outputSuffix: "_edited",
+      engage: "viral"
+    )
+    let args = toArgs(tmpl)
+    check args.contains("--edit")
+    check args.contains("audio")
+    check args.contains("--margin")
+    check args.contains("0.2s")
+    check args.contains("--when-silent")
+    check args.contains("cut()")
+    check args.contains("--when-normal")
+    check args.contains("nil()")
+    check args.contains("-ex")
+    check args.contains("mp4")
+    check args.contains("--engage")
+    check args.contains("viral")
+
+  test "toArgs with empty fields omitted":
+    let tmpl = BatchTemplate(
+      edit: "audio"
+      # All other fields default to empty
+    )
+    let args = toArgs(tmpl)
+    check args == @["--edit", "audio"]
+
+  test "toArgs with engage set":
+    let tmpl = BatchTemplate(
+      engage: "viral"
+    )
+    let args = toArgs(tmpl)
+    check args == @["--engage", "viral"]
+
+  test "toArgs with boolean flags":
+    let tmpl = BatchTemplate(
+      noFaces: true,
+      noTranscript: true
+    )
+    let args = toArgs(tmpl)
+    check args.contains("--no-faces")
+    check args.contains("--no-transcript")
+
+  test "validateTemplate with no issues":
+    let tmpl = BatchTemplate(
+      edit: "audio",
+      margin: "0.2s"
+    )
+    let warnings = validateTemplate(tmpl)
+    check warnings.len == 0
+
+suite "File Discovery":
+  test "generateOutputPath with output dir":
+    when defined(windows):
+      let result = generateOutputPath("input\\videos\\test.mp4", "input", "output", "_edited", ".mp4")
+      check result == "output\\videos\\test_edited.mp4"
+    else:
+      let result = generateOutputPath("input/videos/test.mp4", "input", "output", "_edited", ".mp4")
+      check result == "output/videos/test_edited.mp4"
+
+  test "generateOutputPath without output dir":
+    when defined(windows):
+      let result = generateOutputPath("input\\test.mp4", "input", "", "_edited", "")
+      check result == "input\\test_edited.mp4"
+    else:
+      let result = generateOutputPath("input/test.mp4", "input", "", "_edited", "")
+      check result == "input/test_edited.mp4"
+
+  test "generateOutputPath preserves subdirectory":
+    when defined(windows):
+      let result = generateOutputPath("input\\a\\b\\c.mov", "input", "out", "_cut", ".mp4")
+      check result == "out\\a\\b\\c_cut.mp4"
+    else:
+      let result = generateOutputPath("input/a/b/c.mov", "input", "out", "_cut", ".mp4")
+      check result == "out/a/b/c_cut.mp4"
+
+  test "generateOutputPath keeps original extension when not specified":
+    when defined(windows):
+      let result = generateOutputPath("input\\video.mov", "input", "output", "_new", "")
+      check result == "output\\video_new.mov"
+    else:
+      let result = generateOutputPath("input/video.mov", "input", "output", "_new", "")
+      check result == "output/video_new.mov"
+
+suite "Checkpoint":
+  test "Checkpoint new and serialize":
+    let state = newCheckpoint("template.toml", "/videos", 10)
+    check state.totalFiles == 10
+    check state.completed.len == 0
+    check state.failed.len == 0
+    check state.templatePath == "template.toml"
+    check state.inputPath == "/videos"
+    check state.startTime > 0.0
+
+  test "markCompleted updates state":
+    var state = newCheckpoint("template.toml", "/videos", 5)
+    state.markCompleted("file1.mp4")
+    check state.completed.len == 1
+    check "file1.mp4" in state.completed
+
+  test "markFailed updates state":
+    var state = newCheckpoint("template.toml", "/videos", 5)
+    state.markFailed("bad.mp4", "codec error")
+    check state.failed.len == 1
+    check state.failed[0].path == "bad.mp4"
+    check state.failed[0].error == "codec error"
+
+  test "pendingFiles excludes completed and failed":
+    var state = newCheckpoint("template.toml", "/videos", 5)
+    state.completed = @["a.mp4", "b.mp4"]
+    state.failed = @[FileResult(path: "c.mp4", error: "fail")]
+
+    let allFiles = @["a.mp4", "b.mp4", "c.mp4", "d.mp4", "e.mp4"]
+    let pending = pendingFiles(state, allFiles)
+
+    check pending.len == 2
+    check "d.mp4" in pending
+    check "e.mp4" in pending
+
+  test "Checkpoint JSON round-trip":
+    # Create checkpoint with data
+    var state = newCheckpoint("test.toml", "/input", 10)
+    state.markCompleted("file1.mp4")
+    state.markCompleted("file2.mp4")
+    state.markFailed("file3.mp4", "encoding failed")
+
+    # Save to temp file
+    let tempPath = getTempDir() / "test_checkpoint.json"
+    saveCheckpoint(state, tempPath)
+
+    # Load and verify
+    let loaded = loadCheckpoint(tempPath)
+    check loaded.templatePath == state.templatePath
+    check loaded.inputPath == state.inputPath
+    check loaded.totalFiles == state.totalFiles
+    check loaded.completed.len == state.completed.len
+    check loaded.failed.len == state.failed.len
+    check loaded.completed == state.completed
+    check loaded.failed[0].path == state.failed[0].path
+    check loaded.failed[0].error == state.failed[0].error
+
+    # Cleanup
+    removeFile(tempPath)
