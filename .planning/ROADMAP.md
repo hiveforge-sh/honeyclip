@@ -100,7 +100,7 @@ Plans:
 
 ---
 
-#### Phase 17: Virality Scoring
+#### Phase 17: Virality Scoring ✅
 
 **Goal:** Users see quantified virality scores for each detected clip
 
@@ -108,17 +108,19 @@ Plans:
 
 **Requirements:** VIRAL-01, VIRAL-02, VIRAL-03
 
-**Plans:** 3 plans
+**Plans:** 3/3 complete
 
 Plans:
-- [ ] 17-01-PLAN.md -- Virality types, component calculation, and ranking by virality score
-- [ ] 17-02-PLAN.md -- CLI output, JSON/EDL export, and project file virality fields
-- [ ] 17-03-PLAN.md -- Unit tests for virality scoring calculations
+- [x] 17-01-PLAN.md -- Virality types, component calculation, and ranking by virality score
+- [x] 17-02-PLAN.md -- CLI output, JSON/EDL export, and project file virality fields
+- [x] 17-03-PLAN.md -- Unit tests for virality scoring calculations
+
+**Completed:** 2026-02-14
 
 **Success Criteria:**
-1. User sees engagement score (0-100) for each detected clip in output
-2. User sees score breakdown showing hook, flow, value, and trend components
-3. Clips are automatically sorted by virality score in output (highest first)
+1. ✓ User sees engagement score (0-100) for each detected clip in output
+2. ✓ User sees score breakdown showing hook, flow, value, and trend components
+3. ✓ Clips are automatically sorted by virality score in output (highest first)
 
 ---
 
@@ -242,8 +244,8 @@ Plans:
 |-----------|--------|-------|--------|---------|
 | v1.0 Engagement Analysis | 1-10 | 48 | Complete | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | Complete | 2026-02-05 |
-| v2.0 Workflow, Performance & AI Features | 15-24 | 6 | Phase 16 complete | TBD |
-| **Total** | **24** | **61** | **In Progress** | — |
+| v2.0 Workflow, Performance & AI Features | 15-24 | 9 | Phase 17 complete | TBD |
+| **Total** | **24** | **67** | **In Progress** | — |
 
 ---
-*Roadmap updated: 2026-02-14 after Phase 16 execution*
+*Roadmap updated: 2026-02-14 after Phase 17 execution*
