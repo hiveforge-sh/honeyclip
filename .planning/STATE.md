@@ -10,21 +10,21 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: 15 - Performance Foundation
-Plan: 03/03
-Status: Phase 15 Complete
-Last activity: 2026-02-14 — Phase 15 complete (all 3 plans)
+Phase: 16 - Batch Processing Foundation
+Plan: 01/03
+Status: In Progress
+Last activity: 2026-02-14 — Plan 16-01 complete (template parser and discovery)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
-Progress v2.0: [█████                                           ] 10% (1/10 phases)
-Progress Phase 15: [████████████████████████████████████████████████] 100% (3/3 plans)
+Progress v2.0: [██████████                                      ] 20% (2/10 phases)
+Progress Phase 16: [████████████████                                ] 33% (1/3 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 62
-- Average duration: 3.4 min
+- Total plans completed: 63
+- Average duration: 3.3 min
 - Total execution time: ~3.7 hours
 
 **Milestones:**
@@ -33,16 +33,17 @@ Progress Phase 15: [████████████████████
 |-----------|--------|-------|----------|---------|
 | v1.0 Engagement Analysis | 1-10 | 49 | 4 days | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | 1 day | 2026-02-05 |
-| v2.0 Workflow, Performance & AI | 15-24 | 3 | In progress | TBD |
-| **Total** | **24** | **62** | **5 days** | — |
+| v2.0 Workflow, Performance & AI | 15-24 | 4 | In progress | TBD |
+| **Total** | **24** | **63** | **5 days** | — |
 
 **Recent Plans:**
 
 | Phase-Plan | Duration | Tasks | Files | Completed |
 |------------|----------|-------|-------|-----------|
-| 15-02 | 108s | 2 | 2 | 2026-02-13 |
 | 15-01 | 128s | 2 | 2 | 2026-02-14 |
+| 15-02 | 108s | 2 | 2 | 2026-02-13 |
 | 15-03 | 253s | 1 | 2 | 2026-02-14 |
+| 16-01 | 123s | 2 | 6 | 2026-02-14 |
 
 ## Accumulated Context
 
@@ -65,7 +66,7 @@ Major architectural decisions across milestones:
 - FFmetadata format (FFmpeg native metadata)
 
 **v2.0:**
-- TOML templates for batch processing (emerging decision)
+- TOML templates for batch processing (16-01: template-based configuration with type-safe field mapping)
 - GPU acceleration via CUDA/Metal (emerging decision)
 - Local-first AI with API fallback (emerging decision)
 - Runtime GPU detection with CPU fallback (15-01: file existence check for CUDA, platform-aware detection)
@@ -73,6 +74,7 @@ Major architectural decisions across milestones:
 - Backend parameter as string vs enum (15-01: string for simplicity, no module dependency)
 - Frame buffer pooling for memory efficiency (15-02: pre-allocated buffers, acquire/release semantics)
 - Bounded decode queue for OOM prevention (15-02: maxQueueFrames parameter)
+- Template to CLI args conversion (16-01: defer validation to existing CLI parsing, avoid duplication)
 - [Phase 15]: Added info() logging proc to log.nim for consistency with debug/warning/error pattern
 
 ### Pending Todos
@@ -88,18 +90,19 @@ None — all tech debt items from v1.0 addressed in v1.1.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Phase 15 complete (GPU Runtime & Buffer Pool Tests)
+Stopped at: Completed 16-01-PLAN.md
 Resume file: None
-Next: Execute Phase 16 plans
+Next: Execute Plan 16-02 (batch runner with parallel execution)
 
 **Project Status: v2.0 IN PROGRESS**
 
-All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15 execution complete.
+All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15 execution complete, Phase 16 in progress.
 - Plan 15-01: Complete (GPU Runtime Detection) ✓
 - Plan 15-02: Complete (Frame Buffer Pooling) ✓
 - Plan 15-03: Complete (GPU Runtime & Buffer Pool Tests) ✓
+- Plan 16-01: Complete (Template Parser and Discovery) ✓
 
-**Phase 15 COMPLETE** - Performance foundation established with GPU runtime detection, frame buffer pooling, and comprehensive unit test coverage. Ready for Phase 16 ML acceleration features.
+**Phase 16 IN PROGRESS** - Batch processing foundation started with TOML template parsing, video file discovery, and batch CLI entry point. Parallel execution runner pending in Plan 16-02.
 
 ---
-*Updated: 2026-02-14 after Plan 15-03 execution*
+*Updated: 2026-02-14 after Plan 16-01 execution*
