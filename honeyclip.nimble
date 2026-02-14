@@ -395,6 +395,38 @@ func dirName(package: Package): string =
   return name
 
 
+# Windows path conversion utilities for bash interop
+when defined(windows):
+  proc detectBashPathStyle(): string =
+    ## Detect if we're in WSL (linux-gnu) or MSYS2 (msys)
+    ## Returns "wsl" for /mnt/c/... paths, "msys" for /c/... paths
+    try:
+      let ostype = gorgeEx("bash -c 'echo $OSTYPE'").output.strip()
+      if ostype.contains("linux"):
+        return "wsl"    # /mnt/c/Users/...
+      elif ostype.contains("msys"):
+        return "msys"   # /c/Users/...
+      else:
+        return "msys"   # Default fallback for unknown environments
+    except:
+      return "msys"     # Safe default if detection fails
+  
+  proc toUnixPath(p: string, style: string = ""): string =
+    ## Convert Windows path to Unix style for bash
+    ## style: "wsl" or "msys" (auto-detect if empty)
+    let actualStyle = if style.len == 0: detectBashPathStyle() else: style
+    result = p.replace("\\", "/")
+    if result.len >= 2 and result[1] == ':':
+      let drive = result[0].toLowerAscii
+      case actualStyle
+      of "wsl":
+        result = "/mnt/" & drive & result[2..^1]
+      of "msys":
+        result = "/" & drive & result[2..^1]
+      else:
+        result = "/" & drive & result[2..^1]  # Default to msys style
+
+
 proc getFileHash(filename: string): string =
   if not fileExists(filename):
     raise newException(IOError, "File does not exist: " & filename)
@@ -415,7 +447,9 @@ proc getFileHash(filename: string): string =
         return lines[1].strip().toLowerAscii()
   if exitCode != 0:
     raise newException(IOError, "Cannot hash file: " & filename)
-  return output.split()[0]
+  result = output.split()[0]
+  # sha256sum prefixes hash with \ when filename contains backslashes (Windows paths)
+  result = result.strip(chars = {'\\'})
 
 proc checkHash(package: Package, filename: string) =
   let hash = getFileHash(filename)
@@ -434,13 +468,11 @@ proc makeInstall(packageName: string = "", buildPath: string = "") =
     exec "make install"
   elif defined(windows):
     # Use mingw32-make to avoid Chocolatey's make which has SHELL path issues
-    proc toUnixPath(p: string): string =
-      result = p.replace("\\", "/")
-      if result.len >= 2 and result[1] == ':':
-        result = "/" & result[0].toLowerAscii & result[2..^1]
     let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
+    # libvpx uses out-of-source build on Windows (see configure section)
+    let cdPrefix = if packageName == "libvpx": "cd build_vpx && " else: ""
     # Use mingw32-make instead of make to avoid Windows path space issues with libtool
-    exec &"bash -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make -j4'"
+    exec &"bash -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make -j4'"
 
     # LAME uses libtool which breaks on Windows due to space in Git path
     # Manually install instead of using make install
@@ -462,7 +494,7 @@ proc makeInstall(packageName: string = "", buildPath: string = "") =
       cpFile("x264_config.h", buildPath / "include" / "x264_config.h")
       cpFile("x264.pc", buildPath / "lib" / "pkgconfig" / "x264.pc")
     else:
-      exec &"bash -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make install'"
+      exec &"bash -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make install'"
   else:
     exec "make -j4"
     exec "make install"
@@ -833,16 +865,15 @@ proc ffmpegSetup(crossWindows: bool) =
           # Special handling for nv-codec-headers which doesn't use configure
           if package.name == "nv-codec-headers":
             when defined(windows):
-              proc toUnixPath(p: string): string =
-                result = p.replace("\\", "/")
-                if result.len >= 2 and result[1] == ':':
-                  result = "/" & result[0].toLowerAscii & result[2..^1]
               let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
               exec &"bash -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make install PREFIX=\"{buildPath}\"'"
             else:
               exec &"make install PREFIX=\"{buildPath}\""
           else:
-            if not fileExists("Makefile") or package.name == "x264":
+            let makefileCheck = when defined(windows):
+              (if package.name == "libvpx": "build_vpx/Makefile" else: "Makefile")
+            else: "Makefile"
+            if not fileExists(makefileCheck) or package.name == "x264":
               var args = package.buildArguments
               var envPrefix = ""
               if crossWindows:
@@ -861,12 +892,22 @@ proc ffmpegSetup(crossWindows: bool) =
                   if result.len >= 2 and result[1] == ':':
                     result = "/" & result[0].toLowerAscii & result[2..^1]
                 let unixBuildPath = toUnixPath(buildPath)
-                var configureCmd = &"./configure --prefix=\"{unixBuildPath}\" --enable-static " & args.join(" ")
+                # libvpx needs out-of-source build on Windows: configure writes
+                # absolute MSYS paths (/c/Users/...) that mingw32-make can't resolve.
+                # Building from a subdir makes paths relative (../libs.mk).
+                var cdPrefix = ""
+                if package.name == "libvpx":
+                  mkDir("build_vpx")
+                  cdPrefix = "cd build_vpx && "
+                let configurePath = if package.name == "libvpx": "../" else: "./"
+                var configureCmd = &"{configurePath}configure --prefix=\"{unixBuildPath}\" --enable-static " & args.join(" ")
                 let mingwBase = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64"
                 let mingwBin = mingwBase & "/bin"
                 let ccEnv = "CC=\"" & mingwBin & "/gcc.exe\" CXX=\"" & mingwBin & "/g++.exe\" "
+                # Disable _FORTIFY_SOURCE: MinGW GCC 11.1.0 lacks __memset_chk/__memcpy_chk
+                let fortifyFix = "CFLAGS=\"-O2 -D_FORTIFY_SOURCE=0\" CXXFLAGS=\"-O2 -D_FORTIFY_SOURCE=0\" "
                 # Set CONFIG_SHELL to avoid libtool using Windows path with spaces
-                configureCmd = "bash -c 'export PATH=\"" & mingwBin & ":$PATH\" && export CONFIG_SHELL=/usr/bin/sh && " & ccEnv & envPrefix & configureCmd & "'"
+                configureCmd = "bash -c 'export PATH=\"" & mingwBin & ":/c/Program Files/NASM:$PATH\" && export CONFIG_SHELL=/usr/bin/sh && " & cdPrefix & fortifyFix & ccEnv & envPrefix & configureCmd & "'"
                 echo "RUN: ", configureCmd
                 exec configureCmd
               else:
@@ -1425,15 +1466,38 @@ task makeff, "Build FFmpeg from source":
   let packages = setupPackages(enableWhisper=enableWhisper)
 
   withDir "ffmpeg_sources/ffmpeg":
-    try:
-      exec &"""./configure --prefix="{buildPath}" \
-        --pkg-config-flags="--static" \
-        --extra-cflags="-I{buildPath}/include" \
-        --extra-ldflags="-L{buildPath}/lib" \
-        --extra-libs="-lpthread -lm" \""" & "\n" & setupCommonFlags(packages)
-    except OSError:
-      exec "cat ./ffbuild/config.log"
-      quit(1)
+    when defined(windows):
+      let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
+      let bp = toUnixPath(buildPath)
+      # Flatten common flags to single line for bash -c wrapping
+      let commonFlags = setupCommonFlags(packages).replace(" \\\n", " ").replace("\n", " ").strip()
+      # Add NASM to PATH (Chocolatey installs to /c/Program Files/NASM/)
+      let nasmPath = "/c/Program Files/NASM"
+      let ffConfigureCmd = "bash -c 'export PATH=\"" & mingwBin & ":" & nasmPath & ":$PATH\" && " &
+        "CC=\"" & mingwBin & "/gcc.exe\" CXX=\"" & mingwBin & "/g++.exe\" " &
+        "./configure --prefix=\"" & bp & "\" " &
+        "--pkg-config-flags=\"--static\" " &
+        "--extra-cflags=\"-I" & bp & "/include\" " &
+        "--extra-ldflags=\"-L" & bp & "/lib\" " &
+        "--extra-libs=\"-lpthread -lm\" " &
+        "--disable-x86asm " &
+        commonFlags & "'"
+      try:
+        echo "RUN: ", ffConfigureCmd
+        exec ffConfigureCmd
+      except OSError:
+        exec "bash -c 'cat ./ffbuild/config.log'"
+        quit(1)
+    else:
+      try:
+        exec &"""./configure --prefix="{buildPath}" \
+          --pkg-config-flags="--static" \
+          --extra-cflags="-I{buildPath}/include" \
+          --extra-ldflags="-L{buildPath}/lib" \
+          --extra-libs="-lpthread -lm" \""" & "\n" & setupCommonFlags(packages)
+      except OSError:
+        exec "cat ./ffbuild/config.log"
+        quit(1)
     makeInstall()
 
 task makeffwin, "Build FFmpeg for Windows cross-compilation":

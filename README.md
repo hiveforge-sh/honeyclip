@@ -43,6 +43,8 @@ honeyclip example.mp4 --export premiere
 - For Windows cross-compile: mingw-w64
 - For ML features: cmake, python3
 
+#### macOS / Linux
+
 ```bash
 # Run bootstrap script to install system dependencies
 ./bootstrap.sh
@@ -62,9 +64,42 @@ curl -L -o ~/.cache/whisper/ggml-base.en.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
 ```
 
+#### Windows
+
+**Important:** Windows has two bootstrap scripts:
+- `bootstrap.ps1` - PowerShell script (run in PowerShell, NOT Git Bash)
+- `bootstrap-windows-gitbash.sh` - Git Bash wrapper (launches PowerShell for you)
+
+**Option 1: From PowerShell (recommended for full automation)**
+```powershell
+# Open PowerShell as Administrator
+.\bootstrap.ps1
+
+# Or launch as admin programmatically:
+Start-Process powershell -Verb RunAs -ArgumentList "-File $PWD\bootstrap.ps1"
+```
+
+**Option 2: From Git Bash**
+```bash
+# Wrapper script that launches PowerShell
+./bootstrap-windows-gitbash.sh
+
+# Or manually invoke PowerShell
+powershell.exe -ExecutionPolicy Bypass -File ./bootstrap.ps1
+```
+
+**After bootstrap completes:**
+```bash
+# Switch to Git Bash for FFmpeg build (requires Unix tools)
+nimble makeff
+
+# Build honeyclip (can use PowerShell or Git Bash)
+nimble make
+```
+
 For better transcription accuracy, use a larger model: `ggml-small.en.bin` (~466MB) or `ggml-medium.en.bin` (~1.5GB).
 
-**Windows users:** Run `nimble makeff` from **Git Bash**, not PowerShell or CMD. The FFmpeg build requires Unix tools (sed, make, etc.) that Git Bash provides. ML features are not available on Windows.
+**Note:** ML features (face detection, engagement scoring) are not available on Windows.
 
 ## Editing Methods
 
