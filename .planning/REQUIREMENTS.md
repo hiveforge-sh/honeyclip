@@ -29,14 +29,14 @@ Requirements for v2.0 major release. Full OpusClip feature parity with local-fir
 
 ### GPU Acceleration
 
-- [ ] **GPU-01**: Face detection uses CUDA on Linux when available
-- [ ] **GPU-02**: Face detection uses Metal on macOS when available
-- [ ] **GPU-03**: System automatically falls back to CPU when GPU unavailable
+- [x] **GPU-01**: Face detection uses CUDA on Linux when available
+- [x] **GPU-02**: Face detection uses Metal on macOS when available
+- [x] **GPU-03**: System automatically falls back to CPU when GPU unavailable
 
 ### Memory Optimization
 
-- [ ] **MEM-01**: Frame buffer pooling prevents allocation overhead for 4K+ content
-- [ ] **MEM-02**: Bounded decode queue prevents OOM on large files
+- [x] **MEM-01**: Frame buffer pooling prevents allocation overhead for 4K+ content
+- [x] **MEM-02**: Bounded decode queue prevents OOM on large files
 
 ### Virality Score
 
@@ -113,11 +113,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GPU-01 | Phase 15 | Pending |
-| GPU-02 | Phase 15 | Pending |
-| GPU-03 | Phase 15 | Pending |
-| MEM-01 | Phase 15 | Pending |
-| MEM-02 | Phase 15 | Pending |
+| GPU-01 | Phase 15 | Complete |
+| GPU-02 | Phase 15 | Complete |
+| GPU-03 | Phase 15 | Complete |
+| MEM-01 | Phase 15 | Complete |
+| MEM-02 | Phase 15 | Complete |
 | BATCH-01 | Phase 16 | Pending |
 | BATCH-02 | Phase 16 | Pending |
 | BATCH-03 | Phase 16 | Pending |
