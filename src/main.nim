@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd, analyze, meta]
+import cmds/[info, desc, batch, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd, analyze, meta]
 import util/[color, fun]
 import palet/edit
 import analyze/presets
@@ -22,6 +22,7 @@ setControlCHook(ctrlc)
 type Command = tuple[name: string, handler: proc(args: seq[string])]
 const cmdHandlers: seq[Command] = @[
   ("analyze", analyze.main),
+  ("batch", batch.main),
   ("cache", cache.main),
   ("caption", caption.main),
   ("clips", clipsCmd.main),
