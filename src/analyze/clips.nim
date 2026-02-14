@@ -420,14 +420,14 @@ proc rankClips*(clips: seq[Clip], params: ClipRankingParams): seq[Clip] =
 
 # ===== Virality scoring =====
 
-proc calculateHookScore(firstSegment: EngagementSegment): float32 =
+proc calculateHookScore*(firstSegment: EngagementSegment): float32 =
   ## Calculate hook score from first segment
   ## Base score + bonus for detected hook patterns
   result = firstSegment.score
   if firstSegment.hasHook:
     result = min(100.0f, result + 15.0f)
 
-proc calculateFlowScore(segments: seq[EngagementSegment]): float32 =
+proc calculateFlowScore*(segments: seq[EngagementSegment]): float32 =
   ## Calculate flow score: average engagement with variance penalty
   ## Penalizes inconsistent retention (high variance in segment scores)
   if segments.len == 0:
@@ -452,7 +452,7 @@ proc calculateFlowScore(segments: seq[EngagementSegment]): float32 =
 
   result = max(0.0f, avgScore - flowPenalty)
 
-proc calculateValueScore(segments: seq[EngagementSegment], maxFaceCount: int): float32 =
+proc calculateValueScore*(segments: seq[EngagementSegment], maxFaceCount: int): float32 =
   ## Calculate value score: average engagement + face presence boost
   ## Face presence indicates human-centered content (higher value)
   if segments.len == 0:
@@ -471,7 +471,7 @@ proc calculateValueScore(segments: seq[EngagementSegment], maxFaceCount: int): f
     let faceBoost = min(maxFaceCount.float32 * 3.0f, 15.0f)
     result = min(100.0f, result + faceBoost)
 
-proc calculateTrendScore(segments: seq[EngagementSegment]): float32 =
+proc calculateTrendScore*(segments: seq[EngagementSegment]): float32 =
   ## Calculate trend score based on hook pattern diversity
   ## More diverse patterns = higher originality/authenticity
   var uniquePatterns: HashSet[string]
@@ -487,7 +487,7 @@ proc calculateTrendScore(segments: seq[EngagementSegment]): float32 =
   # 1 pattern = 33, 2 patterns = 67, 3+ patterns = 100
   result = min(100.0f, uniquePatterns.len.float32 * 33.33f)
 
-proc calculateViralityComponents(segments: seq[EngagementSegment], maxFaceCount: int): ViralityComponents =
+proc calculateViralityComponents*(segments: seq[EngagementSegment], maxFaceCount: int): ViralityComponents =
   ## Calculate all four virality components from clip segments
   if segments.len == 0:
     return ViralityComponents(hook: 0.0f, flow: 0.0f, value: 0.0f, trend: 0.0f)
@@ -497,7 +497,7 @@ proc calculateViralityComponents(segments: seq[EngagementSegment], maxFaceCount:
   result.value = calculateValueScore(segments, maxFaceCount)
   result.trend = calculateTrendScore(segments)
 
-proc combineViralityScore(components: ViralityComponents): float32 =
+proc combineViralityScore*(components: ViralityComponents): float32 =
   ## Combine virality components with research-backed weights
   ## Hook 35%, Flow 30%, Value 25%, Trend 10%
   result = (components.hook * 0.35f +

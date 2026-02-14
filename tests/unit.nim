@@ -4008,3 +4008,186 @@ suite "Checkpoint":
 
     # Cleanup
     removeFile(tempPath)
+
+suite "Virality Scoring":
+  test "calculateHookScore without hook":
+    var seg = newEngagementSegment(0, 5000)
+    seg.score = 70.0f
+    seg.hasHook = false
+
+    let hookScore = calculateHookScore(seg)
+    check hookScore == 70.0f
+
+  test "calculateHookScore with hook":
+    var seg = newEngagementSegment(0, 5000)
+    seg.score = 70.0f
+    seg.hasHook = true
+
+    let hookScore = calculateHookScore(seg)
+    check hookScore == 85.0f  # 70 + 15 boost
+
+  test "calculateHookScore with hook capped at 100":
+    var seg = newEngagementSegment(0, 5000)
+    seg.score = 90.0f
+    seg.hasHook = true
+
+    let hookScore = calculateHookScore(seg)
+    check hookScore == 100.0f  # 90 + 15 = 105, capped at 100
+
+  test "calculateFlowScore empty segments":
+    let segments: seq[EngagementSegment] = @[]
+    let flowScore = calculateFlowScore(segments)
+    check flowScore == 0.0f
+
+  test "calculateFlowScore single segment":
+    var seg = newEngagementSegment(0, 5000)
+    seg.score = 60.0f
+    let segments = @[seg]
+
+    let flowScore = calculateFlowScore(segments)
+    check flowScore == 60.0f  # No variance with single segment
+
+  test "calculateFlowScore no variance":
+    var segments: seq[EngagementSegment] = @[]
+    for i in 0..2:
+      var seg = newEngagementSegment(int64(i * 5000), int64((i + 1) * 5000))
+      seg.score = 80.0f
+      segments.add(seg)
+
+    let flowScore = calculateFlowScore(segments)
+    check flowScore == 80.0f  # Perfect consistency, no penalty
+
+  test "calculateFlowScore high variance":
+    var segments: seq[EngagementSegment] = @[]
+    let scores = [50.0f, 100.0f, 50.0f, 100.0f]
+    for i, score in scores:
+      var seg = newEngagementSegment(int64(i * 5000), int64((i + 1) * 5000))
+      seg.score = score
+      segments.add(seg)
+
+    let flowScore = calculateFlowScore(segments)
+    # Average = 75, stdDev = 25, penalty = min(25*0.5, 30) = 12.5
+    # Expected: 75 - 12.5 = 62.5
+    check checkApprox(flowScore, 62.5, 1.0)
+
+  test "calculateValueScore no faces":
+    var segments: seq[EngagementSegment] = @[]
+    for i in 0..2:
+      var seg = newEngagementSegment(int64(i * 5000), int64((i + 1) * 5000))
+      seg.score = 70.0f
+      seg.faceCount = 0
+      segments.add(seg)
+
+    let valueScore = calculateValueScore(segments, 0)
+    check valueScore == 70.0f
+
+  test "calculateValueScore with faces":
+    var segments: seq[EngagementSegment] = @[]
+    for i in 0..2:
+      var seg = newEngagementSegment(int64(i * 5000), int64((i + 1) * 5000))
+      seg.score = 70.0f
+      seg.faceCount = 2
+      segments.add(seg)
+
+    let valueScore = calculateValueScore(segments, 2)
+    check valueScore == 76.0f  # 70 + 2*3 = 76
+
+  test "calculateValueScore with many faces capped":
+    var segments: seq[EngagementSegment] = @[]
+    for i in 0..2:
+      var seg = newEngagementSegment(int64(i * 5000), int64((i + 1) * 5000))
+      seg.score = 90.0f
+      seg.faceCount = 10
+      segments.add(seg)
+
+    let valueScore = calculateValueScore(segments, 10)
+    check valueScore == 100.0f  # 90 + min(10*3, 15) = 90 + 15 = 105, capped at 100
+
+  test "calculateValueScore empty segments":
+    let segments: seq[EngagementSegment] = @[]
+    let valueScore = calculateValueScore(segments, 0)
+    check valueScore == 0.0f
+
+  test "calculateTrendScore no hooks":
+    var segments: seq[EngagementSegment] = @[]
+    for i in 0..2:
+      var seg = newEngagementSegment(int64(i * 5000), int64((i + 1) * 5000))
+      seg.hookMatches = @[]
+      segments.add(seg)
+
+    let trendScore = calculateTrendScore(segments)
+    check trendScore == 50.0f  # Neutral score for no hooks
+
+  test "calculateTrendScore one unique pattern":
+    var segments: seq[EngagementSegment] = @[]
+    for i in 0..2:
+      var seg = newEngagementSegment(int64(i * 5000), int64((i + 1) * 5000))
+      seg.hookMatches = @["question"]
+      segments.add(seg)
+
+    let trendScore = calculateTrendScore(segments)
+    check checkApprox(trendScore, 33.33, 1.0)  # 1 pattern = 33.33
+
+  test "calculateTrendScore three unique patterns":
+    var segments: seq[EngagementSegment] = @[]
+    var seg1 = newEngagementSegment(0, 5000)
+    seg1.hookMatches = @["question"]
+    var seg2 = newEngagementSegment(5000, 10000)
+    seg2.hookMatches = @["storytelling"]
+    var seg3 = newEngagementSegment(10000, 15000)
+    seg3.hookMatches = @["conflict"]
+    segments = @[seg1, seg2, seg3]
+
+    let trendScore = calculateTrendScore(segments)
+    check checkApprox(trendScore, 100.0, 1.0)  # 3 patterns = 99.99, close to 100
+
+  test "combineViralityScore all max":
+    let components = ViralityComponents(
+      hook: 100.0f,
+      flow: 100.0f,
+      value: 100.0f,
+      trend: 100.0f
+    )
+    let combined = combineViralityScore(components)
+    check combined == 100.0f
+
+  test "combineViralityScore all zero":
+    let components = ViralityComponents(
+      hook: 0.0f,
+      flow: 0.0f,
+      value: 0.0f,
+      trend: 0.0f
+    )
+    let combined = combineViralityScore(components)
+    check combined == 0.0f
+
+  test "combineViralityScore weighted formula":
+    let components = ViralityComponents(
+      hook: 80.0f,    # 35% weight
+      flow: 60.0f,    # 30% weight
+      value: 70.0f,   # 25% weight
+      trend: 40.0f    # 10% weight
+    )
+    let combined = combineViralityScore(components)
+    # 80*0.35 + 60*0.30 + 70*0.25 + 40*0.10 = 28 + 18 + 17.5 + 4 = 67.5
+    check checkApprox(combined, 67.5, 0.1)
+
+  test "rankClips sorts by viralityScore":
+    var testClips = @[
+      clips.Clip(startMs: 0, endMs: 30000, engagementScore: 80.0f, viralityScore: 90.0f),
+      clips.Clip(startMs: 40000, endMs: 70000, engagementScore: 85.0f, viralityScore: 70.0f),
+      clips.Clip(startMs: 80000, endMs: 110000, engagementScore: 90.0f, viralityScore: 80.0f)
+    ]
+    var params = defaultClipRankingParams()
+    params.topN = 3
+    params.overlapThreshold = 1.0  # Disable overlap penalty
+
+    let ranked = rankClips(testClips, params)
+
+    # Should be sorted by viralityScore descending: 90, 80, 70
+    check ranked[0].viralityScore == 90.0f
+    check ranked[0].rank == 1
+    check ranked[1].viralityScore == 80.0f
+    check ranked[1].rank == 2
+    check ranked[2].viralityScore == 70.0f
+    check ranked[2].rank == 3
