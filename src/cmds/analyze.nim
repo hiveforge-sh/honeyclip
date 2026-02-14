@@ -24,7 +24,7 @@ proc printTopClips(clips: seq[Clip], limit: int = 5) =
     let startSec = clip.startMs div 1000
     let endSec = clip.endMs div 1000
     let hookStr = if clip.hasHook: " [HOOK]" else: ""
-    echo &"  #{clip.rank}: [{startSec div 60}:{startSec mod 60:02}]-[{endSec div 60}:{endSec mod 60:02}] Score: {clip.engagementScore:.0f}{hookStr}"
+    echo &"  #{clip.rank}: [{startSec div 60}:{startSec mod 60:02}]-[{endSec div 60}:{endSec mod 60:02}] Virality: {clip.viralityScore:.0f} (Engagement: {clip.engagementScore:.0f}){hookStr}"
   echo ""
 
 proc promptNextAction(): string =
@@ -325,7 +325,8 @@ Try:
       engagementScore: clip.engagementScore,
       adjustedScore: clip.adjustedScore,
       text: clip.text,
-      rank: clip.rank
+      rank: clip.rank,
+      viralityScore: clip.viralityScore
     ))
   saveProject(project, projectPath)
   if showProgress:

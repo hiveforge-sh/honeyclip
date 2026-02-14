@@ -22,6 +22,7 @@ type
     adjustedScore*: float32
     text*: string
     rank*: int
+    viralityScore*: float32
 
   ReframeSettings* = object
     ## Reframe configuration stored in project
@@ -76,7 +77,8 @@ proc projectClipToJson(clip: ProjectClip): JsonNode =
     "engagement_score": clip.engagementScore,
     "adjusted_score": clip.adjustedScore,
     "text": clip.text,
-    "rank": clip.rank
+    "rank": clip.rank,
+    "virality_score": clip.viralityScore
   }
 
 proc jsonToProjectClip(node: JsonNode): ProjectClip =
@@ -87,6 +89,7 @@ proc jsonToProjectClip(node: JsonNode): ProjectClip =
   result.adjustedScore = node["adjusted_score"].getFloat().float32
   result.text = node{"text"}.getStr("")
   result.rank = node{"rank"}.getInt(0)
+  result.viralityScore = node{"virality_score"}.getFloat(0.0).float32
 
 proc reframeSettingsToJson(settings: ReframeSettings): JsonNode =
   ## Serialize ReframeSettings to JSON object

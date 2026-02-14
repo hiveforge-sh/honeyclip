@@ -31,6 +31,11 @@ type
     engagementScore*: float32
     text*: string            # Truncated transcript for comment
     rank*: int               # Clip rank (1 = best)
+    viralityScore*: float32  # Virality score (0-100)
+    viralityHook*: float32   # Hook component
+    viralityFlow*: float32   # Flow component
+    viralityValue*: float32  # Value component
+    viralityTrend*: float32  # Trend component
 
 proc formatTimecode*(ms: int64, fps: float = 30.0): string =
   ## Format milliseconds as SMPTE timecode HH:MM:SS:FF
@@ -113,6 +118,7 @@ proc exportCMX3600EDL*(clips: seq[EDLClip], outputPath: string,
 
     # Comment lines with metadata (asterisk prefix)
     lines.add(&"* ENGAGEMENT_SCORE: {clip.engagementScore:.1f}")
+    lines.add(&"* VIRALITY_SCORE: {clip.viralityScore:.1f}")
     lines.add(&"* RANK: {clip.rank}")
 
     # Truncate text for comment (max 60 chars)
@@ -170,6 +176,13 @@ proc exportClipsJSON*(clips: seq[EDLClip], outputPath: string,
       "start_timecode": formatTimecode(clip.startMs),
       "end_timecode": formatTimecode(clip.endMs),
       "engagement_score": clip.engagementScore,
+      "virality_score": clip.viralityScore,
+      "virality_components": {
+        "hook": clip.viralityHook,
+        "flow": clip.viralityFlow,
+        "value": clip.viralityValue,
+        "trend": clip.viralityTrend
+      },
       "text": clip.text
     }
     root["clips"].add(clipJson)
@@ -196,7 +209,12 @@ proc loadClipsFromJson*(jsonPath: string): tuple[clips: seq[EDLClip], source: st
       endMs: clipJson["end_ms"].getBiggestInt(),
       engagementScore: clipJson["engagement_score"].getFloat().float32,
       text: clipJson.getOrDefault("text").getStr(""),
-      rank: clipJson["rank"].getInt()
+      rank: clipJson["rank"].getInt(),
+      viralityScore: clipJson{"virality_score"}.getFloat(0.0).float32,
+      viralityHook: clipJson{"virality_components"}{"hook"}.getFloat(0.0).float32,
+      viralityFlow: clipJson{"virality_components"}{"flow"}.getFloat(0.0).float32,
+      viralityValue: clipJson{"virality_components"}{"value"}.getFloat(0.0).float32,
+      viralityTrend: clipJson{"virality_components"}{"trend"}.getFloat(0.0).float32
     )
     clips.add(clip)
 
@@ -404,6 +422,7 @@ proc exportCMX3600EDLWithMarkers*(clips: seq[EDLClip], markers: seq[Marker],
 
     # Comment lines with metadata (asterisk prefix)
     lines.add(&"* ENGAGEMENT_SCORE: {clip.engagementScore:.1f}")
+    lines.add(&"* VIRALITY_SCORE: {clip.viralityScore:.1f}")
     lines.add(&"* RANK: {clip.rank}")
 
     # Truncate text for comment (max 60 chars)

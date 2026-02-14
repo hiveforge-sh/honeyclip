@@ -377,8 +377,8 @@ Examples:
     var nleMarkers: seq[Marker] = @[]
 
     if not noMarkers:
-      # 1. Engagement markers: from top clips by engagement score
-      var rankedClips = clips.sortedByIt(-it.engagementScore)
+      # 1. Engagement markers: from top clips by virality score
+      var rankedClips = clips.sortedByIt(-it.viralityScore)
       for rank, clip in rankedClips[0 ..< min(10, rankedClips.len)]:
         nleMarkers.add(createEngagementMarker(
           clip.startMs,
@@ -491,7 +491,8 @@ Examples:
         engagementScore: clip.engagementScore,
         adjustedScore: clip.engagementScore,
         text: clip.text,
-        rank: clip.rank
+        rank: clip.rank,
+        viralityScore: clip.viralityScore
       ))
 
     # Create HoneyclipProject and save it
@@ -635,7 +636,14 @@ Examples:
       engagementScore: clip.engagementScore,
       adjustedScore: clip.engagementScore,
       text: clip.text,
-      rank: clip.rank
+      rank: clip.rank,
+      viralityScore: clip.viralityScore,
+      viralityComponents: ViralityComponents(
+        hook: clip.viralityHook,
+        flow: clip.viralityFlow,
+        value: clip.viralityValue,
+        trend: clip.viralityTrend
+      )
     ))
 
   let results = batchExportMultiAspect(inputPath, exportClips, multiParams,

@@ -28,7 +28,7 @@ proc generateOutputPath*(inputPath: string, outputDir: string, ext: string): str
 proc printClipList*(clips: seq[Clip], inputPath: string) =
   ## Print detected clips in human-readable format
   echo ""
-  echo &"Detected Clips ({clips.len} total)"
+  echo &"Detected Clips ({clips.len} total, sorted by virality)"
   echo "=========================="
   echo ""
 
@@ -38,7 +38,8 @@ proc printClipList*(clips: seq[Clip], inputPath: string) =
     let duration = (clip.endMs - clip.startMs) div 1000
     let hookStr = if clip.hasHook: " [HOOK]" else: ""
 
-    echo &"  #{clip.rank}: {startTime}-{endTime} ({duration}s) Score: {clip.engagementScore:.0f}{hookStr}"
+    echo &"  #{clip.rank}: {startTime}-{endTime} ({duration}s) Virality: {clip.viralityScore:.0f}{hookStr}"
+    echo &"      Hook: {clip.viralityComponents.hook:.0f}  Flow: {clip.viralityComponents.flow:.0f}  Value: {clip.viralityComponents.value:.0f}  Trend: {clip.viralityComponents.trend:.0f}"
 
     # Truncate text
     if clip.text.len > 0:
@@ -325,7 +326,12 @@ Workflow:
           endMs: clip.endMs,
           engagementScore: clip.engagementScore,
           text: clip.text,
-          rank: clip.rank
+          rank: clip.rank,
+          viralityScore: clip.viralityScore,
+          viralityHook: clip.viralityComponents.hook,
+          viralityFlow: clip.viralityComponents.flow,
+          viralityValue: clip.viralityComponents.value,
+          viralityTrend: clip.viralityComponents.trend
         ))
 
       # Export EDL
