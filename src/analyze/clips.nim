@@ -9,7 +9,7 @@
 ## The multi-signal approach produces clips that feel like natural "moments"
 ## suitable for social media (TikTok, Reels, Shorts).
 
-import std/[algorithm, strformat, strutils, osproc, os]
+import std/[algorithm, strformat, strutils, osproc, os, sets, math]
 import engagement_types
 import ../exports/presets
 import ../reframe/crop
@@ -361,14 +361,14 @@ proc rankClips*(clips: seq[Clip], params: ClipRankingParams): seq[Clip] =
   ## Rank clips with overlap penalty to promote variety
   ##
   ## Algorithm:
-  ## 1. Sort candidates by engagement score (descending)
+  ## 1. Sort candidates by virality score (descending)
   ## 2. For each candidate, calculate overlap with already-selected clips
   ## 3. Apply penalty for overlapping clips (IoU * penalty)
   ## 4. Add hook boost if clip has hook
   ## 5. Select top N clips with positive adjusted scores
   ##
   ## CONTEXT.md decisions:
-  ## - "Default to top 5 clips by engagement score"
+  ## - "Default to top 5 clips by virality score"
   ## - "Promote variety: reduce score of clips that overlap significantly"
   ## - "When clips overlap in time, prefer the longer clip"
   ## - "Slight boost for hook segments"
@@ -379,15 +379,15 @@ proc rankClips*(clips: seq[Clip], params: ClipRankingParams): seq[Clip] =
   var ranked: seq[Clip] = @[]
   var candidates = clips
 
-  # Sort by engagement score descending
-  candidates.sort(proc(a, b: Clip): int = cmp(b.engagementScore, a.engagementScore))
+  # Sort by virality score descending
+  candidates.sort(proc(a, b: Clip): int = cmp(b.viralityScore, a.viralityScore))
 
   for candidate in candidates:
     if ranked.len >= params.topN:
       break
 
-    # Start with base engagement score
-    var adjustedScore = candidate.engagementScore
+    # Start with base virality score
+    var adjustedScore = candidate.viralityScore
 
     # Add hook boost
     if candidate.hasHook:
@@ -417,6 +417,93 @@ proc rankClips*(clips: seq[Clip], params: ClipRankingParams): seq[Clip] =
     ranked[i].rank = i + 1
 
   return ranked
+
+# ===== Virality scoring =====
+
+proc calculateHookScore(firstSegment: EngagementSegment): float32 =
+  ## Calculate hook score from first segment
+  ## Base score + bonus for detected hook patterns
+  result = firstSegment.score
+  if firstSegment.hasHook:
+    result = min(100.0f, result + 15.0f)
+
+proc calculateFlowScore(segments: seq[EngagementSegment]): float32 =
+  ## Calculate flow score: average engagement with variance penalty
+  ## Penalizes inconsistent retention (high variance in segment scores)
+  if segments.len == 0:
+    return 0.0f
+
+  # Calculate average score
+  var avgScore = 0.0f
+  for seg in segments:
+    avgScore += seg.score
+  avgScore /= segments.len.float32
+
+  # Calculate standard deviation
+  var variance = 0.0f
+  for seg in segments:
+    let diff = seg.score - avgScore
+    variance += diff * diff
+  variance /= segments.len.float32
+  let stdDev = sqrt(variance)
+
+  # Apply variance penalty (capped at 30 points)
+  let flowPenalty = min(stdDev * 0.5f, 30.0f)
+
+  result = max(0.0f, avgScore - flowPenalty)
+
+proc calculateValueScore(segments: seq[EngagementSegment], maxFaceCount: int): float32 =
+  ## Calculate value score: average engagement + face presence boost
+  ## Face presence indicates human-centered content (higher value)
+  if segments.len == 0:
+    return 0.0f
+
+  # Calculate average score
+  var avgScore = 0.0f
+  for seg in segments:
+    avgScore += seg.score
+  avgScore /= segments.len.float32
+
+  result = avgScore
+
+  # Add face boost (capped at 15 points)
+  if maxFaceCount > 0:
+    let faceBoost = min(maxFaceCount.float32 * 3.0f, 15.0f)
+    result = min(100.0f, result + faceBoost)
+
+proc calculateTrendScore(segments: seq[EngagementSegment]): float32 =
+  ## Calculate trend score based on hook pattern diversity
+  ## More diverse patterns = higher originality/authenticity
+  var uniquePatterns: HashSet[string]
+
+  for seg in segments:
+    for pattern in seg.hookMatches:
+      uniquePatterns.incl(pattern)
+
+  if uniquePatterns.len == 0:
+    return 50.0f  # Neutral score for no hooks
+
+  # More diverse patterns = higher trend score
+  # 1 pattern = 33, 2 patterns = 67, 3+ patterns = 100
+  result = min(100.0f, uniquePatterns.len.float32 * 33.33f)
+
+proc calculateViralityComponents(segments: seq[EngagementSegment], maxFaceCount: int): ViralityComponents =
+  ## Calculate all four virality components from clip segments
+  if segments.len == 0:
+    return ViralityComponents(hook: 0.0f, flow: 0.0f, value: 0.0f, trend: 0.0f)
+
+  result.hook = calculateHookScore(segments[0])
+  result.flow = calculateFlowScore(segments)
+  result.value = calculateValueScore(segments, maxFaceCount)
+  result.trend = calculateTrendScore(segments)
+
+proc combineViralityScore(components: ViralityComponents): float32 =
+  ## Combine virality components with research-backed weights
+  ## Hook 35%, Flow 30%, Value 25%, Trend 10%
+  result = (components.hook * 0.35f +
+            components.flow * 0.30f +
+            components.value * 0.25f +
+            components.trend * 0.10f)
 
 # ===== Clip extraction =====
 
@@ -474,6 +561,7 @@ proc detectClips*(timeline: EngagementTimeline,
     var texts: seq[string] = @[]
     var hasHook = false
     var maxFaceCount = 0
+    var clipSegments: seq[EngagementSegment] = @[]
 
     for seg in timeline.segments:
       # Check if segment overlaps with clip
@@ -483,6 +571,7 @@ proc detectClips*(timeline: EngagementTimeline,
         totalMotionScore += seg.motionScore
         totalSpeechScore += seg.speechScore
         segmentCount += 1
+        clipSegments.add(seg)
 
         if seg.text.len > 0:
           texts.add(seg.text)
@@ -497,6 +586,10 @@ proc detectClips*(timeline: EngagementTimeline,
     if segmentCount == 0:
       continue
 
+    # Calculate virality components and score
+    let components = calculateViralityComponents(clipSegments, maxFaceCount)
+    let viralityScore = combineViralityScore(components)
+
     # Create clip with averaged scores
     result.add(Clip(
       startMs: startMs,
@@ -509,7 +602,9 @@ proc detectClips*(timeline: EngagementTimeline,
       speechScore: totalSpeechScore / segmentCount.float32,
       hasHook: hasHook,
       faceCount: maxFaceCount,
-      rank: 0  # Will be set during ranking
+      rank: 0,  # Will be set during ranking
+      viralityScore: viralityScore,
+      viralityComponents: components
     ))
 
 # ===== Clip export =====

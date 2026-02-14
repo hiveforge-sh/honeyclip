@@ -26,7 +26,7 @@ import ../src/render/scoreviz
 import ../src/metadata/types as metadataTypes
 import ../src/metadata/apply
 import ../src/analyze/hook_schema
-import ../src/batch/[template, discover, checkpoint]
+import ../src/batch/[templates, discover, checkpoint]
 
 # Include test fixture utilities for tolerance-based assertions
 include fixtures/test_utils
@@ -1522,9 +1522,9 @@ suite "clips module":
 
   test "rankClips overlap penalty":
     var testClips = @[
-      clips.Clip(startMs: 0, endMs: 30000, engagementScore: 90.0f),
-      clips.Clip(startMs: 10000, endMs: 40000, engagementScore: 85.0f),  # Overlaps with first
-      clips.Clip(startMs: 50000, endMs: 80000, engagementScore: 80.0f)   # No overlap
+      clips.Clip(startMs: 0, endMs: 30000, engagementScore: 90.0f, viralityScore: 90.0f),
+      clips.Clip(startMs: 10000, endMs: 40000, engagementScore: 85.0f, viralityScore: 85.0f),  # Overlaps with first
+      clips.Clip(startMs: 50000, endMs: 80000, engagementScore: 80.0f, viralityScore: 80.0f)   # No overlap
     ]
     var params = defaultClipRankingParams()
     params.topN = 3
