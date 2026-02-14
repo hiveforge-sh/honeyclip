@@ -11,21 +11,21 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 16 - Batch Processing Foundation
-Plan: 01/03
+Plan: 02/03
 Status: In Progress
-Last activity: 2026-02-14 — Plan 16-01 complete (template parser and discovery)
+Last activity: 2026-02-14 — Plan 16-02 complete (checkpoint/resume and parallel batch runner)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
 Progress v2.0: [██████████                                      ] 20% (2/10 phases)
-Progress Phase 16: [████████████████                                ] 33% (1/3 plans)
+Progress Phase 16: [████████████████████████████████                ] 67% (2/3 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 63
-- Average duration: 3.3 min
-- Total execution time: ~3.7 hours
+- Total plans completed: 64
+- Average duration: 3.2 min
+- Total execution time: ~3.8 hours
 
 **Milestones:**
 
@@ -33,17 +33,17 @@ Progress Phase 16: [████████████████            
 |-----------|--------|-------|----------|---------|
 | v1.0 Engagement Analysis | 1-10 | 49 | 4 days | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | 1 day | 2026-02-05 |
-| v2.0 Workflow, Performance & AI | 15-24 | 4 | In progress | TBD |
-| **Total** | **24** | **63** | **5 days** | — |
+| v2.0 Workflow, Performance & AI | 15-24 | 5 | In progress | TBD |
+| **Total** | **24** | **64** | **5 days** | — |
 
 **Recent Plans:**
 
 | Phase-Plan | Duration | Tasks | Files | Completed |
 |------------|----------|-------|-------|-----------|
-| 15-01 | 128s | 2 | 2 | 2026-02-14 |
 | 15-02 | 108s | 2 | 2 | 2026-02-13 |
 | 15-03 | 253s | 1 | 2 | 2026-02-14 |
 | 16-01 | 123s | 2 | 6 | 2026-02-14 |
+| 16-02 | 132s | 2 | 5 | 2026-02-14 |
 
 ## Accumulated Context
 
@@ -76,6 +76,8 @@ Major architectural decisions across milestones:
 - Bounded decode queue for OOM prevention (15-02: maxQueueFrames parameter)
 - Template to CLI args conversion (16-01: defer validation to existing CLI parsing, avoid duplication)
 - [Phase 15]: Added info() logging proc to log.nim for consistency with debug/warning/error pattern
+- [Phase 16]: Subprocess-based parallel execution for process isolation
+- [Phase 16]: Chunk-based checkpoint saves for resume granularity
 
 ### Pending Todos
 
@@ -90,9 +92,9 @@ None — all tech debt items from v1.0 addressed in v1.1.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 16-01-PLAN.md
+Stopped at: Completed 16-02-PLAN.md
 Resume file: None
-Next: Execute Plan 16-02 (batch runner with parallel execution)
+Next: Execute Plan 16-03 (batch integration tests and documentation)
 
 **Project Status: v2.0 IN PROGRESS**
 
@@ -101,8 +103,9 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15 execution complet
 - Plan 15-02: Complete (Frame Buffer Pooling) ✓
 - Plan 15-03: Complete (GPU Runtime & Buffer Pool Tests) ✓
 - Plan 16-01: Complete (Template Parser and Discovery) ✓
+- Plan 16-02: Complete (Checkpoint/Resume and Parallel Batch Runner) ✓
 
-**Phase 16 IN PROGRESS** - Batch processing foundation started with TOML template parsing, video file discovery, and batch CLI entry point. Parallel execution runner pending in Plan 16-02.
+**Phase 16 IN PROGRESS** - Batch processing foundation nearly complete. TOML template parsing, file discovery, parallel execution with malebolgia, checkpoint/resume system all operational. Integration tests and documentation pending in Plan 16-03.
 
 ---
-*Updated: 2026-02-14 after Plan 16-01 execution*
+*Updated: 2026-02-14 after Plan 16-02 execution*
