@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, batch, cache, levels, subdump, transcript, whisper, caption, chapters as chaptersCmd, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd, analyze, meta]
+import cmds/[info, desc, batch, cache, levels, subdump, transcript, whisper, caption, chapters as chaptersCmd, engagement, clips as clipsCmd, preview as previewCmd, reframe as reframeCmd, exportcmd, analyze, meta]
 import util/[color, fun]
 import palet/edit
 import analyze/presets
@@ -33,6 +33,7 @@ const cmdHandlers: seq[Command] = @[
   ("info", info.main),
   ("levels", levels.main),
   ("meta", meta.main),
+  ("preview", previewCmd.main),
   ("reframe", reframeCmd.main),
   ("subdump", subdump.main),
   ("transcript", transcript.main),
@@ -359,6 +360,7 @@ Commands:
   export      Export clips with multi-aspect and preview support
   info        Show media file information
   levels      Show audio levels
+  preview     Generate 720p proxy for fast review
   reframe     Auto-reframe video for different aspect ratios
   subdump     Extract subtitles from video
   transcript  Extract transcript from video
