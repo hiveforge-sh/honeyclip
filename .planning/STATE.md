@@ -10,22 +10,22 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: 19 - Brand Templates
-Plan: 03/03
-Status: Complete
-Last activity: 2026-02-15 — Plan 19-03 complete (brand template unit tests)
+Phase: 20 - Preview Generation
+Plan: 01/02
+Status: In Progress
+Last activity: 2026-02-15 — Plan 20-01 complete (proxy preview generation)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
-Progress v2.0: [████████████████████████                          ] 50% (5/10 phases)
-Progress Phase 19: [████████████████████████████████████████████████] 100% (3/3 plans)
+Progress v2.0: [█████████████████████████                         ] 55% (5.5/10 phases)
+Progress Phase 20: [█████████████████████████                     ] 50% (1/2 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 73
-- Average duration: 3.6 min
-- Total execution time: ~4.7 hours
+- Total plans completed: 74
+- Average duration: 3.5 min
+- Total execution time: ~4.8 hours
 
 **Milestones:**
 
@@ -52,6 +52,7 @@ Progress Phase 19: [████████████████████
 | 19-01 | 122s | 2 | 4 | 2026-02-15 |
 | 19-02 | 89s | 2 | 2 | 2026-02-15 |
 | 19-03 | 1235s | 1 | 1 | 2026-02-15 |
+| 20-01 | 149s | 2 | 3 | 2026-02-15 |
 
 ## Accumulated Context
 
@@ -101,10 +102,13 @@ Major architectural decisions across milestones:
 - [Phase 19]: Processing order: edit -> watermark -> intro/outro concat
 - [Phase 19-03]: Temp directory cleanup via try/except CatchableError for test reliability
 - [Phase 19-03]: Edge case test coverage pattern (empty, invalid, disabled, defaults)
+- [Phase 20-01]: Backend-specific bitrate modes: Hardware encoders use VBR 2M, CPU uses CRF 28
+- [Phase 20-01]: fast_bilinear scaling for proxy generation (fastest algorithm, quality secondary to speed)
+- [Phase 20-01]: Progress parsing from FFmpeg stderr (time= and speed= patterns for live updates)
 
 ### Pending Todos
 
-None currently. Phase 19 complete (all 3 plans executed).
+None currently. Phase 20 in progress (1/2 plans executed).
 
 ### Blockers/Concerns
 
@@ -115,9 +119,9 @@ None — all tech debt items from v1.0 addressed in v1.1.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 19-03-PLAN.md
+Stopped at: Completed 20-01-PLAN.md
 Resume file: None
-Next: Phase 20 (next phase)
+Next: Plan 20-02 (multi-format proxy generation)
 
 **Project Status: v2.0 IN PROGRESS**
 
@@ -137,6 +141,7 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phases 15, 16, 17, 18, and
 - Plan 19-01: Complete (Brand Template Core Types) ✓
 - Plan 19-02: Complete (Brand Pipeline Integration) ✓
 - Plan 19-03: Complete (Brand Template Unit Tests) ✓
+- Plan 20-01: Complete (Proxy Preview Generation) ✓
 
 **Phase 16 COMPLETE** - Batch processing foundation fully operational and tested.
 
@@ -146,5 +151,7 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phases 15, 16, 17, 18, and
 
 **Phase 19 COMPLETE** - Brand template system for applying consistent watermarks, intro/outro clips, and caption styles across batch jobs. Complete with BrandConfig type system, brand modules (watermark filter generation, concat list builder, caption style overrides), FFmpeg pipeline integration, and comprehensive unit test coverage (26 tests across 4 suites).
 
+**Phase 20 IN PROGRESS** - Plan 20-01 complete: 720p proxy generation with GPU-aware encoder selection (NVENC/VideoToolbox/x264) and live progress reporting via `honeyclip preview` command. Hardware encoder selection with CPU fallback, FFmpeg stderr progress parsing, and automatic output path generation.
+
 ---
-*Updated: 2026-02-15 after Phase 19 Plan 02 execution*
+*Updated: 2026-02-15 after Phase 20 Plan 01 execution*
