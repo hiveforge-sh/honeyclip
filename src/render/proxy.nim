@@ -4,7 +4,7 @@
 ## Auto-selects hardware encoder (NVENC/VideoToolbox) when available,
 ## falls back to ultrafast CPU encoding.
 
-import std/[strformat, strutils, os, osproc, times]
+import std/[strformat, strutils, os, osproc, times, streams]
 import ../ml/gpu_runtime
 import ../render/previews
 import ../log
