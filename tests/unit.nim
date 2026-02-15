@@ -1,5 +1,5 @@
 import unittest
-import std/[os, tempfiles, strutils, xmltree, json, tables]
+import std/[os, tempfiles, strutils, xmltree, json, tables, sequtils]
 
 import ../src/[av, edit, ffmpeg, timeline]
 import ../src/util/[color, fun, lang]
@@ -28,6 +28,7 @@ import ../src/metadata/types as metadataTypes
 import ../src/metadata/apply
 import ../src/analyze/hook_schema
 import ../src/batch/[templates, discover, checkpoint]
+import ../src/brand/[watermark, concat, styles]
 
 # Include test fixture utilities for tolerance-based assertions
 include fixtures/test_utils
@@ -4461,3 +4462,249 @@ suite "Chapter Detection":
     check markers[0].markerType == mtSceneBoundary
     check markers[1].markerType == mtEngagementPeak
     check markers[2].markerType == mtSceneBoundary
+
+suite "Brand Config":
+  test "toArgs with watermark enabled":
+    var tmpl = BatchTemplate()
+    tmpl.brand.watermark.enabled = true
+    tmpl.brand.watermark.imagePath = "logo.png"
+    tmpl.brand.watermark.position = "bottom-right"
+
+    let args = toArgs(tmpl)
+    check "--watermark" in args
+    check "logo.png" in args
+    check "--watermark-position" in args
+    check "bottom-right" in args
+
+  test "toArgs with intro and outro":
+    var tmpl = BatchTemplate()
+    tmpl.brand.introOutro.introPath = "intro.mp4"
+    tmpl.brand.introOutro.outroPath = "outro.mp4"
+
+    let args = toArgs(tmpl)
+    check "--intro" in args
+    check "intro.mp4" in args
+    check "--outro" in args
+    check "outro.mp4" in args
+
+  test "toArgs with caption preset":
+    var tmpl = BatchTemplate()
+    tmpl.brand.captionStyle.preset = "modern"
+    tmpl.brand.captionStyle.fontSize = 72
+    tmpl.brand.captionStyle.color = "#ff0000"
+
+    let args = toArgs(tmpl)
+    check "--caption-preset" in args
+    check "modern" in args
+    check "--caption-size" in args
+    check "72" in args
+    check "--caption-color" in args
+    check "#ff0000" in args
+
+  test "toArgs with no brand config":
+    var tmpl = BatchTemplate()
+    tmpl.edit = "audio"
+
+    let args = toArgs(tmpl)
+    check args == @["--edit", "audio"]
+
+  test "toArgs with watermark disabled":
+    var tmpl = BatchTemplate()
+    tmpl.brand.watermark.enabled = false
+    tmpl.brand.watermark.imagePath = "logo.png"
+
+    let args = toArgs(tmpl)
+    check "--watermark" notin args
+
+  test "validateTemplate warns on watermark without image":
+    var tmpl = BatchTemplate()
+    tmpl.brand.watermark.enabled = true
+    tmpl.brand.watermark.imagePath = ""
+
+    let warnings = validateTemplate(tmpl)
+    check warnings.len > 0
+    check warnings.anyIt("watermark" in it.toLowerAscii())
+
+suite "Watermark Filter":
+  test "buildWatermarkFilter bottom-right":
+    let filter = buildWatermarkFilter("logo.png", wpBottomRight, 10, 10, 0.1, 1.0)
+    check "overlay=W-w-10:H-h-10" in filter
+    check "[0:v][1:v]" in filter  # Full opacity, no colorchannelmixer
+
+  test "buildWatermarkFilter top-left":
+    let filter = buildWatermarkFilter("logo.png", wpTopLeft, 20, 20, 0.1, 1.0)
+    check "overlay=20:20" in filter
+
+  test "buildWatermarkFilter center":
+    let filter = buildWatermarkFilter("logo.png", wpCenter)
+    check "overlay=(W-w)/2:(H-h)/2" in filter
+
+  test "buildWatermarkFilter with opacity":
+    let filter = buildWatermarkFilter("logo.png", wpBottomRight, 10, 10, 0.1, 0.7)
+    check "colorchannelmixer=aa=0.7" in filter
+    check "[wm]" in filter  # Opacity pipeline label
+
+  test "buildWatermarkFilter empty path returns empty":
+    let filter = buildWatermarkFilter("", wpBottomRight)
+    check filter == ""
+
+  test "parseWatermarkPosition valid values":
+    check parseWatermarkPosition("top-left") == wpTopLeft
+    check parseWatermarkPosition("bottom-right") == wpBottomRight
+    check parseWatermarkPosition("center") == wpCenter
+
+  test "parseWatermarkPosition unknown defaults to bottom-right":
+    check parseWatermarkPosition("invalid") == wpBottomRight
+    check parseWatermarkPosition("") == wpBottomRight
+
+suite "Concat List":
+  test "buildConcatList with intro and outro":
+    let tempDir = createTempDir("honeyclip_test_", "")
+    try:
+      # Create temp video files (just touch them for existence check)
+      let introPath = joinPath(tempDir, "intro.mp4")
+      let videoPath = joinPath(tempDir, "video.mp4")
+      let outroPath = joinPath(tempDir, "outro.mp4")
+      writeFile(introPath, "")
+      writeFile(videoPath, "")
+      writeFile(outroPath, "")
+
+      let concatFile = buildConcatList(introPath, videoPath, outroPath, tempDir)
+      let content = readFile(concatFile)
+
+      # Check contents contain 3 file lines
+      let lines = content.splitLines().filterIt(it.len > 0)
+      check lines.len == 3
+      check "intro.mp4" in content
+      check "video.mp4" in content
+      check "outro.mp4" in content
+
+      # Clean up
+      cleanupConcatList(concatFile)
+      removeDir(tempDir)
+    except CatchableError:
+      removeDir(tempDir)
+      raise
+
+  test "buildConcatList with only intro":
+    let tempDir = createTempDir("honeyclip_test_", "")
+    try:
+      let introPath = joinPath(tempDir, "intro.mp4")
+      let videoPath = joinPath(tempDir, "video.mp4")
+      writeFile(introPath, "")
+      writeFile(videoPath, "")
+
+      let concatFile = buildConcatList(introPath, videoPath, "", tempDir)
+      let content = readFile(concatFile)
+
+      let lines = content.splitLines().filterIt(it.len > 0)
+      check lines.len == 2  # intro + video, no outro
+      check "intro.mp4" in content
+      check "video.mp4" in content
+      check "outro.mp4" notin content
+
+      cleanupConcatList(concatFile)
+      removeDir(tempDir)
+    except CatchableError:
+      removeDir(tempDir)
+      raise
+
+  test "buildConcatList with only outro":
+    let tempDir = createTempDir("honeyclip_test_", "")
+    try:
+      let videoPath = joinPath(tempDir, "video.mp4")
+      let outroPath = joinPath(tempDir, "outro.mp4")
+      writeFile(videoPath, "")
+      writeFile(outroPath, "")
+
+      let concatFile = buildConcatList("", videoPath, outroPath, tempDir)
+      let content = readFile(concatFile)
+
+      let lines = content.splitLines().filterIt(it.len > 0)
+      check lines.len == 2  # video + outro, no intro
+      check "intro.mp4" notin content
+      check "video.mp4" in content
+      check "outro.mp4" in content
+
+      cleanupConcatList(concatFile)
+      removeDir(tempDir)
+    except CatchableError:
+      removeDir(tempDir)
+      raise
+
+  test "buildConcatList video only":
+    let tempDir = createTempDir("honeyclip_test_", "")
+    try:
+      let videoPath = joinPath(tempDir, "video.mp4")
+      writeFile(videoPath, "")
+
+      let concatFile = buildConcatList("", videoPath, "", tempDir)
+      let content = readFile(concatFile)
+
+      let lines = content.splitLines().filterIt(it.len > 0)
+      check lines.len == 1  # video only
+      check "video.mp4" in content
+
+      cleanupConcatList(concatFile)
+      removeDir(tempDir)
+    except CatchableError:
+      removeDir(tempDir)
+      raise
+
+  test "validateConcatFiles reports missing files":
+    let errors = validateConcatFiles(@["/nonexistent/file.mp4"])
+    check errors.len > 0
+    check "not found" in errors[0].toLowerAscii()
+
+  test "validateConcatFiles passes for empty list":
+    let errors = validateConcatFiles(@[])
+    check errors.len == 0
+
+suite "Caption Style Presets":
+  test "toCaptionStyle with modern preset":
+    var overrides = CaptionOverrides(preset: "modern")
+    let style = toCaptionStyle(overrides)
+
+    check style.fontSize == 72
+    check style.position == cpCenter
+    check style.backgroundBox == true
+
+  test "toCaptionStyle with traditional preset":
+    var overrides = CaptionOverrides(preset: "traditional")
+    let style = toCaptionStyle(overrides)
+
+    check style.fontSize == 60
+    check style.position == cpBottomCenter
+    check style.outline == true
+
+  test "toCaptionStyle with overrides on preset":
+    var overrides = CaptionOverrides(preset: "modern", fontSize: 48, color: "#ff0000")
+    let style = toCaptionStyle(overrides)
+
+    check style.fontSize == 48  # overridden
+    check style.color == "#ff0000"  # overridden
+    check style.position == cpCenter  # from preset, not overridden
+
+  test "toCaptionStyle with empty preset uses traditional":
+    var overrides = CaptionOverrides()
+    let style = toCaptionStyle(overrides)
+
+    # Should match traditional preset defaults
+    check style.fontSize == 60
+    check style.position == cpBottomCenter
+    check style.outline == true
+
+  test "toCaptionStyle position override":
+    var overrides = CaptionOverrides(preset: "traditional", position: "center")
+    let style = toCaptionStyle(overrides)
+
+    check style.position == cpCenter  # overridden from traditional's bottom
+
+  test "parseCaptionPosition valid values":
+    check parseCaptionPosition("bottom") == cpBottomCenter
+    check parseCaptionPosition("center") == cpCenter
+    check parseCaptionPosition("top") == cpTopCenter
+
+  test "parseCaptionPosition unknown defaults to bottom":
+    check parseCaptionPosition("") == cpBottomCenter
+    check parseCaptionPosition("invalid") == cpBottomCenter
