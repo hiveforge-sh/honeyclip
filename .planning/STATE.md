@@ -10,22 +10,22 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: 17 - Virality Scoring
-Plan: 03/03
-Status: Complete
-Last activity: 2026-02-14 — Plan 17-03 complete (virality scoring unit tests)
+Phase: 18 - Chapter Detection
+Plan: 01/03
+Status: In Progress
+Last activity: 2026-02-15 — Plan 18-01 complete (chapter detection core)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
 Progress v2.0: [███████████████                                 ] 30% (3/10 phases)
-Progress Phase 17: [████████████████████████████████████████████████] 100% (3/3 plans)
+Progress Phase 18: [████████████████                                ] 33% (1/3 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 67
+- Total plans completed: 68
 - Average duration: 3.5 min
-- Total execution time: ~4.4 hours
+- Total execution time: ~4.5 hours
 
 **Milestones:**
 
@@ -33,8 +33,8 @@ Progress Phase 17: [████████████████████
 |-----------|--------|-------|----------|---------|
 | v1.0 Engagement Analysis | 1-10 | 49 | 4 days | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | 1 day | 2026-02-05 |
-| v2.0 Workflow, Performance & AI | 15-24 | 8 | In progress | TBD |
-| **Total** | **24** | **68** | **5 days** | — |
+| v2.0 Workflow, Performance & AI | 15-24 | 9 | In progress | TBD |
+| **Total** | **24** | **69** | **5 days** | — |
 
 **Recent Plans:**
 
@@ -45,9 +45,11 @@ Progress Phase 17: [████████████████████
 | 16-01 | 123s | 2 | 6 | 2026-02-14 |
 | 16-02 | 132s | 2 | 5 | 2026-02-14 |
 | 16-03 | 55s | 1 | 1 | 2026-02-14 |
+| 16-03 | 55s | 1 | 1 | 2026-02-14 |
 | 17-01 | 859s | 2 | 6 | 2026-02-14 |
 | 17-02 | 300s | 2 | 5 | 2026-02-14 |
 | 17-03 | 584s | 1 | 2 | 2026-02-14 |
+| 18-01 | 102s | 2 | 1 | 2026-02-15 |
 
 ## Accumulated Context
 
@@ -85,10 +87,13 @@ Major architectural decisions across milestones:
 - [Phase 17]: Four-component virality model (hook, flow, value, trend) with research-backed weights
 - [Phase 17-03]: Export virality calculation procs for unit testing access
 - [Phase 17-03]: Use checkApprox helper for float tolerance comparisons
+- [Phase 18-01]: Default 30s minimum spacing between chapters for usable navigation
+- [Phase 18-01]: Combined mode prefers engagement markers over scene markers during deduplication
+- [Phase 18-01]: Chapter titles use engagement labels (High/Medium/Low) for context
 
 ### Pending Todos
 
-None currently. Phase 17 complete. Ready for Phase 18.
+None currently. Phase 18 Plan 01 complete. Ready for Plan 02 (scene detection).
 
 ### Blockers/Concerns
 
@@ -98,14 +103,14 @@ None — all tech debt items from v1.0 addressed in v1.1.
 
 ## Session Continuity
 
-Last session: 2026-02-14
-Stopped at: Completed 17-03-PLAN.md
+Last session: 2026-02-15
+Stopped at: Completed 18-01-PLAN.md
 Resume file: None
-Next: Phase 18
+Next: Phase 18 Plan 02
 
 **Project Status: v2.0 IN PROGRESS**
 
-All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15 and Phase 16 execution complete. Phase 17 complete.
+All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15, 16, and 17 execution complete. Phase 18 in progress.
 - Plan 15-01: Complete (GPU Runtime Detection) ✓
 - Plan 15-02: Complete (Frame Buffer Pooling) ✓
 - Plan 15-03: Complete (GPU Runtime & Buffer Pool Tests) ✓
@@ -115,10 +120,13 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15 and Phase 16 exec
 - Plan 17-01: Complete (Virality Scoring Core Logic) ✓
 - Plan 17-02: Complete (Virality CLI Output and Exports) ✓
 - Plan 17-03: Complete (Virality Scoring Unit Tests) ✓
+- Plan 18-01: Complete (Chapter Detection Core) ✓
 
 **Phase 16 COMPLETE** - Batch processing foundation fully operational and tested.
 
 **Phase 17 COMPLETE** - Four-component virality scoring (hook, flow, value, trend) with research-backed weights integrated into clip detection and ranking pipeline. Clips ranked by virality score instead of raw engagement. CLI output displays virality scores with component breakdown. JSON/EDL exports include virality fields. Project files store virality scores. Comprehensive unit test coverage (18 tests) for all virality components.
 
+**Phase 18 IN PROGRESS** - Plan 01 complete: Chapter detection core module with local maxima engagement peak detection, three-mode chapter generation (scene/engagement/combined), and export conversion to ChapterMarker and Marker formats.
+
 ---
-*Updated: 2026-02-14 after Phase 17 execution*
+*Updated: 2026-02-15 after Phase 18 Plan 01 execution*
