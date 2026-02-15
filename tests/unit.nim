@@ -17,6 +17,7 @@ import ../src/render/captions
 import ../src/analyze/engagement_types
 import ../src/analyze/hooks
 import ../src/analyze/clips
+import ../src/analyze/chapters
 import ../src/exports/edl
 import ../src/reframe/compositor
 import ../src/reframe/crop
@@ -4191,3 +4192,272 @@ suite "Virality Scoring":
     check ranked[1].rank == 2
     check ranked[2].viralityScore == 70.0f
     check ranked[2].rank == 3
+
+# Chapter Detection Tests
+suite "Chapter Detection":
+  # Helper: Create test timeline with segments of given scores
+  proc makeTimeline(scores: seq[float32], segDurationMs: int64 = 10000): EngagementTimeline =
+    result.segments = @[]
+    result.duration = int64(scores.len) * segDurationMs
+    result.avgScore = 0.0f
+    result.hookCount = 0
+    result.params = defaultEngagementParams()
+
+    for i, score in scores:
+      var seg = newEngagementSegment(int64(i) * segDurationMs, int64(i + 1) * segDurationMs)
+      seg.score = score
+      result.segments.add(seg)
+
+    # Calculate average score
+    if scores.len > 0:
+      var sum = 0.0f
+      for score in scores:
+        sum += score
+      result.avgScore = sum / float32(scores.len)
+
+  # detectEngagementPeaks tests
+  test "detectEngagementPeaks empty timeline":
+    let timeline = makeTimeline(@[])
+    let peaks = detectEngagementPeaks(timeline)
+    check peaks.len == 0
+
+  test "detectEngagementPeaks single segment":
+    let timeline = makeTimeline(@[80.0f])
+    let peaks = detectEngagementPeaks(timeline)
+    check peaks.len == 0
+
+  test "detectEngagementPeaks two segments":
+    let timeline = makeTimeline(@[80.0f, 90.0f])
+    let peaks = detectEngagementPeaks(timeline)
+    check peaks.len == 0  # Need at least 3 for local maxima
+
+  test "detectEngagementPeaks clear peak in middle":
+    let timeline = makeTimeline(@[20.0f, 80.0f, 20.0f])
+    let peaks = detectEngagementPeaks(timeline, minScore = 60.0)
+    check peaks.len == 1
+    check peaks[0] == 10000  # Middle segment starts at 10000ms
+
+  test "detectEngagementPeaks multiple peaks with spacing":
+    let timeline = makeTimeline(@[20.0f, 80.0f, 20.0f, 30.0f, 90.0f, 30.0f])
+    let peaks = detectEngagementPeaks(timeline, minSpacingMs = 10000, minScore = 60.0)
+    check peaks.len == 2
+    check peaks[0] == 10000  # First peak at index 1
+    check peaks[1] == 40000  # Second peak at index 4
+
+  test "detectEngagementPeaks peaks too close together":
+    # Two peaks within minSpacingMs - should return only the higher one
+    let timeline = makeTimeline(@[20.0f, 80.0f, 30.0f, 90.0f, 20.0f])
+    let peaks = detectEngagementPeaks(timeline, minSpacingMs = 30000, minScore = 60.0)
+    check peaks.len == 1
+    check peaks[0] == 30000  # Should pick the 90.0 peak (higher score)
+
+  test "detectEngagementPeaks all scores below threshold":
+    let timeline = makeTimeline(@[30.0f, 50.0f, 40.0f, 55.0f, 35.0f])
+    let peaks = detectEngagementPeaks(timeline, minScore = 60.0)
+    check peaks.len == 0
+
+  test "detectEngagementPeaks maxPeaks limit":
+    # Create 5 clear peaks but limit to 2
+    let timeline = makeTimeline(@[
+      20.0f, 70.0f, 20.0f,  # Peak 1 (score 70)
+      20.0f, 80.0f, 20.0f,  # Peak 2 (score 80)
+      20.0f, 90.0f, 20.0f,  # Peak 3 (score 90)
+      20.0f, 85.0f, 20.0f,  # Peak 4 (score 85)
+      20.0f, 75.0f, 20.0f   # Peak 5 (score 75)
+    ])
+    let peaks = detectEngagementPeaks(timeline, minSpacingMs = 10000, minScore = 60.0, maxPeaks = 2)
+    check peaks.len == 2
+    # Should get the top 2 by score: 90 (index 7) and 85 (index 10), sorted chronologically
+    check peaks[0] == 70000  # Peak at index 7 (90.0 score)
+    check peaks[1] == 100000 # Peak at index 10 (85.0 score)
+
+  test "detectEngagementPeaks plateau handling":
+    # Plateaus: [50, 80, 80, 50] - neither 80 is a local max
+    let timeline = makeTimeline(@[50.0f, 80.0f, 80.0f, 50.0f])
+    let peaks = detectEngagementPeaks(timeline, minScore = 60.0)
+    check peaks.len == 0  # No local maxima (equal neighbors)
+
+  # generateChapters - scene mode tests
+  test "generateChapters scene mode basic":
+    let sceneTimes = @[0.0, 30.0, 60.0]  # In seconds
+    let timeline = makeTimeline(@[50.0f, 60.0f, 70.0f], segDurationMs = 30000)
+    var params = defaultChapterParams()
+    params.mode = "scene"
+    params.minSpacingMs = 10000
+
+    let chapters = generateChapters(sceneTimes, @[], timeline, params)
+    check chapters.len == 3
+    check chapters[0].startMs == 0
+    check chapters[0].endMs == 29999  # Next startMs - 1
+    check chapters[0].title == "Scene 1"
+    check chapters[0].source == csScene
+    check chapters[1].startMs == 30000
+    check chapters[1].endMs == 59999
+    check chapters[1].title == "Scene 2"
+    check chapters[2].startMs == 60000
+    check chapters[2].endMs == timeline.duration  # Last chapter ends at duration
+    check chapters[2].title == "Scene 3"
+
+  test "generateChapters scene mode empty":
+    let timeline = makeTimeline(@[50.0f])
+    var params = defaultChapterParams()
+    params.mode = "scene"
+
+    let chapters = generateChapters(@[], @[], timeline, params)
+    check chapters.len == 0
+
+  test "generateChapters scene mode spacing filter":
+    # Scenes at 0, 10, 100 - first two are within 30s minSpacing
+    let sceneTimes = @[0.0, 10.0, 100.0]
+    let timeline = makeTimeline(@[50.0f], segDurationMs = 150000)
+    var params = defaultChapterParams()
+    params.mode = "scene"
+    params.minSpacingMs = 30000
+
+    let chapters = generateChapters(sceneTimes, @[], timeline, params)
+    check chapters.len == 2  # 0 and 100 kept, 10 filtered out
+    check chapters[0].startMs == 0
+    check chapters[1].startMs == 100000
+
+  # generateChapters - engagement mode tests
+  test "generateChapters engagement mode basic":
+    let timeline = makeTimeline(@[20.0f, 85.0f, 30.0f, 75.0f, 25.0f], segDurationMs = 15000)
+    let engagementPeaks = @[15000'i64, 45000'i64]  # At segment indices 1 and 3
+    var params = defaultChapterParams()
+    params.mode = "engagement"
+
+    let chapters = generateChapters(@[], engagementPeaks, timeline, params)
+    check chapters.len == 2
+    check chapters[0].startMs == 15000
+    check chapters[0].endMs == 44999  # Next peak - 1
+    check chapters[0].source == csEngagement
+    check chapters[0].score == 85.0f  # Looked up from timeline
+    check "High engagement" in chapters[0].title  # Should have engagement label
+    check chapters[1].startMs == 45000
+    check chapters[1].endMs == timeline.duration
+    check chapters[1].score == 75.0f
+
+  # generateChapters - combined mode tests
+  test "generateChapters combined mode deduplication":
+    # Scene at 30000ms and engagement peak at 32000ms - within 5000ms dedupe window
+    let sceneTimes = @[30.0]  # 30 seconds = 30000ms
+    let timeline = makeTimeline(@[20.0f, 30.0f, 80.0f, 25.0f], segDurationMs = 10000)
+    let engagementPeaks = @[20000'i64]  # Segment index 2
+    var params = defaultChapterParams()
+    params.mode = "combined"
+    params.dedupeWindowMs = 15000  # Large enough to merge 20000 and 30000
+
+    let chapters = generateChapters(sceneTimes, engagementPeaks, timeline, params)
+    check chapters.len == 1  # Merged to single chapter
+    check chapters[0].source == csEngagement  # Engagement preferred over scene
+    check chapters[0].startMs == 20000
+
+  test "generateChapters combined mode no deduplication":
+    # Scene at 30000ms and engagement peak at 60000ms - outside dedupe window
+    let sceneTimes = @[30.0]
+    let timeline = makeTimeline(@[20.0f, 30.0f, 40.0f, 50.0f, 80.0f, 25.0f], segDurationMs = 10000)
+    let engagementPeaks = @[40000'i64]  # Segment index 4
+    var params = defaultChapterParams()
+    params.mode = "combined"
+    params.dedupeWindowMs = 5000
+
+    let chapters = generateChapters(sceneTimes, engagementPeaks, timeline, params)
+    check chapters.len == 2  # Both kept
+    check chapters[0].startMs == 30000
+    check chapters[0].source == csScene
+    check chapters[1].startMs == 40000
+    check chapters[1].source == csEngagement
+
+  test "generateChapters combined mode sorted chronologically":
+    # Engagement before scene - should be sorted
+    let sceneTimes = @[50.0]
+    let timeline = makeTimeline(@[20.0f, 80.0f, 30.0f, 40.0f, 50.0f, 60.0f], segDurationMs = 10000)
+    let engagementPeaks = @[10000'i64]
+    var params = defaultChapterParams()
+    params.mode = "combined"
+    params.dedupeWindowMs = 5000
+
+    let chapters = generateChapters(sceneTimes, engagementPeaks, timeline, params)
+    check chapters.len == 2
+    check chapters[0].startMs == 10000  # Engagement first
+    check chapters[1].startMs == 50000  # Scene second
+
+  test "generateChapters combined mode maxChapters limit":
+    # 6 markers total, limit to 3
+    let sceneTimes = @[10.0, 50.0, 90.0]
+    let timeline = makeTimeline(@[20.0f, 80.0f, 30.0f, 70.0f, 25.0f, 75.0f, 30.0f, 65.0f, 20.0f, 60.0f], segDurationMs = 10000)
+    let engagementPeaks = @[30000'i64, 70000'i64, 110000'i64]
+    var params = defaultChapterParams()
+    params.mode = "combined"
+    params.maxChapters = 3
+    params.minSpacingMs = 5000  # Allow close markers
+    params.dedupeWindowMs = 2000  # Minimal dedupe
+
+    let chapters = generateChapters(sceneTimes, engagementPeaks, timeline, params)
+    check chapters.len <= 3
+
+  # chaptersToMetadata tests
+  test "chaptersToMetadata basic conversion":
+    var chapters = @[
+      Chapter(startMs: 0, endMs: 29999, title: "Intro", source: csScene, score: 0.0f),
+      Chapter(startMs: 30000, endMs: 59999, title: "Peak #1 - High engagement", source: csEngagement, score: 85.0f)
+    ]
+
+    let metadata = chaptersToMetadata(chapters)
+    check metadata.len == 2
+    check metadata[0].startMs == 0
+    check metadata[0].endMs == 29999
+    check metadata[0].title == "Intro"
+    check metadata[1].startMs == 30000
+    check metadata[1].title == "Peak #1 - High engagement"
+
+  test "chaptersToMetadata empty input":
+    let chapters: seq[Chapter] = @[]
+    let metadata = chaptersToMetadata(chapters)
+    check metadata.len == 0
+
+  # chaptersToMarkers tests
+  test "chaptersToMarkers engagement chapter":
+    var chapters = @[
+      Chapter(startMs: 15000, endMs: 44999, title: "Peak #1 - High engagement", source: csEngagement, score: 85.0f)
+    ]
+
+    let markers = chaptersToMarkers(chapters)
+    check markers.len == 1
+    check markers[0].markerType == mtEngagementPeak
+    check markers[0].timestampMs == 15000
+    check markers[0].durationMs == 29999  # endMs - startMs
+    check markers[0].name == "Peak #1 - High engagement"
+    check "Score: 85/100" in markers[0].comment
+    check markers[0].color == getMarkerColor(mtEngagementPeak)
+
+  test "chaptersToMarkers scene chapter":
+    var chapters = @[
+      Chapter(startMs: 0, endMs: 29999, title: "Scene 1", source: csScene, score: 0.0f)
+    ]
+
+    let markers = chaptersToMarkers(chapters)
+    check markers.len == 1
+    check markers[0].markerType == mtSceneBoundary
+    check markers[0].timestampMs == 0
+    check markers[0].name == "Scene 1"
+    check "Scene boundary" in markers[0].comment
+    check markers[0].color == getMarkerColor(mtSceneBoundary)
+
+  test "chaptersToMarkers empty input":
+    let chapters: seq[Chapter] = @[]
+    let markers = chaptersToMarkers(chapters)
+    check markers.len == 0
+
+  test "chaptersToMarkers mixed sources":
+    var chapters = @[
+      Chapter(startMs: 0, endMs: 29999, title: "Scene 1", source: csScene, score: 0.0f),
+      Chapter(startMs: 30000, endMs: 59999, title: "Peak #1 - High engagement", source: csEngagement, score: 85.0f),
+      Chapter(startMs: 60000, endMs: 89999, title: "Scene 2", source: csScene, score: 0.0f)
+    ]
+
+    let markers = chaptersToMarkers(chapters)
+    check markers.len == 3
+    check markers[0].markerType == mtSceneBoundary
+    check markers[1].markerType == mtEngagementPeak
+    check markers[2].markerType == mtSceneBoundary
