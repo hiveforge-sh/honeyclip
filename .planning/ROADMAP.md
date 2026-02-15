@@ -182,6 +182,12 @@ Plans:
 
 **Requirements:** PREV-01, PREV-02
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 20-01-PLAN.md -- Proxy encoding pipeline with hardware encoder selection and preview CLI subcommand
+- [ ] 20-02-PLAN.md -- Unit tests for proxy generation module
+
 **Success Criteria:**
 1. User can generate 720p proxy preview of any input video
 2. Preview generation runs at 2-3x realtime speed (faster than playback)
