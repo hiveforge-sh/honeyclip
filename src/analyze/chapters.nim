@@ -104,3 +104,215 @@ proc detectEngagementPeaks*(timeline: EngagementTimeline,
   # Sort chronologically and return
   selected.sort()
   return selected
+
+proc generateChapters*(sceneTimes: seq[float64],
+                        engagementPeaks: seq[int64],
+                        timeline: EngagementTimeline,
+                        params: ChapterParams): seq[Chapter] =
+  ## Generate chapters from scene and engagement signals
+  ##
+  ## Modes:
+  ##   "scene" - Scene boundaries only
+  ##   "engagement" - Engagement peaks only
+  ##   "combined" - Merge both with deduplication (default)
+  ##
+  ## CRITICAL: Per RESEARCH.md Pitfall 4, endMs must be startMs of next chapter
+  ## minus 1 (not equal to next startMs). Last chapter endMs = timeline.duration.
+  ##
+  ## Args:
+  ##   sceneTimes: Scene change timestamps in seconds (float64)
+  ##   engagementPeaks: Engagement peak timestamps in milliseconds
+  ##   timeline: EngagementTimeline for score lookup and duration
+  ##   params: ChapterParams with mode and constraints
+  ##
+  ## Returns: Sequence of Chapter objects with proper timing and titles
+
+  var chapters: seq[Chapter] = @[]
+
+  case params.mode:
+  of "scene":
+    # Convert scene times from seconds to milliseconds
+    var sceneTimesMs: seq[int64] = @[]
+    for time in sceneTimes:
+      sceneTimesMs.add(int64(time * 1000.0))
+
+    # Filter scenes within minSpacingMs (keep first)
+    var filtered: seq[int64] = @[]
+    if sceneTimesMs.len > 0:
+      filtered.add(sceneTimesMs[0])
+
+    for i in 1 ..< sceneTimesMs.len:
+      if sceneTimesMs[i] - filtered[^1] >= params.minSpacingMs:
+        filtered.add(sceneTimesMs[i])
+
+    # Cap at maxChapters (keep evenly distributed if too many)
+    if filtered.len > params.maxChapters:
+      let step = filtered.len div params.maxChapters
+      var evenly: seq[int64] = @[]
+      for i in 0 ..< params.maxChapters:
+        evenly.add(filtered[i * step])
+      filtered = evenly
+
+    # Create chapters
+    for i, time in filtered:
+      let endMs = if i < filtered.len - 1:
+                    filtered[i+1] - 1
+                  else:
+                    timeline.duration
+      chapters.add(Chapter(
+        startMs: time,
+        endMs: endMs,
+        title: "Scene " & $(i + 1),
+        source: csScene,
+        score: 0.0f
+      ))
+
+  of "engagement":
+    # Use engagement peak timestamps directly
+    for i, peakTime in engagementPeaks:
+      # Find engagement score from timeline segments
+      var score = 0.0f
+      for seg in timeline.segments:
+        if peakTime >= seg.startMs and peakTime < seg.endMs:
+          score = seg.score
+          break
+
+      let endMs = if i < engagementPeaks.len - 1:
+                    engagementPeaks[i+1] - 1
+                  else:
+                    timeline.duration
+
+      let label = labelForScore(score)
+      chapters.add(Chapter(
+        startMs: peakTime,
+        endMs: endMs,
+        title: "Peak #" & $(i + 1) & " - " & label,
+        source: csEngagement,
+        score: score
+      ))
+
+  of "combined":
+    # Collect all scene times (as ms) and engagement peaks with source tags
+    type MarkerCandidate = tuple[time: int64, source: ChapterSource, score: float32]
+    var allMarkers: seq[MarkerCandidate] = @[]
+
+    # Add scene markers
+    for time in sceneTimes:
+      allMarkers.add((int64(time * 1000.0), csScene, 0.0f))
+
+    # Add engagement markers
+    for peakTime in engagementPeaks:
+      var score = 0.0f
+      for seg in timeline.segments:
+        if peakTime >= seg.startMs and peakTime < seg.endMs:
+          score = seg.score
+          break
+      allMarkers.add((peakTime, csEngagement, score))
+
+    # Sort by timestamp
+    allMarkers.sort(proc(a, b: MarkerCandidate): int =
+      cmp(a.time, b.time))
+
+    # Deduplicate: if two markers within dedupeWindowMs, keep engagement one
+    var i = 0
+    while i < allMarkers.len:
+      if i < allMarkers.len - 1:
+        let curr = allMarkers[i]
+        let next = allMarkers[i+1]
+        if next.time - curr.time < params.dedupeWindowMs:
+          # Keep engagement marker over scene marker
+          if curr.source == csEngagement:
+            allMarkers.delete(i+1)
+          else:
+            allMarkers.delete(i)
+          continue
+      i += 1
+
+    # Apply minSpacing filter across combined list
+    var spaced: seq[MarkerCandidate] = @[]
+    if allMarkers.len > 0:
+      spaced.add(allMarkers[0])
+
+    for marker in allMarkers[1..^1]:
+      if marker.time - spaced[^1].time >= params.minSpacingMs:
+        spaced.add(marker)
+
+    # Cap at maxChapters
+    if spaced.len > params.maxChapters:
+      let step = spaced.len div params.maxChapters
+      var capped: seq[MarkerCandidate] = @[]
+      for i in 0 ..< params.maxChapters:
+        capped.add(spaced[i * step])
+      spaced = capped
+
+    # Generate chapters with proper titles and endMs
+    var engagementCount = 0
+    var sceneCount = 0
+    for i, marker in spaced:
+      let endMs = if i < spaced.len - 1:
+                    spaced[i+1].time - 1
+                  else:
+                    timeline.duration
+
+      var title: string
+      if marker.source == csEngagement:
+        engagementCount += 1
+        let label = labelForScore(marker.score)
+        title = "Peak #" & $engagementCount & " - " & label
+      else:
+        sceneCount += 1
+        title = "Scene " & $sceneCount
+
+      chapters.add(Chapter(
+        startMs: marker.time,
+        endMs: endMs,
+        title: title,
+        source: marker.source,
+        score: marker.score
+      ))
+
+  else:
+    # Unknown mode, return empty
+    discard
+
+  return chapters
+
+proc chaptersToMetadata*(chapters: seq[Chapter]): seq[ChapterMarker] =
+  ## Convert Chapters to ChapterMarker for MP4 metadata export
+  ##
+  ## Used by generateFFMetadata in metadata/apply.nim
+  result = @[]
+  for chapter in chapters:
+    result.add(ChapterMarker(
+      startMs: chapter.startMs,
+      endMs: chapter.endMs,
+      title: chapter.title
+    ))
+
+proc chaptersToMarkers*(chapters: seq[Chapter]): seq[Marker] =
+  ## Convert Chapters to Marker for NLE export
+  ##
+  ## Args:
+  ##   chapters: Sequence of Chapter objects
+  ##
+  ## Returns: Sequence of Marker objects with proper type, color, and metadata
+  result = @[]
+  for chapter in chapters:
+    let markerType = if chapter.source == csEngagement:
+                       mtEngagementPeak
+                     else:
+                       mtSceneBoundary
+
+    let comment = if chapter.source == csEngagement:
+                    "Score: " & $(chapter.score.int) & "/100"
+                  else:
+                    "Scene boundary"
+
+    result.add(Marker(
+      markerType: markerType,
+      timestampMs: chapter.startMs,
+      durationMs: chapter.endMs - chapter.startMs,
+      name: chapter.title,
+      comment: comment,
+      color: getMarkerColor(markerType)
+    ))
