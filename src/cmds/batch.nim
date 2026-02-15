@@ -60,6 +60,18 @@ proc main*(cArgs: seq[string]) =
   for w in warnings:
     echo &"[batch] Warning: {w}"
 
+  # Log brand configuration if present
+  if tmpl.brand.watermark.enabled and tmpl.brand.watermark.imagePath != "":
+    echo &"[batch] Brand: watermark from {tmpl.brand.watermark.imagePath}"
+
+  if tmpl.brand.introOutro.introPath != "" or tmpl.brand.introOutro.outroPath != "":
+    let intro = if tmpl.brand.introOutro.introPath != "": tmpl.brand.introOutro.introPath else: "none"
+    let outro = if tmpl.brand.introOutro.outroPath != "": tmpl.brand.introOutro.outroPath else: "none"
+    echo &"[batch] Brand: intro={intro} outro={outro}"
+
+  if tmpl.brand.captionStyle.preset != "":
+    echo &"[batch] Brand: caption preset={tmpl.brand.captionStyle.preset}"
+
   # Discover files
   let files = findVideoFiles(inputPath)
   if files.len == 0:
