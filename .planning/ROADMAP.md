@@ -124,7 +124,7 @@ Plans:
 
 ---
 
-#### Phase 18: Chapter Detection
+#### Phase 18: Chapter Detection ✅
 
 **Goal:** Users can auto-generate chapters from scene changes and engagement peaks
 
@@ -132,18 +132,20 @@ Plans:
 
 **Requirements:** CHAP-01, CHAP-02, CHAP-03, CHAP-04
 
-**Plans:** 3 plans
+**Plans:** 3/3 complete
 
 Plans:
-- [ ] 18-01-PLAN.md -- Core chapter types, peak detection, generation logic, and export conversion
-- [ ] 18-02-PLAN.md -- CLI chapters command and main.nim registration
-- [ ] 18-03-PLAN.md -- Unit tests for chapter detection module
+- [x] 18-01-PLAN.md -- Core chapter types, peak detection, generation logic, and export conversion
+- [x] 18-02-PLAN.md -- CLI chapters command and main.nim registration
+- [x] 18-03-PLAN.md -- Unit tests for chapter detection module
+
+**Completed:** 2026-02-14
 
 **Success Criteria:**
-1. User can auto-detect chapter boundaries from scene changes
-2. User can generate chapters at high-engagement peaks
-3. User can export chapters as MP4 metadata (FFmpeg format)
-4. User can export chapters as NLE markers (FCP, Premiere, Resolve)
+1. ✓ User can auto-detect chapter boundaries from scene changes
+2. ✓ User can generate chapters at high-engagement peaks
+3. ✓ User can export chapters as MP4 metadata (FFmpeg format)
+4. ✓ User can export chapters as NLE markers (FCP, Premiere, Resolve)
 
 ---
 
@@ -251,8 +253,8 @@ Plans:
 |-----------|--------|-------|--------|---------|
 | v1.0 Engagement Analysis | 1-10 | 48 | Complete | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | Complete | 2026-02-05 |
-| v2.0 Workflow, Performance & AI Features | 15-24 | 9 | Phase 17 complete | TBD |
-| **Total** | **24** | **67** | **In Progress** | — |
+| v2.0 Workflow, Performance & AI Features | 15-24 | 12 | Phase 18 complete | TBD |
+| **Total** | **24** | **70** | **In Progress** | — |
 
 ---
-*Roadmap updated: 2026-02-14 after Phase 17 execution*
+*Roadmap updated: 2026-02-14 after Phase 18 execution*
