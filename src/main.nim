@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, batch, cache, levels, subdump, transcript, whisper, caption, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd, analyze, meta]
+import cmds/[info, desc, batch, cache, levels, subdump, transcript, whisper, caption, chapters as chaptersCmd, engagement, clips as clipsCmd, reframe as reframeCmd, exportcmd, analyze, meta]
 import util/[color, fun]
 import palet/edit
 import analyze/presets
@@ -25,6 +25,7 @@ const cmdHandlers: seq[Command] = @[
   ("batch", batch.main),
   ("cache", cache.main),
   ("caption", caption.main),
+  ("chapters", chaptersCmd.main),
   ("clips", clipsCmd.main),
   ("desc", desc.main),
   ("engage", engagement.main),

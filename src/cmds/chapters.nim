@@ -366,7 +366,7 @@ Examples:
       let markerList = chaptersToMarkers(chapters)
 
       # Write FCPXML
-      writeMarkersFCPXML(markerList, outputFile, extractFilename(inputPath))
+      writeMarkersFCPXML(inputPath, markerList, outputFile)
 
       if not quietMode:
         echo ""
