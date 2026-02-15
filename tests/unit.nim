@@ -29,6 +29,8 @@ import ../src/metadata/apply
 import ../src/analyze/hook_schema
 import ../src/batch/[templates, discover, checkpoint]
 import ../src/brand/[watermark, concat, styles]
+import ../src/render/proxy
+import ../src/ml/gpu_runtime
 
 # Include test fixture utilities for tolerance-based assertions
 include fixtures/test_utils
@@ -4707,4 +4709,183 @@ suite "Caption Style Presets":
 
   test "parseCaptionPosition unknown defaults to bottom":
     check parseCaptionPosition("") == cpBottomCenter
+
+suite "Proxy Generation":
+  test "selectProxyEncoder with CPU backend":
+    let runtime = GpuRuntime(backend: CPU, available: false, deviceName: "CPU")
+    let encoder = selectProxyEncoder(runtime)
+
+    check encoder.codec == "libx264"
+    check encoder.preset == "ultrafast"
+    check encoder.tune == "fastdecode"
+    check encoder.bitrateMode == "crf"
+    check encoder.bitrateValue == "28"
+
+  test "selectProxyEncoder with CUDA backend":
+    let runtime = GpuRuntime(backend: CUDA, available: true, deviceName: "NVIDIA GPU")
+    let encoder = selectProxyEncoder(runtime)
+
+    check encoder.codec == "h264_nvenc"
+    check encoder.preset == "p1"
+    check encoder.bitrateMode == "vbr"
+    check encoder.bitrateValue == "2M"
+
+  test "selectProxyEncoder with CoreML backend":
+    let runtime = GpuRuntime(backend: CoreML, available: true, deviceName: "Apple Neural Engine")
+    let encoder = selectProxyEncoder(runtime)
+
+    check encoder.codec == "h264_videotoolbox"
+    check encoder.preset == "veryfast"
+    check encoder.bitrateMode == "vbr"
+    check encoder.bitrateValue == "2M"
+
+  test "buildProxyPath standard path":
+    let output = buildProxyPath("/videos/talk.mp4")
+    check output.endsWith("talk_proxy.mp4")
+    check "videos" in output or output.startsWith("talk_proxy.mp4")
+
+  test "buildProxyPath with spaces":
+    let output = buildProxyPath("/my videos/file.mp4")
+    check output.endsWith("file_proxy.mp4")
+    check "my videos" in output or output.startsWith("file_proxy.mp4")
+
+  test "buildProxyPath different extension":
+    let output = buildProxyPath("/dir/clip.mov")
+    check output.endsWith("clip_proxy.mp4")
+    check "dir" in output or output.startsWith("clip_proxy.mp4")
+
+  test "buildProxyPath no directory":
+    let output = buildProxyPath("video.mp4")
+    check output == "video_proxy.mp4"
+
+  test "buildFFmpegArgs CPU encoder contains required flags":
+    let encoder = EncoderConfig(
+      codec: "libx264",
+      preset: "ultrafast",
+      tune: "fastdecode",
+      pixelFormat: "yuv420p",
+      bitrateMode: "crf",
+      bitrateValue: "28"
+    )
+    let args = buildFFmpegArgs("/input.mp4", "/output.mp4", encoder)
+
+    check "-c:v" in args
+    check "libx264" in args
+    check "-preset" in args
+    check "ultrafast" in args
+    check "-tune" in args
+    check "fastdecode" in args
+    check "-crf" in args
+    check "28" in args
+
+  test "buildFFmpegArgs NVENC encoder contains required flags":
+    let encoder = EncoderConfig(
+      codec: "h264_nvenc",
+      preset: "p1",
+      tune: "",
+      pixelFormat: "yuv420p",
+      bitrateMode: "vbr",
+      bitrateValue: "2M"
+    )
+    let args = buildFFmpegArgs("/input.mp4", "/output.mp4", encoder)
+
+    check "-c:v" in args
+    check "h264_nvenc" in args
+    check "-preset" in args
+    check "p1" in args
+    check "-b:v" in args
+    check "2M" in args
+    check "-rc" in args
+    check "vbr" in args
+
+  test "buildFFmpegArgs contains scale filter":
+    let encoder = EncoderConfig(
+      codec: "libx264",
+      preset: "ultrafast",
+      tune: "",
+      pixelFormat: "yuv420p",
+      bitrateMode: "crf",
+      bitrateValue: "28"
+    )
+    let args = buildFFmpegArgs("/input.mp4", "/output.mp4", encoder)
+
+    check "-vf" in args
+    check "scale=1280:720:flags=fast_bilinear" in args
+
+  test "buildFFmpegArgs contains audio encoding":
+    let encoder = EncoderConfig(
+      codec: "libx264",
+      preset: "ultrafast",
+      tune: "",
+      pixelFormat: "yuv420p",
+      bitrateMode: "crf",
+      bitrateValue: "28"
+    )
+    let args = buildFFmpegArgs("/input.mp4", "/output.mp4", encoder)
+
+    check "-c:a" in args
+    check "aac" in args
+    check "-b:a" in args
+    check "128k" in args
+
+  test "buildFFmpegArgs contains faststart flag":
+    let encoder = EncoderConfig(
+      codec: "libx264",
+      preset: "ultrafast",
+      tune: "",
+      pixelFormat: "yuv420p",
+      bitrateMode: "crf",
+      bitrateValue: "28"
+    )
+    let args = buildFFmpegArgs("/input.mp4", "/output.mp4", encoder)
+
+    check "-movflags" in args
+    check "+faststart" in args
+
+  test "buildFFmpegArgs starts with overwrite flag":
+    let encoder = EncoderConfig(
+      codec: "libx264",
+      preset: "ultrafast",
+      tune: "",
+      pixelFormat: "yuv420p",
+      bitrateMode: "crf",
+      bitrateValue: "28"
+    )
+    let args = buildFFmpegArgs("/input.mp4", "/output.mp4", encoder)
+
+    check args[0] == "-y"
+
+  test "parseProgress standard line":
+    let line = "frame=1234 fps=60.5 time=00:01:23.45 speed=2.1x"
+    let duration = 120.0  # 2 minutes
+    let (progress, speed) = parseProgress(line, duration)
+
+    # 1:23.45 = 83.45 seconds, 83.45/120 = 69.5%
+    check checkApprox(progress, 69.54, 0.1)
+    check checkApprox(speed, 2.1, 0.01)
+
+  test "parseProgress zero time":
+    let line = "frame=0 fps=0.0 time=00:00:00.00 speed=0.0x"
+    let duration = 120.0
+    let (progress, speed) = parseProgress(line, duration)
+
+    check checkApprox(progress, 0.0, 0.01)
+    check checkApprox(speed, 0.0, 0.01)
+
+  test "parseProgress no match returns -1":
+    let line = "Encoding started..."
+    let duration = 120.0
+    let (progress, speed) = parseProgress(line, duration)
+
+    check progress == -1.0
+    check speed == -1.0
+
+  test "parseProgress high speed encoding":
+    let line = "frame=5000 fps=120.5 time=00:05:00.00 speed=8.5x"
+    let duration = 600.0  # 10 minutes
+    let (progress, speed) = parseProgress(line, duration)
+
+    # 5:00 = 300 seconds, 300/600 = 50%
+    check checkApprox(progress, 50.0, 0.1)
+    check checkApprox(speed, 8.5, 0.01)
     check parseCaptionPosition("invalid") == cpBottomCenter
