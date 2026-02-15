@@ -11,19 +11,19 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 19 - Brand Templates
-Plan: 01/03
+Plan: 02/03
 Status: In Progress
-Last activity: 2026-02-15 — Plan 19-01 complete (brand template core types)
+Last activity: 2026-02-15 — Plan 19-02 complete (brand pipeline integration)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
 Progress v2.0: [████████████████████                              ] 40% (4/10 phases)
-Progress Phase 19: [████████████████                                ] 33% (1/3 plans)
+Progress Phase 19: [████████████████████████████████                ] 67% (2/3 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 71
+- Total plans completed: 72
 - Average duration: 3.5 min
 - Total execution time: ~4.5 hours
 
@@ -33,7 +33,7 @@ Progress Phase 19: [████████████████            
 |-----------|--------|-------|----------|---------|
 | v1.0 Engagement Analysis | 1-10 | 49 | 4 days | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | 1 day | 2026-02-05 |
-| v2.0 Workflow, Performance & AI | 15-24 | 10 | In progress | TBD |
+| v2.0 Workflow, Performance & AI | 15-24 | 11 | In progress | TBD |
 | **Total** | **24** | **70** | **5 days** | — |
 
 **Recent Plans:**
@@ -53,6 +53,7 @@ Progress Phase 19: [████████████████            
 | 18-02 | 313s | 2 | 2 | 2026-02-15 |
 | 18-03 | 736s | 1 | 1 | 2026-02-15 |
 | 19-01 | 122s | 2 | 4 | 2026-02-15 |
+| 19-02 | 89s | 2 | 2 | 2026-02-15 |
 
 ## Accumulated Context
 
@@ -98,10 +99,12 @@ Major architectural decisions across milestones:
 - [Phase 18-02]: Use execCmd for FFmpeg chapter embedding (simpler than libav process)
 - [Phase 18-03]: Test fixture pattern with makeTimeline helper for clean test data creation
 - [Phase 18-03]: Systematic edge case testing (empty, single, plateau, limits, spacing)
+- [Phase 19]: Post-processing approach: Apply brand operations after main honeyclip subprocess completes
+- [Phase 19]: Processing order: edit -> watermark -> intro/outro concat
 
 ### Pending Todos
 
-None currently. Phase 19 in progress (plan 01/03 complete).
+None currently. Phase 19 in progress (plan 02/03 complete).
 
 ### Blockers/Concerns
 
@@ -112,9 +115,9 @@ None — all tech debt items from v1.0 addressed in v1.1.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 19-01-PLAN.md
+Stopped at: Completed 19-02-PLAN.md
 Resume file: None
-Next: Phase 19 Plan 02
+Next: Phase 19 Plan 03
 
 **Project Status: v2.0 IN PROGRESS**
 
@@ -132,6 +135,7 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15, 16, 17, and 18 e
 - Plan 18-02: Complete (Chapters CLI Command) ✓
 - Plan 18-03: Complete (Chapter Detection Unit Tests) ✓
 - Plan 19-01: Complete (Brand Template Core Types) ✓
+- Plan 19-02: Complete (Brand Pipeline Integration) ✓
 
 **Phase 16 COMPLETE** - Batch processing foundation fully operational and tested.
 
@@ -139,7 +143,7 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15, 16, 17, and 18 e
 
 **Phase 18 COMPLETE** - Chapter detection with local maxima peak detection, three-mode generation (scene/engagement/combined), and export to MP4 metadata and NLE markers. CLI integration via `honeyclip chapters` subcommand. Comprehensive unit test coverage (23 tests) for all chapter detection functionality.
 
-**Phase 19 IN PROGRESS** - Brand template system for applying consistent watermarks, intro/outro clips, and caption styles across batch jobs. Plan 01 complete: BrandConfig type system and core brand modules (watermark filter generation, concat list builder, caption style overrides).
+**Phase 19 IN PROGRESS** - Brand template system for applying consistent watermarks, intro/outro clips, and caption styles across batch jobs. Plan 01 complete: BrandConfig type system and core brand modules. Plan 02 complete: Brand pipeline integration with FFmpeg post-processing (watermark overlay, intro/outro concat).
 
 ---
-*Updated: 2026-02-15 after Phase 19 Plan 01 execution*
+*Updated: 2026-02-15 after Phase 19 Plan 02 execution*
