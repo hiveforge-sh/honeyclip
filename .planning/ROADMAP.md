@@ -132,6 +132,13 @@ Plans:
 
 **Requirements:** CHAP-01, CHAP-02, CHAP-03, CHAP-04
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 18-01-PLAN.md -- Core chapter types, peak detection, generation logic, and export conversion
+- [ ] 18-02-PLAN.md -- CLI chapters command and main.nim registration
+- [ ] 18-03-PLAN.md -- Unit tests for chapter detection module
+
 **Success Criteria:**
 1. User can auto-detect chapter boundaries from scene changes
 2. User can generate chapters at high-engagement peaks
