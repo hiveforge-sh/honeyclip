@@ -11,19 +11,19 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 18 - Chapter Detection
-Plan: 01/03
+Plan: 02/03
 Status: In Progress
-Last activity: 2026-02-15 — Plan 18-01 complete (chapter detection core)
+Last activity: 2026-02-15 — Plan 18-02 complete (chapters CLI command)
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
 Progress v2.0: [███████████████                                 ] 30% (3/10 phases)
-Progress Phase 18: [████████████████                                ] 33% (1/3 plans)
+Progress Phase 18: [████████████████████████████████                ] 67% (2/3 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 68
+- Total plans completed: 69
 - Average duration: 3.5 min
 - Total execution time: ~4.5 hours
 
@@ -33,8 +33,8 @@ Progress Phase 18: [████████████████            
 |-----------|--------|-------|----------|---------|
 | v1.0 Engagement Analysis | 1-10 | 49 | 4 days | 2026-02-04 |
 | v1.1 Polish | 11-14 | 10 | 1 day | 2026-02-05 |
-| v2.0 Workflow, Performance & AI | 15-24 | 9 | In progress | TBD |
-| **Total** | **24** | **69** | **5 days** | — |
+| v2.0 Workflow, Performance & AI | 15-24 | 10 | In progress | TBD |
+| **Total** | **24** | **70** | **5 days** | — |
 
 **Recent Plans:**
 
@@ -50,6 +50,7 @@ Progress Phase 18: [████████████████            
 | 17-02 | 300s | 2 | 5 | 2026-02-14 |
 | 17-03 | 584s | 1 | 2 | 2026-02-14 |
 | 18-01 | 102s | 2 | 1 | 2026-02-15 |
+| 18-02 | 313s | 2 | 2 | 2026-02-15 |
 
 ## Accumulated Context
 
@@ -90,10 +91,13 @@ Major architectural decisions across milestones:
 - [Phase 18-01]: Default 30s minimum spacing between chapters for usable navigation
 - [Phase 18-01]: Combined mode prefers engagement markers over scene markers during deduplication
 - [Phase 18-01]: Chapter titles use engagement labels (High/Medium/Low) for context
+- [Phase 18-02]: Auto-set --no-transcript for scene-only mode when no model specified
+- [Phase 18-02]: Create dummy timeline with zero segments for scene-only mode
+- [Phase 18-02]: Use execCmd for FFmpeg chapter embedding (simpler than libav process)
 
 ### Pending Todos
 
-None currently. Phase 18 Plan 01 complete. Ready for Plan 02 (scene detection).
+None currently. Phase 18 Plan 02 complete. Ready for Plan 03 if exists (or Phase 18 complete).
 
 ### Blockers/Concerns
 
@@ -104,9 +108,9 @@ None — all tech debt items from v1.0 addressed in v1.1.
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 18-01-PLAN.md
+Stopped at: Completed 18-02-PLAN.md
 Resume file: None
-Next: Phase 18 Plan 02
+Next: Phase 18 Plan 03 or next phase
 
 **Project Status: v2.0 IN PROGRESS**
 
@@ -121,12 +125,13 @@ All 38 v2.0 requirements mapped to 10 phases (15-24). Phase 15, 16, and 17 execu
 - Plan 17-02: Complete (Virality CLI Output and Exports) ✓
 - Plan 17-03: Complete (Virality Scoring Unit Tests) ✓
 - Plan 18-01: Complete (Chapter Detection Core) ✓
+- Plan 18-02: Complete (Chapters CLI Command) ✓
 
 **Phase 16 COMPLETE** - Batch processing foundation fully operational and tested.
 
 **Phase 17 COMPLETE** - Four-component virality scoring (hook, flow, value, trend) with research-backed weights integrated into clip detection and ranking pipeline. Clips ranked by virality score instead of raw engagement. CLI output displays virality scores with component breakdown. JSON/EDL exports include virality fields. Project files store virality scores. Comprehensive unit test coverage (18 tests) for all virality components.
 
-**Phase 18 IN PROGRESS** - Plan 01 complete: Chapter detection core module with local maxima engagement peak detection, three-mode chapter generation (scene/engagement/combined), and export conversion to ChapterMarker and Marker formats.
+**Phase 18 IN PROGRESS** - Plan 01 complete: Chapter detection core module with local maxima engagement peak detection, three-mode chapter generation (scene/engagement/combined), and export conversion to ChapterMarker and Marker formats. Plan 02 complete: CLI command for chapter generation with multi-mode detection (scene/engagement/combined) and export to MP4 metadata, FCPXML, EDL, and JSON.
 
 ---
-*Updated: 2026-02-15 after Phase 18 Plan 01 execution*
+*Updated: 2026-02-15 after Phase 18 Plan 02 execution*
