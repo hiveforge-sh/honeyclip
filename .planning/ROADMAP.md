@@ -157,6 +157,13 @@ Plans:
 
 **Requirements:** BRAND-01, BRAND-02, BRAND-03, BRAND-04
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 19-01-PLAN.md -- BrandConfig types, TOML parsing, watermark/concat/style core modules
+- [ ] 19-02-PLAN.md -- Batch runner integration with watermark/concat post-processing
+- [ ] 19-03-PLAN.md -- Unit tests for brand config, watermark, concat, and caption styles
+
 **Success Criteria:**
 1. User can define brand template with logo watermark position
 2. User can define intro/outro clips to prepend/append
