@@ -142,7 +142,7 @@ jobs:
           mv honeyclip ${{ matrix.binary_name }}
       - name: Upload to Release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.binary_name }}
         env:
@@ -188,7 +188,7 @@ jobs:
           mv honeyclip.exe honeyclip-windows-amd64.exe
       - name: Upload to Release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           files: honeyclip-windows-amd64.exe
         env:
