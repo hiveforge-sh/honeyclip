@@ -96,7 +96,9 @@ proc veoGenerate*(client: HttpClientLike, apiKey: string, model: string,
         return ClipResult(success: false, error: &"Veo download returned {dlCode}")
       createDir(outDir)
       let outPath = outDir / &"broll_veo_{insertion.startMs}.mp4"
-      writeFile(outPath, dlBody)
+      let tmpPath = outPath & ".tmp"
+      writeFile(tmpPath, dlBody)
+      moveFile(tmpPath, outPath)
       return ClipResult(success: true, clipPath: outPath,
                         actualDurationMs: int64(veoFixedClipSeconds * 1000))
 

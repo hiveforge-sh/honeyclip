@@ -83,7 +83,9 @@ proc comfyuiGenerate*(client: HttpClientLike, baseUrl: string,
                                 error: &"ComfyUI /view returned {dlCode}")
             createDir(outDir)
             let outPath = outDir / &"broll_{insertion.startMs}.mp4"
-            writeFile(outPath, dlBody)
+            let tmpPath = outPath & ".tmp"
+            writeFile(tmpPath, dlBody)
+            moveFile(tmpPath, outPath)
             return ClipResult(success: true, clipPath: outPath,
                               actualDurationMs: insertion.pauseMs)
 
