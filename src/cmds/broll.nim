@@ -144,7 +144,11 @@ proc main*(cArgs: seq[string]) =
   let http: HttpClientLike = newRealHttpClient()
 
   # Resolve provider early so we fail fast before long transcript/analysis.
-  let prov = resolveProvider(backend, comfyUrl, workflowPath, apiKey, veoModel, http)
+  let prov =
+    try:
+      resolveProvider(backend, comfyUrl, workflowPath, apiKey, veoModel, http)
+    except ValueError as e:
+      error e.msg
 
   # Find whisper model if needed
   if whisperModel == "":
