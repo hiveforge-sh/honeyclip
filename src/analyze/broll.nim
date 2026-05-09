@@ -55,10 +55,9 @@ proc engagementScoreAt(engagement: EngagementTimeline, ms: int64,
   if side == "before":
     for seg in engagement.segments:
       let mid = (seg.startMs + seg.endMs) div 2
-      if mid <= ms:
-        result = seg.score
-      elif mid > ms:
+      if mid > ms:
         break
+      result = seg.score  # keep updating; last segment with mid <= ms wins
   else:  # after
     for seg in engagement.segments:
       let mid = (seg.startMs + seg.endMs) div 2
