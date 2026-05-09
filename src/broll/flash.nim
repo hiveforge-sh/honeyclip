@@ -32,7 +32,13 @@ proc rewritePrompt*(client: HttpClientLike, apiKey: string,
       warning &"Gemini Flash returned {code}; using raw transcript"
       return contextText
     let parsed = parseJson(resp)
-    let txt = parsed{"candidates"}[0]{"content"}{"parts"}[0]{"text"}.getStr
+    let candidatesNode = parsed{"candidates"}
+    if candidatesNode == nil or candidatesNode.kind != JArray or candidatesNode.len == 0:
+      return contextText
+    let partsNode = candidatesNode[0]{"content"}{"parts"}
+    if partsNode == nil or partsNode.kind != JArray or partsNode.len == 0:
+      return contextText
+    let txt = partsNode[0]{"text"}.getStr
     if txt == "":
       return contextText
     return txt.strip
