@@ -8,6 +8,7 @@ import sys
 from collections.abc import Callable
 from fractions import Fraction
 from hashlib import sha256
+from pathlib import Path
 from tempfile import mkdtemp
 from time import perf_counter
 
@@ -749,6 +750,14 @@ def main():
         shutil.rmtree(run.temp_dir)
         sys.exit(1)
     shutil.rmtree(run.temp_dir)
+
+    # Phase 21 — B-roll subcommand
+    print("\nRunning Phase 21 B-roll E2E...")
+    broll_result = subprocess.run(
+        [sys.executable, str(Path(__file__).parent / "test_broll.py")],
+        capture_output=False)
+    if broll_result.returncode != 0:
+        sys.exit(broll_result.returncode)
 
 
 if __name__ == "__main__":
