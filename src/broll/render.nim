@@ -84,7 +84,11 @@ proc renderWithBroll*(sourceVideo: string,
     let targetW = parts[0].parseInt
     let targetH = parts[1].parseInt
     let fpsParts = parts[2].split('/')
+    if fpsParts.len < 2 or fpsParts[1] == "0":
+      error &"ffprobe returned unparseable frame rate: {parts[2]}"
     let targetFps = fpsParts[0].parseFloat / fpsParts[1].parseFloat
+    if targetFps <= 0.0:
+      error &"ffprobe returned non-positive frame rate: {targetFps}"
 
     # 2. Normalize each B-roll clip
     var normalizedPaths: seq[string]
