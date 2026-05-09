@@ -2,7 +2,7 @@
 phase: 22
 slug: ai-audio-enhancement
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-05-09
 ---
@@ -38,7 +38,7 @@ created: 2026-05-09
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 22-01-01 | 01 | 0 | AUDIO-01..03 | T-22-00 | FFmpeg filter allowlist updated (deesser, highpass, equalizer, afftdn, astats, ametadata, anullsink); `nimble makeff` re-run; `nimble test` passes | manual+unit | `nimble makeff && nimble test` | ❌ W0 | ⬜ pending |
+| 22-01-01 | 01 | 0 | AUDIO-01..03 | T-22-00 | FFmpeg filter allowlist updated (deesser, highpass, equalizer, afftdn, astats, ametadata, anullsink, silencedetect, acrossfade); `nimble makeff` re-run; `nimble test` passes | manual+unit | `nimble makeff && nimble test` | ❌ W0 | ⬜ pending |
 | 22-01-02 | 01 | 0 | AUDIO-01..03 | T-22-01 | `HttpClientLike.postMultipart` extension for ElevenLabs file upload | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
 | 22-01-03 | 01 | 0 | AUDIO-01..03 | — | Audio fixtures + DeepFilterNet stub harness | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
 | 22-01-04 | 01 | 1 | AUDIO-03 | T-22-02 | `src/config.nim` extended with `resolveElevenlabsKey` (env-first, TOML `[elevenlabs]` fallback, never log secret) | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
@@ -46,12 +46,12 @@ created: 2026-05-09
 | 22-02-01 | 02 | 2 | AUDIO-02 | T-22-03 | DeepFilterNet local provider: `whichDeepFilter` detection + subprocess invocation contract | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
 | 22-02-02 | 02 | 2 | AUDIO-03 | T-22-04 | ElevenLabs Voice Isolator client: multipart upload + sync response + cost gate | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
 | 22-02-03 | 02 | 2 | AUDIO-02..03 | — | `AudioProvider` object variant + auto-fallback (DeepFilterNet absent → ElevenLabs when key set) | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
-| 22-02-04 | 02 | 3 | AUDIO-01 | — | FFmpeg chain orchestrator: hum-removal · de-ess · loudnorm (file-path subprocess; not in-process) | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
-| 22-02-05 | 02 | 3 | AUDIO-01 | — | Long-file chunking + crossfade reassembly for ElevenLabs (file-size limit) | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
-| 22-02-06 | 02 | 3 | AUDIO-01 | — | Resample to 48kHz mono (DeepFilterNet input), restore source rate/channels for final mux | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
-| 22-02-07 | 02 | 3 | AUDIO-01..03 | — | `honeyclip enhance` CLI: arg parsing, --backend/--{stage}/--audio-only/--yes flags, video out vs --audio-only | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
-| 22-03-01 | 03 | 4 | AUDIO-01..03 | — | E2E harness: enhance subcommand against fixture audio with DeepFilterNet stub + ElevenLabs HTTP mock | e2e | `python3 tests/test_audio.py` | ❌ W0 | ⬜ pending |
-| 22-03-02 | 03 | 4 | AUDIO-01..03 | — | README "Audio Enhancement" section: setup, ElevenLabs cost, DeepFilterNet install, --audio-only docs | manual | `grep -cE "Audio Enhancement\|ELEVENLABS_API_KEY\|deepfilternet" README.md` | ❌ W0 | ⬜ pending |
+| 22-03-01 | 03 | 3 | AUDIO-01 | — | FFmpeg chain orchestrator: hum-removal · de-ess · loudnorm (file-path subprocess; not in-process) | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
+| 22-03-02 | 03 | 3 | AUDIO-01 | — | Long-file chunking + crossfade reassembly for ElevenLabs (file-size limit) | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
+| 22-03-03 | 03 | 3 | AUDIO-01 | — | Resample to 48kHz mono (DeepFilterNet input), restore source rate/channels for final mux | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
+| 22-03-04 | 03 | 3 | AUDIO-01..03 | — | `honeyclip enhance` CLI: arg parsing, --backend/--{stage}/--audio-only/--yes flags, video out vs --audio-only | unit | `nim c -r --path:src tests/unit_audio.nim` | ❌ W0 | ⬜ pending |
+| 22-04-01 | 04 | 4 | AUDIO-01..03 | — | E2E harness: enhance subcommand against fixture audio with DeepFilterNet stub + ElevenLabs HTTP mock | e2e | `python3 tests/test_audio.py` | ❌ W0 | ⬜ pending |
+| 22-04-02 | 04 | 4 | AUDIO-01..03 | — | README "Audio Enhancement" section: setup, ElevenLabs cost, DeepFilterNet install, --audio-only docs | manual | `grep -cE "Audio Enhancement\|ELEVENLABS_API_KEY\|deepfilternet" README.md` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -59,7 +59,7 @@ created: 2026-05-09
 
 ## Wave 0 Requirements
 
-- [ ] `honeyclip.nimble` FFmpeg filter allowlist updated (deesser, highpass, equalizer, afftdn, astats, ametadata, anullsink) AND `nimble makeff` re-run successfully
+- [ ] `honeyclip.nimble` FFmpeg filter allowlist updated (deesser, highpass, equalizer, afftdn, astats, ametadata, anullsink, silencedetect, acrossfade) AND `nimble makeff` re-run successfully
 - [ ] `tests/unit_audio.nim` — test module compiled into `nimble test` target
 - [ ] `tests/fixtures/audio_clean.wav` — clean speech, 48kHz mono PCM, ~5s
 - [ ] `tests/fixtures/audio_noisy.wav` — speech + AC hum + keyboard, 48kHz stereo PCM, ~5s

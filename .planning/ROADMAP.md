@@ -225,6 +225,14 @@ Plans:
 
 **Requirements:** AUDIO-01, AUDIO-02, AUDIO-03
 
+**Plans:** 4 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Wave 0+1 foundations: FFmpeg filter allowlist + multipart HTTP seam + fixtures + ElevenLabs config + auto-detect analyzer
+- [ ] 22-02-PLAN.md — Wave 2: DeepFilterNet local + ElevenLabs HTTP client + AudioProvider variant
+- [ ] 22-03-PLAN.md — Wave 3: FFmpeg chain orchestrator + chunking + resample + render mux + honeyclip enhance CLI
+- [ ] 22-04-PLAN.md — Wave 4: Python E2E harness + README Audio Enhancement section
+
 **Success Criteria:**
 1. User can enhance audio quality (noise reduction, normalization) with single flag
 2. Audio enhancement works with local models when available

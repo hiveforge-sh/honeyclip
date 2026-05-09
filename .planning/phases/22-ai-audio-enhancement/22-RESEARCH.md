@@ -975,11 +975,14 @@ ElevenLabs `/v1/audio-isolation/stream` returns "raw audio bytes." Based on sear
 | FFmpeg filter allowlist | HIGH | Confirmed missing; confirmed valid in FFmpeg 8.0.1 |
 | DeepFilterNet subprocess | MEDIUM | CLI command confirmed; exit codes and fallback command path assumed |
 
-### Open Questions Remaining
+### Open Questions Remaining (RESOLVED)
 
 1. **OQ-1:** `deepFilter` vs `python3 -m df.enhance` — which is more reliable on Windows PATH?
+   - **RESOLVED:** Resolved by Task 22-02-01 (`whichDeepFilter`): try `deepFilter --help` first, fall back to `python3 -c "import df.enhance"` then invoke as `python3 -m df.enhance`. Both code paths shipped; runtime detection picks whichever the user has installed.
 2. **OQ-2:** Does `ametadata=print:file=pipe:1` work in honeyclip's FFmpeg build (`--disable-protocols` except `file`)? If not, temp-file fallback needed.
+   - **RESOLVED:** Resolved by Task 22-01-05 (`runAstatsProbe`): always uses a temp-file fallback (`getTempDir() / "honeyclip_astats.txt"`) for `ametadata=print:file=...`. Pipe protocol is not relied upon; the file-based path works regardless of `--disable-protocols` configuration.
 3. **OQ-3:** ElevenLabs response audio codec — MP3 (assumed) or PCM WAV? Affects whether intermediate decode step is needed.
+   - **RESOLVED:** Resolved by Tasks 22-02-04 (`decodeMp3ToWav`) and 22-02-05 (enhance dispatch flow). Pipeline always treats the ElevenLabs response as opaque bytes and invokes `decodeMp3ToWav` to normalize to WAV before chaining FFmpeg — works for MP3 (the assumed format) and degrades gracefully if the response is already WAV PCM (FFmpeg passes through).
 
 ### Ready for Planning
 
