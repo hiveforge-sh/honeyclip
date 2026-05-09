@@ -42,6 +42,7 @@ method post*(c: RealHttpClient, url: string, body: string,
   c.inner.headers = newHttpHeaders({"Content-Type": contentType})
   let resp = c.inner.post(url, body = body)
   result = (resp.code.int, resp.body)
+  c.inner.headers = newHttpHeaders()  # reset after use to avoid leaking Content-Type to subsequent requests
 
 proc newMockHttpClient*(): MockHttpClient =
   MockHttpClient(responses: initTable[MockResponseKey, HttpResponse](), calls: @[])
