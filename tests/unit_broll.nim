@@ -78,3 +78,47 @@ suite "fixtures":
     let d = parseJson(raw)
     check d["completed"]["done"].getBool == true
     check d["completed"]["response"]["generateVideoResponse"]["generatedSamples"].len == 1
+
+# ============================================================
+# Suite: config
+# ============================================================
+import ../src/config
+
+suite "config":
+  setup:
+    putEnv("GEMINI_API_KEY", "")
+    putEnv("HONEYCLIP_COMFYUI_URL", "")
+
+  test "configPath is non-empty":
+    let p = configPath()
+    when defined(windows):
+      # On Windows: requires APPDATA to be set (normally always set)
+      let appData = getEnv("APPDATA")
+      if appData != "":
+        check p.endsWith("config.toml")
+        check p.contains("honeyclip")
+    else:
+      check p.endsWith("honeyclip/config.toml") or p.endsWith("honeyclip\\config.toml")
+
+  test "resolveGeminiKey returns env var when set":
+    putEnv("GEMINI_API_KEY", "ENV_KEY_123")
+    check resolveGeminiKey() == "ENV_KEY_123"
+
+  test "resolveGeminiKey returns TOML key when env unset":
+    putEnv("GEMINI_API_KEY", "")
+    let tmp = getTempDir() / "honeyclip_cfg_test.toml"
+    writeFile(tmp, "[api]\ngeminiKey = \"FILE_KEY_456\"\n")
+    check resolveGeminiKey(tmp) == "FILE_KEY_456"
+    removeFile(tmp)
+
+  test "resolveGeminiKey returns empty when neither set":
+    putEnv("GEMINI_API_KEY", "")
+    check resolveGeminiKey("/nonexistent/path.toml") == ""
+
+  test "resolveComfyUrl defaults to localhost":
+    putEnv("HONEYCLIP_COMFYUI_URL", "")
+    check resolveComfyUrl("/nonexistent/path.toml") == "http://127.0.0.1:8188"
+
+  test "loadConfig returns zero-value when file missing":
+    let cfg = loadConfig("/nonexistent/path.toml")
+    check cfg.api.geminiKey == ""
