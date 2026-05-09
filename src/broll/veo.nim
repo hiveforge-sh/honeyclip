@@ -82,7 +82,10 @@ proc veoGenerate*(client: HttpClientLike, apiKey: string, model: string,
       if op.hasKey("error"):
         return ClipResult(success: false,
                           error: op["error"]{"message"}.getStr("Veo error"))
-      let videoUri = op{"response"}{"generateVideoResponse"}{"generatedSamples"}[0]{"video"}{"uri"}.getStr
+      let samples = op{"response"}{"generateVideoResponse"}{"generatedSamples"}
+      if samples == nil or samples.kind != JArray or samples.len == 0:
+        return ClipResult(success: false, error: "Veo response: generatedSamples is empty")
+      let videoUri = samples[0]{"video"}{"uri"}.getStr
       if videoUri == "":
         return ClipResult(success: false, error: "Veo response missing video URI")
       # Append key to download URL — never log the URL
