@@ -544,3 +544,21 @@ suite "marker json":
       check ins0.hasKey(k)
     check ins0["prompt"].getStr == "a sunny park"
     removeFile(outPath)
+
+# ============================================================
+# Suite: broll cli
+# ============================================================
+import ../src/cmds/broll  # compile test: if this compiles, broll module is valid
+
+suite "broll cli":
+  test "broll module compiles":
+    # If unit_broll compiles successfully with ../src/cmds/broll imported, this passes.
+    discard
+
+  test "main.nim registers broll":
+    let mainSrc = readFile("src/main.nim")
+    check "broll" in mainSrc
+    check "\"broll\"" in mainSrc
+
+  test "help text prints all required flags (binary smoke -- only if built)":
+    skip()

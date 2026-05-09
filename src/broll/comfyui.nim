@@ -2,7 +2,7 @@
 ##
 ## Provides ComfyUI API integration: submit workflow, poll history, download result.
 ## All HTTP goes through HttpClientLike so unit tests can inject MockHttpClient.
-## No direct newHttpClient() calls in this module (T-21-01 compliance).
+## All HTTP goes through HttpClientLike — no direct stdlib newHttpClient calls (T-21-01).
 
 import std/[json, os, random, strformat, strutils]
 import ../http_client
