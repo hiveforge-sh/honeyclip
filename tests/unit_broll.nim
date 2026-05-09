@@ -482,3 +482,65 @@ suite "provider selection":
     expect ValueError:
       discard resolveProvider("auto", "http://127.0.0.1:9999", "wf.json", "",
                               "veo-3.0-fast-generate-001", m)
+
+# ============================================================
+# Suite: render plan + marker JSON
+# ============================================================
+import ../src/broll/render
+import ../src/broll/markers
+
+suite "render plan":
+  test "empty insertions yields single source segment":
+    let plan = buildSegmentPlan(60000, @[])
+    check plan.len == 1
+    check plan[0].kind == skSource
+    check plan[0].endMs == 60000
+
+  test "two insertions yield 5 alternating segments":
+    let inserts = @[
+      brollAnalyze.BrollInsertion(startMs: 10000, endMs: 13000, pauseMs: 3000),
+      brollAnalyze.BrollInsertion(startMs: 40000, endMs: 43000, pauseMs: 3000)
+    ]
+    let plan = buildSegmentPlan(60000, inserts)
+    check plan.len == 5
+    check plan[0].kind == skSource and plan[0].endMs == 10000
+    check plan[1].kind == skBroll and plan[1].sourceIndex == 0
+    check plan[2].kind == skSource and plan[2].startMs == 13000 and plan[2].endMs == 40000
+    check plan[3].kind == skBroll and plan[3].sourceIndex == 1
+    check plan[4].kind == skSource and plan[4].endMs == 60000
+
+  test "buildConcatList interleaves correctly":
+    let plan = @[
+      SegmentPlan(kind: skSource, startMs: 0, endMs: 10000, sourceIndex: -1),
+      SegmentPlan(kind: skBroll, startMs: 10000, endMs: 13000, sourceIndex: 0),
+      SegmentPlan(kind: skSource, startMs: 13000, endMs: 60000, sourceIndex: -1)
+    ]
+    let txt = buildConcatList(plan, @["s0.mp4", "s1.mp4"], @["b0.mp4"])
+    check "file 's0.mp4'" in txt
+    check "file 'b0.mp4'" in txt
+    check "file 's1.mp4'" in txt
+    check txt.count("file '") == 3
+
+  test "normalizeBrollClipCmd contains scale and libx264":
+    let cmd = normalizeBrollClipCmd("in.mp4", 1920, 1080, 24.0, "out.mp4")
+    check "scale=1920:1080" in cmd
+    check "libx264" in cmd
+    check "fps=24.000" in cmd
+
+suite "marker json":
+  test "writeBrollMarkersJson produces parseable JSON with all required keys":
+    let outPath = getTempDir() / "honeyclip_marker_test.json"
+    let inserts = @[brollAnalyze.BrollInsertion(
+      startMs: 18000, endMs: 21000, pauseMs: 3000,
+      score: 75.5'f32, sourceTag: "boundary", contextText: "hello world")]
+    let clips2 = @[ClipResult(success: true, clipPath: "/tmp/x.mp4", actualDurationMs: 3000)]
+    writeBrollMarkersJson("input.mp4", inserts, clips2, @["a sunny park"], outPath)
+    let parsed = parseJson(readFile(outPath))
+    check parsed["sourceVideo"].getStr == "input.mp4"
+    check parsed["insertions"].len == 1
+    let ins0 = parsed["insertions"][0]
+    for k in ["startMs", "endMs", "pauseMs", "score", "sourceTag",
+              "contextText", "prompt", "clipPath", "actualDurationMs", "success"]:
+      check ins0.hasKey(k)
+    check ins0["prompt"].getStr == "a sunny park"
+    removeFile(outPath)
