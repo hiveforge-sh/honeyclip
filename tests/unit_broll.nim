@@ -286,3 +286,132 @@ suite "comfyui provider":
                              ins, "x", getTempDir(), pollIntervalMs = 0, maxAttempts = 1)
     check r.success == false
     check "500" in r.error
+
+# ============================================================
+# Suite: veo + flash (QueueMock helper + tests)
+# ============================================================
+import ../src/broll/veo
+import ../src/broll/flash
+import std/tables
+
+## QueueMock: extends HttpClientLike to return different responses per call
+## for a given URL substring (used to simulate LRO state machine transitions).
+## Falls back to a registered MockHttpClient for non-queued URLs.
+type QueueMock = ref object of HttpClientLike
+  inner: MockHttpClient
+  queues: Table[string, seq[HttpResponse]]  # key = url substring, value = fifo
+
+proc newQueueMock*(): QueueMock =
+  QueueMock(inner: newMockHttpClient(), queues: initTable[string, seq[HttpResponse]]())
+
+proc register*(q: QueueMock, meth: string, urlSubstring: string,
+               status: int, body: string) =
+  q.inner.register(meth, urlSubstring, status, body)
+
+proc enqueue*(q: QueueMock, meth: string, urlSubstring: string,
+              status: int, body: string) =
+  let key = meth.toUpperAscii & ":" & urlSubstring
+  if key notin q.queues:
+    q.queues[key] = @[]
+  q.queues[key].add (status, body)
+
+method get*(q: QueueMock, url: string): HttpResponse =
+  for k, queue in q.queues.mpairs:
+    if k.startsWith("GET:") and url.contains(k[4..^1]) and queue.len > 0:
+      let resp = queue[0]
+      queue.delete(0)
+      return resp
+  return q.inner.get(url)
+
+method post*(q: QueueMock, url: string, body: string,
+             contentType: string = "application/json"): HttpResponse =
+  for k, queue in q.queues.mpairs:
+    if k.startsWith("POST:") and url.contains(k[5..^1]) and queue.len > 0:
+      let resp = queue[0]
+      queue.delete(0)
+      return resp
+  return q.inner.post(url, body, contentType)
+
+suite "veo cost":
+  test "estimateVeoCost fast tier":
+    # 2 clips * 8s * $0.15 = $2.40
+    let cost = estimateVeoCost(2, "veo-3.0-fast-generate-001")
+    check abs(cost - 2.4) < 0.001
+
+  test "estimateVeoCost standard tier":
+    # 1 clip * 8s * $0.40 = $3.20
+    let cost = estimateVeoCost(1, "veo-3.0-generate-001")
+    check abs(cost - 3.20) < 0.001
+
+  test "confirmVeoCost passes with autoYes":
+    check confirmVeoCost(5, "veo-3.0-fast-generate-001", isTty=false, autoYes=true) == true
+
+  test "confirmVeoCost rejects non-tty without autoYes":
+    check confirmVeoCost(5, "veo-3.0-fast-generate-001", isTty=false, autoYes=false) == false
+
+  test "confirmVeoCost reads y on tty":
+    check confirmVeoCost(1, "veo-3.0-fast-generate-001", isTty=true, autoYes=false,
+                          readLineFn = proc(): string = "y") == true
+
+  test "confirmVeoCost reads n on tty":
+    check confirmVeoCost(1, "veo-3.0-fast-generate-001", isTty=true, autoYes=false,
+                          readLineFn = proc(): string = "no") == false
+
+suite "veo provider":
+  test "veoGenerate empty key short-circuits":
+    let m = newMockHttpClient()
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 8000, pauseMs: 8000)
+    let r = veoGenerate(m, "", "veo-3.0-fast-generate-001", ins, "p", getTempDir(),
+                         pollIntervalMs=0, maxAttempts=1)
+    check r.success == false
+    check "GEMINI_API_KEY" in r.error
+
+  test "veoGenerate full happy path with completed LRO":
+    let fixture = parseJson(readFile(FixturesDir / "veo_lro_response.json"))
+    let inProgressStr = $fixture["inProgress"]
+    let completedStr = $fixture["completed"]
+    let q = newQueueMock()
+    # POST :predictLongRunning returns the inProgress payload (has the operation name)
+    q.register("POST", ":predictLongRunning", 200, inProgressStr)
+    # First GET /operations/ -> inProgress (done=false), second -> completed (done=true)
+    q.enqueue("GET", "/operations/", 200, inProgressStr)
+    q.enqueue("GET", "/operations/", 200, completedStr)
+    # Download the video file bytes
+    q.register("GET", "/files/xyz", 200, "FAKE_VEO_MP4")
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 8000, pauseMs: 8000)
+    let testOutDir = getTempDir() / "honeyclip_veo_test"
+    let r = veoGenerate(q, "FAKE_KEY", "veo-3.0-fast-generate-001", ins, "p",
+                         testOutDir, pollIntervalMs=0, maxAttempts=5)
+    check r.success == true
+    check r.actualDurationMs == 8000
+    check fileExists(r.clipPath)
+    removeDir(testOutDir)
+
+  test "veoGenerate surfaces error from errored LRO":
+    let fixture = parseJson(readFile(FixturesDir / "veo_lro_response.json"))
+    let erroredStr = $fixture["errored"]
+    let m = newMockHttpClient()
+    m.register("POST", ":predictLongRunning", 200,
+               """{"name":"models/veo-3.0-fast-generate-001/operations/err1"}""")
+    m.register("GET", "/operations/err1", 200, erroredStr)
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 8000, pauseMs: 8000)
+    let r = veoGenerate(m, "FAKE_KEY", "veo-3.0-fast-generate-001", ins, "p",
+                         getTempDir(), pollIntervalMs=0, maxAttempts=2)
+    check r.success == false
+    check "Quota" in r.error
+
+suite "flash rewrite":
+  test "rewritePrompt returns context on empty key":
+    let m = newMockHttpClient()
+    check rewritePrompt(m, "", "hello world") == "hello world"
+
+  test "rewritePrompt extracts candidates[0].content.parts[0].text":
+    let m = newMockHttpClient()
+    m.register("POST", ":generateContent", 200,
+               """{"candidates":[{"content":{"parts":[{"text":"a sunny park"}]}}]}""")
+    check rewritePrompt(m, "K", "we walked outside") == "a sunny park"
+
+  test "rewritePrompt falls back on non-200":
+    let m = newMockHttpClient()
+    m.register("POST", ":generateContent", 500, "")
+    check rewritePrompt(m, "K", "fallback text") == "fallback text"
