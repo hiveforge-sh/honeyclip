@@ -1,0 +1,17 @@
+{
+  "sourceVideo": "fixture.mp4",
+  "insertions": [
+    {
+      "startMs": 18000,
+      "endMs": 21000,
+      "pauseMs": 3000,
+      "score": 75.5,
+      "sourceTag": "boundary",
+      "contextText": "transcript window",
+      "prompt": "a city street",
+      "clipPath": "/tmp/broll_18000.mp4",
+      "actualDurationMs": 3000,
+      "success": true
+    }
+  ]
+}
