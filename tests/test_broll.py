@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -107,6 +108,7 @@ class BrollOfflineFailureTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             out_path = Path(td) / "broll.json"
+            start = time.monotonic()
             r = subprocess.run(
                 [
                     binary, "broll", video,
@@ -116,11 +118,19 @@ class BrollOfflineFailureTest(unittest.TestCase):
                     "-o", str(out_path),
                     "--quiet",
                 ],
-                capture_output=True, text=True, env=env, timeout=120
+                capture_output=True, text=True, env=env, timeout=15
             )
+            elapsed = time.monotonic() - start
             self.assertNotEqual(
                 r.returncode, 0,
                 msg="expected non-zero exit when no backend is reachable; got 0"
+            )
+            self.assertLess(
+                elapsed, 10.0,
+                msg=(
+                    f"broll should fail fast before transcript extraction "
+                    f"(resolveProvider must short-circuit); elapsed={elapsed:.2f}s"
+                )
             )
             combined = (r.stdout + r.stderr).lower()
             self.assertTrue(
