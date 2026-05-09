@@ -490,6 +490,15 @@ suite "provider selection":
       discard resolveProvider("auto", "http://127.0.0.1:9999", "wf.json", "",
                               "veo-3.0-fast-generate-001", m)
 
+  test "auto raises when comfy reachable but no workflow":
+    ## Covers the branch in resolveProvider where ComfyUI is reachable but
+    ## workflowPath == "" — the untested error path from IN-03.
+    let m = newMockHttpClient()
+    m.register("GET", "/system_stats", 200, "{}")
+    expect ValueError:
+      discard resolveProvider("auto", "http://127.0.0.1:8188", "",
+                              "FAKE_KEY", "veo-3.0-fast-generate-001", m)
+
 # ============================================================
 # Suite: render plan + marker JSON
 # ============================================================
