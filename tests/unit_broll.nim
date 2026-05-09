@@ -297,12 +297,16 @@ import std/tables
 ## QueueMock: extends HttpClientLike to return different responses per call
 ## for a given URL substring (used to simulate LRO state machine transitions).
 ## Falls back to a registered MockHttpClient for non-queued URLs.
+## Uses a read-index per queue key instead of seq.delete(0) to avoid O(n) shifts.
 type QueueMock = ref object of HttpClientLike
   inner: MockHttpClient
   queues: Table[string, seq[HttpResponse]]  # key = url substring, value = fifo
+  indices: Table[string, int]               # current read position per queue key
 
 proc newQueueMock*(): QueueMock =
-  QueueMock(inner: newMockHttpClient(), queues: initTable[string, seq[HttpResponse]]())
+  QueueMock(inner: newMockHttpClient(),
+            queues: initTable[string, seq[HttpResponse]](),
+            indices: initTable[string, int]())
 
 proc register*(q: QueueMock, meth: string, urlSubstring: string,
                status: int, body: string) =
@@ -313,23 +317,26 @@ proc enqueue*(q: QueueMock, meth: string, urlSubstring: string,
   let key = meth.toUpperAscii & ":" & urlSubstring
   if key notin q.queues:
     q.queues[key] = @[]
+    q.indices[key] = 0
   q.queues[key].add (status, body)
 
 method get*(q: QueueMock, url: string): HttpResponse =
-  for k, queue in q.queues.mpairs:
-    if k.startsWith("GET:") and url.contains(k[4..^1]) and queue.len > 0:
-      let resp = queue[0]
-      queue.delete(0)
-      return resp
+  for k, queue in q.queues.pairs:
+    if k.startsWith("GET:") and url.contains(k[4..^1]):
+      let idx = q.indices.getOrDefault(k, 0)
+      if idx < queue.len:
+        q.indices[k] = idx + 1
+        return queue[idx]
   return q.inner.get(url)
 
 method post*(q: QueueMock, url: string, body: string,
              contentType: string = "application/json"): HttpResponse =
-  for k, queue in q.queues.mpairs:
-    if k.startsWith("POST:") and url.contains(k[5..^1]) and queue.len > 0:
-      let resp = queue[0]
-      queue.delete(0)
-      return resp
+  for k, queue in q.queues.pairs:
+    if k.startsWith("POST:") and url.contains(k[5..^1]):
+      let idx = q.indices.getOrDefault(k, 0)
+      if idx < queue.len:
+        q.indices[k] = idx + 1
+        return queue[idx]
   return q.inner.post(url, body, contentType)
 
 suite "veo cost":
