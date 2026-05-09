@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: Workflow, Performance & AI Features
+status: executing
+stopped_at: Phase 21 context gathered
+last_updated: "2026-05-09T02:39:51.834Z"
+last_activity: 2026-05-09 -- Phase 21 execution started
+progress:
+  total_phases: 10
+  completed_phases: 6
+  total_plans: 20
+  completed_plans: 17
+  percent: 85
+---
+
 # Project State
 
 ## Project Reference
@@ -6,14 +22,14 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Project:** honeyclip — Extract the sweetest moments from your video
 **Core value:** Surface the most engaging moments from any video with a single command — transcript with engagement scores, suggested clips, and speaker-centered reframing.
-**Current focus:** v2.0 Workflow, Performance & AI Features
+**Current focus:** Phase 21 — ai-broll-integration
 
 ## Current Position
 
-Phase: 21 - AI B-Roll Integration
-Plan: Context captured
-Status: Discuss complete
-Last activity: 2026-05-08 — Phase 21 CONTEXT.md captured (AI B-Roll Integration)
+Phase: 21 (ai-broll-integration) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 21
+Last activity: 2026-05-09 -- Phase 21 execution started
 
 Progress v1.0: [████████████████████████████████████████████████] 100%
 Progress v1.1: [████████████████████████████████████████████████] 100%
@@ -23,6 +39,7 @@ Progress Phase 20: [████████████████████
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 75
 - Average duration: 3.6 min
 - Total execution time: ~5.1 hours
@@ -63,6 +80,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 Major architectural decisions across milestones:
 
 **v1.0:**
+
 - Local signals for engagement (no cloud dependencies)
 - SRT output format (standard, editor compatible)
 - Face detection via ML (libfacedetection, OpenCV, ONNX)
@@ -70,12 +88,14 @@ Major architectural decisions across milestones:
 - ASS subtitle format (advanced styling)
 
 **v1.1:**
+
 - MinSizeRel for ML libraries (size optimization)
 - JSON schema for custom hooks (user extensibility)
 - Per-module coverage threshold (test quality)
 - FFmetadata format (FFmpeg native metadata)
 
 **v2.0:**
+
 - TOML templates for batch processing (16-01: template-based configuration with type-safe field mapping)
 - GPU acceleration via CUDA/Metal (emerging decision)
 - Local-first AI with API fallback (emerging decision)
@@ -128,6 +148,7 @@ Next: /gsd-plan-phase 21
 **Project Status: v2.0 IN PROGRESS**
 
 All 38 v2.0 requirements mapped to 10 phases (15-24). Phases 15, 16, 17, 18, 19, and 20 execution complete.
+
 - Plan 15-01: Complete (GPU Runtime Detection) ✓
 - Plan 15-02: Complete (Frame Buffer Pooling) ✓
 - Plan 15-03: Complete (GPU Runtime & Buffer Pool Tests) ✓
