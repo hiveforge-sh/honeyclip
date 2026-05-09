@@ -38,8 +38,8 @@ proc loadConfig*(pathOverride: string = ""): HoneyclipConfig =
   try:
     result = Toml.loadFile(path, HoneyclipConfig)
   except CatchableError as e:
-    # Never include the path content (might contain secrets) in the warning.
-    warning "Failed to parse config.toml at " & path & ": " & e.msg
+    # Never include the full path (reveals home dir / username) in the warning.
+    warning "Failed to parse honeyclip config file (config.toml in user config dir): " & e.msg
 
 proc resolveGeminiKey*(pathOverride: string = ""): string =
   ## Return GEMINI_API_KEY from env first, then TOML fallback.
