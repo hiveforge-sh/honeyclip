@@ -44,8 +44,10 @@ proc comfyuiGenerate*(client: HttpClientLike, baseUrl: string,
   randomize()
   let seed = rand(int64.high div 2)
   let substituted = substituteWorkflow(workflowRaw, prompt, seed, lengthFrames)
-  # Wrap substituted workflow (which is already a JSON object) as the "prompt" key.
-  let body = "{\"prompt\":" & substituted & ",\"client_id\":\"honeyclip\"}"
+  # Parse substituted workflow as JSON and re-serialize — avoids fragile string
+  # concatenation that breaks on leading/trailing whitespace or BOM (IN-01).
+  let workflowNode = parseJson(substituted)
+  let body = $(%*{"prompt": workflowNode, "client_id": "honeyclip"})
 
   try:
     let (postCode, postResp) = client.post(baseUrl & "/prompt", body)
