@@ -415,3 +415,70 @@ suite "flash rewrite":
     let m = newMockHttpClient()
     m.register("POST", ":generateContent", 500, "")
     check rewritePrompt(m, "K", "fallback text") == "fallback text"
+
+# ============================================================
+# Suite: fitting strategy + provider selection
+# ============================================================
+import ../src/broll/fitting
+import ../src/broll/provider
+
+suite "fitting strategy":
+  test "fsNone when within tolerance":
+    check selectFittingStrategy(3000, 3100) == fsNone
+    check selectFittingStrategy(3000, 2850) == fsNone
+
+  test "fsTruncate when actual exceeds":
+    check selectFittingStrategy(8000, 3000) == fsTruncate
+
+  test "fsPadFreeze for small gap":
+    check selectFittingStrategy(2700, 3100) == fsPadFreeze  # gap 400ms
+
+  test "fsPadSpeedRamp for medium gap":
+    check selectFittingStrategy(1500, 3000) == fsPadSpeedRamp  # gap 1500ms
+
+  test "fsRequestExtra for large gap":
+    check selectFittingStrategy(1000, 5000) == fsRequestExtra  # gap 4000ms
+
+  test "buildFittingCmd truncate has -t flag":
+    let cmd = buildFittingCmd("in.mp4", 3000, 8000, fsTruncate, "out.mp4")
+    check "-t" in cmd
+    check "3.000" in cmd
+
+  test "buildFittingCmd padFreeze has tpad":
+    let cmd = buildFittingCmd("in.mp4", 3000, 2700, fsPadFreeze, "out.mp4")
+    check "tpad=stop_mode=clone" in cmd
+
+  test "buildFittingCmd padSpeedRamp has setpts":
+    let cmd = buildFittingCmd("in.mp4", 3000, 1500, fsPadSpeedRamp, "out.mp4")
+    check "setpts=" in cmd
+
+suite "provider selection":
+  test "forced comfyui without workflow raises":
+    let m = newMockHttpClient()
+    expect ValueError:
+      discard resolveProvider("comfyui", "http://x", "", "", "veo-3.0-fast-generate-001", m)
+
+  test "forced veo without key raises":
+    let m = newMockHttpClient()
+    expect ValueError:
+      discard resolveProvider("veo", "http://x", "wf.json", "", "veo-3.0-fast-generate-001", m)
+
+  test "auto picks comfyui when reachable":
+    let m = newMockHttpClient()
+    m.register("GET", "/system_stats", 200, "{}")
+    let p = resolveProvider("auto", "http://127.0.0.1:8188",
+                            FixturesDir / "comfyui_workflow.json",
+                            "FAKE_KEY", "veo-3.0-fast-generate-001", m)
+    check p.kind == bpComfyUI
+
+  test "auto falls back to veo when comfy unreachable + key set":
+    let m = newMockHttpClient()
+    let p = resolveProvider("auto", "http://127.0.0.1:9999", "wf.json",
+                            "FAKE_KEY", "veo-3.0-fast-generate-001", m)
+    check p.kind == bpVeo
+
+  test "auto raises when neither available":
+    let m = newMockHttpClient()
+    expect ValueError:
+      discard resolveProvider("auto", "http://127.0.0.1:9999", "wf.json", "",
+                              "veo-3.0-fast-generate-001", m)
