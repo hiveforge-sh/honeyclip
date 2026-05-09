@@ -227,6 +227,8 @@ proc main*(cArgs: seq[string]) =
   # Generate clips
   let outDir = getTempDir() / &"honeyclip_broll_{epochTime():.0f}"
   createDir(outDir)
+  defer:
+    try: removeDir(outDir) except CatchableError: discard
   var clips: seq[ClipResult]
   var prompts: seq[string]
   for ins in chosen:
