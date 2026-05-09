@@ -115,10 +115,16 @@ proc main*(cArgs: seq[string]) =
         veoModel = key
         expecting = ""
       of "max-broll":
-        maxBroll = parseInt(key)
+        try:
+          maxBroll = parseInt(key)
+        except ValueError:
+          error &"--max-broll requires an integer, got: {key}"
         expecting = ""
       of "min-spacing":
-        minSpacingSec = parseInt(key)
+        try:
+          minSpacingSec = parseInt(key)
+        except ValueError:
+          error &"--min-spacing requires an integer, got: {key}"
         expecting = ""
       of "output":
         outputPath = key
