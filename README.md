@@ -138,6 +138,102 @@ honeyclip example.mp4 --cut-out 0,30sec
 honeyclip example.mp4 --edit none --add-in 30sec,60sec
 ```
 
+## B-Roll
+
+`honeyclip broll` auto-detects narrative-meaningful pause points in your video,
+generates short B-roll clips for each (locally via ComfyUI or remotely via Gemini Veo),
+and either emits a marker JSON for review or muxes a final video.
+
+### Quick start (local — ComfyUI)
+
+```bash
+# Start a ComfyUI server (defaults to http://127.0.0.1:8188).
+# Export your workflow as API-format JSON. Mark the prompt, seed, and frame-count
+# inputs with placeholders {{PROMPT}}, {{SEED}}, {{LENGTH}}.
+
+honeyclip broll input.mp4 --workflow my-workflow.json
+# Writes input_broll.json with detected insertion points and generated clips.
+
+honeyclip broll input.mp4 --workflow my-workflow.json --render -o final.mp4
+# Muxes final.mp4 with B-roll inserts; original audio plays underneath.
+```
+
+### Quick start (remote — Gemini Veo)
+
+```bash
+export GEMINI_API_KEY="your-key-here"
+honeyclip broll input.mp4 --backend veo --max-broll 3 --yes
+```
+
+You can also store the key in a config file:
+
+- Linux/macOS: `$XDG_CONFIG_HOME/honeyclip/config.toml` (default `~/.config/honeyclip/config.toml`)
+- Windows: `%APPDATA%\honeyclip\config.toml`
+
+```toml
+[api]
+geminiKey = "your-key-here"
+comfyuiUrl = "http://127.0.0.1:8188"
+```
+
+After creating the file:
+
+```bash
+chmod 600 ~/.config/honeyclip/config.toml
+```
+
+Add `**/honeyclip/config.toml` to your global `.gitignore`. honeyclip will warn
+if the resolved config path falls inside a git repo.
+
+### Backend selection
+
+| Flag value           | Behavior |
+|----------------------|----------|
+| `--backend auto`     | Tries ComfyUI first; falls back to Veo if a key is set |
+| `--backend comfyui`  | Forces ComfyUI; requires `--workflow PATH` |
+| `--backend veo`      | Forces Veo; requires `GEMINI_API_KEY` |
+
+### Cost note (Veo)
+
+Veo bills per second of generated video. Each clip is fixed at 8 seconds.
+
+| Tier | Per second | Per 8s clip |
+|------|------------|-------------|
+| `veo-3.0-fast-generate-001` (default) | $0.15 | $1.20 |
+| `veo-3.0-generate-001`                | $0.40 | $3.20 |
+
+Worked example: a 30-minute video with default density (~1 clip per 60s) would request
+30 clips x 8s x $0.15/s = **$36**. Use `--max-broll N` to cap.
+
+honeyclip prompts for cost confirmation when running Veo on a TTY. Use `--yes` for
+non-interactive runs (CI, scripts).
+
+### SSRF caveat
+
+`--comfy-url` accepts any URL. Default is `http://127.0.0.1:8188`. Do not point it
+at internal services unintentionally — honeyclip does not validate the host.
+
+### Output formats
+
+- Default: `input_broll.json` — list of detected insertion points and generated clip paths.
+  Reviewable before rendering.
+- With `--render`: `input_broll.mp4` — fully muxed output with B-roll inserts spliced
+  in, original audio playing underneath. A `_broll.json` sidecar is also written.
+
+### Limits
+
+- Veo clips are always 8s; honeyclip caps requested pauses at 6s and truncates as needed.
+- ComfyUI duration depends on your workflow. honeyclip falls back to freeze-pad or
+  speed-ramp fitting if the model returns a shorter clip than requested.
+- ComfyUI workflow placeholder system is opt-in: only `{{PROMPT}}`, `{{SEED}}`,
+  `{{LENGTH}}` are substituted. Any other tokens pass through unchanged.
+
+### Caveat: first network feature
+
+honeyclip is otherwise offline-first. The `broll` subcommand is the only one that
+talks to external services (ComfyUI on localhost or Gemini APIs). API keys are
+read from env first, config file second, and never written to logs.
+
 ## License
 
 [Public Domain (Unlicense)](LICENSE)
