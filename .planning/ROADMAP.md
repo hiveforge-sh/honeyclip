@@ -202,12 +202,12 @@ Plans:
 
 **Requirements:** BROLL-01, BROLL-02, BROLL-03, BROLL-04
 
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 21-01-PLAN.md -- Wave 0/1 foundations: HTTP client abstraction, test fixtures, src/config.nim, topic-shift detector + selection
-- [ ] 21-02-PLAN.md -- Providers (ComfyUI/Veo/Flash), variable-duration fitting, render mux, honeyclip broll CLI subcommand
-- [ ] 21-03-PLAN.md -- E2E Python harness, marker JSON snapshot, audio-sync smoke, README documentation
+- [x] 21-01-PLAN.md -- Wave 0/1 foundations: HTTP client abstraction, test fixtures, src/config.nim, topic-shift detector + selection
+- [x] 21-02-PLAN.md -- Providers (ComfyUI/Veo/Flash), variable-duration fitting, render mux, honeyclip broll CLI subcommand
+- [x] 21-03-PLAN.md -- E2E Python harness, marker JSON snapshot, audio-sync smoke, README documentation
 
 **Success Criteria:**
 1. User can auto-detect B-roll insertion points in timeline
