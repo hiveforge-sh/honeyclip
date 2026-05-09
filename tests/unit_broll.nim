@@ -212,3 +212,77 @@ suite "broll detection":
     let candidates = detectBrollInsertions(t, e, defaultBrollParams())
     let picked = selectInsertions(candidates, defaultBrollParams(), 200000)
     check picked.len >= 3
+
+# ============================================================
+# Suite: comfyui workflow substitution
+# ============================================================
+import ../src/broll/workflow
+import ../src/broll/comfyui
+import ../src/analyze/broll as brollAnalyze
+
+suite "comfyui workflow substitution":
+  test "substituteWorkflow replaces all three placeholders":
+    let wf = """{"text":"{{PROMPT}}","seed":"{{SEED}}","len":"{{LENGTH}}"}"""
+    let result2 = substituteWorkflow(wf, "a cat", 42'i64, 24)
+    check "{{PROMPT}}" notin result2
+    check "{{SEED}}" notin result2
+    check "{{LENGTH}}" notin result2
+    check "a cat" in result2
+    check "42" in result2
+    check "24" in result2
+
+  test "escapeJsonString handles quotes and newlines":
+    let s = "she said \"hi\"\nbye"
+    let esc = escapeJsonString(s)
+    check "\\\"hi\\\"" in esc
+    check "\\n" in esc
+    # The result, when wrapped in quotes, must be parseable JSON:
+    discard parseJson("\"" & esc & "\"")
+
+# ============================================================
+# Suite: comfyui provider
+# ============================================================
+
+suite "comfyui provider":
+  test "isComfyReachable true on 200":
+    let m = newMockHttpClient()
+    m.register("GET", "/system_stats", 200, "{}")
+    check isComfyReachable(m, "http://127.0.0.1:8188") == true
+
+  test "isComfyReachable false on 500":
+    let m = newMockHttpClient()
+    m.register("GET", "/system_stats", 500, "")
+    check isComfyReachable(m, "http://127.0.0.1:8188") == false
+
+  test "isComfyReachable false when not registered":
+    let m = newMockHttpClient()
+    check isComfyReachable(m, "http://127.0.0.1:8188") == false
+
+  test "comfyuiGenerate full happy path":
+    let m = newMockHttpClient()
+    m.register("POST", "/prompt", 200, "{\"prompt_id\":\"abc\"}")
+    m.register("GET", "/history/abc", 200,
+               "{\"abc\":{\"outputs\":{\"9\":{\"videos\":[{\"filename\":\"out.mp4\",\"subfolder\":\"\",\"type\":\"output\"}]}}}}")
+    m.register("GET", "/view", 200, "FAKE_MP4_BYTES")
+    let outDir = getTempDir() / "honeyclip_test_broll"
+    let ins = brollAnalyze.BrollInsertion(startMs: 18000, endMs: 21000, pauseMs: 3000)
+    let r = comfyuiGenerate(m, "http://127.0.0.1:8188",
+                             FixturesDir / "comfyui_workflow.json",
+                             ins, "a city street at night", outDir,
+                             pollIntervalMs = 0, maxAttempts = 2)
+    check r.success == true
+    check r.clipPath.endsWith(".mp4")
+    check fileExists(r.clipPath)
+    check m.callCount("POST", "/prompt") == 1
+    check m.callCount("GET", "/view") == 1
+    removeDir(outDir)
+
+  test "comfyuiGenerate returns failure on POST 500":
+    let m = newMockHttpClient()
+    m.register("POST", "/prompt", 500, "internal error")
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 3000, pauseMs: 3000)
+    let r = comfyuiGenerate(m, "http://127.0.0.1:8188",
+                             FixturesDir / "comfyui_workflow.json",
+                             ins, "x", getTempDir(), pollIntervalMs = 0, maxAttempts = 1)
+    check r.success == false
+    check "500" in r.error
