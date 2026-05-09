@@ -35,6 +35,12 @@ proc buildSegmentPlan*(durationMs: int64,
     result.add SegmentPlan(kind: skSource, startMs: cursor, endMs: durationMs,
                            sourceIndex: -1)
 
+proc escapeConcatPath*(p: string): string =
+  ## Escape a file path for use inside single-quoted FFmpeg concat-demuxer entries.
+  ## FFmpeg concat-demuxer uses its own escaping: backslashes and single quotes
+  ## must be escaped so a path like "it's" becomes "it'\''s".
+  p.replace("\\", "\\\\").replace("'", "\\'")
+
 proc buildConcatList*(plan: seq[SegmentPlan], srcSegmentPaths: seq[string],
                       brollClipPaths: seq[string]): string =
   ## Build FFmpeg concat-demuxer file content. Uses single-quoted path syntax.
@@ -43,10 +49,10 @@ proc buildConcatList*(plan: seq[SegmentPlan], srcSegmentPaths: seq[string],
   for s in plan:
     case s.kind
     of skSource:
-      result.add &"file '{srcSegmentPaths[srcIdx]}'\n"
+      result.add &"file '{escapeConcatPath(srcSegmentPaths[srcIdx])}'\n"
       inc srcIdx
     of skBroll:
-      result.add &"file '{brollClipPaths[s.sourceIndex]}'\n"
+      result.add &"file '{escapeConcatPath(brollClipPaths[s.sourceIndex])}'\n"
 
 proc normalizeBrollClipCmd*(brollPath: string, targetW, targetH: int,
                             targetFps: float, outPath: string): string =
