@@ -212,3 +212,353 @@ suite "broll detection":
     let candidates = detectBrollInsertions(t, e, defaultBrollParams())
     let picked = selectInsertions(candidates, defaultBrollParams(), 200000)
     check picked.len >= 3
+
+# ============================================================
+# Suite: comfyui workflow substitution
+# ============================================================
+import ../src/broll/workflow
+import ../src/broll/comfyui
+import ../src/analyze/broll as brollAnalyze
+
+suite "comfyui workflow substitution":
+  test "substituteWorkflow replaces all three placeholders":
+    let wf = """{"text":"{{PROMPT}}","seed":"{{SEED}}","len":"{{LENGTH}}"}"""
+    let result2 = substituteWorkflow(wf, "a cat", 42'i64, 24)
+    check "{{PROMPT}}" notin result2
+    check "{{SEED}}" notin result2
+    check "{{LENGTH}}" notin result2
+    check "a cat" in result2
+    check "42" in result2
+    check "24" in result2
+
+  test "escapeJsonString handles quotes and newlines":
+    let s = "she said \"hi\"\nbye"
+    let esc = escapeJsonString(s)
+    check "\\\"hi\\\"" in esc
+    check "\\n" in esc
+    # The result, when wrapped in quotes, must be parseable JSON:
+    discard parseJson("\"" & esc & "\"")
+
+# ============================================================
+# Suite: comfyui provider
+# ============================================================
+
+suite "comfyui provider":
+  test "isComfyReachable true on 200":
+    let m = newMockHttpClient()
+    m.register("GET", "/system_stats", 200, "{}")
+    check isComfyReachable(m, "http://127.0.0.1:8188") == true
+
+  test "isComfyReachable false on 500":
+    let m = newMockHttpClient()
+    m.register("GET", "/system_stats", 500, "")
+    check isComfyReachable(m, "http://127.0.0.1:8188") == false
+
+  test "isComfyReachable false when not registered":
+    let m = newMockHttpClient()
+    check isComfyReachable(m, "http://127.0.0.1:8188") == false
+
+  test "comfyuiGenerate full happy path":
+    let m = newMockHttpClient()
+    m.register("POST", "/prompt", 200, "{\"prompt_id\":\"abc\"}")
+    m.register("GET", "/history/abc", 200,
+               "{\"abc\":{\"outputs\":{\"9\":{\"videos\":[{\"filename\":\"out.mp4\",\"subfolder\":\"\",\"type\":\"output\"}]}}}}")
+    m.register("GET", "/view", 200, "FAKE_MP4_BYTES")
+    let outDir = getTempDir() / "honeyclip_test_broll"
+    let ins = brollAnalyze.BrollInsertion(startMs: 18000, endMs: 21000, pauseMs: 3000)
+    let r = comfyuiGenerate(m, "http://127.0.0.1:8188",
+                             FixturesDir / "comfyui_workflow.json",
+                             ins, "a city street at night", outDir,
+                             pollIntervalMs = 0, maxAttempts = 2)
+    check r.success == true
+    check r.clipPath.endsWith(".mp4")
+    check fileExists(r.clipPath)
+    check m.callCount("POST", "/prompt") == 1
+    check m.callCount("GET", "/view") == 1
+    removeDir(outDir)
+
+  test "comfyuiGenerate returns failure on POST 500":
+    let m = newMockHttpClient()
+    m.register("POST", "/prompt", 500, "internal error")
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 3000, pauseMs: 3000)
+    let r = comfyuiGenerate(m, "http://127.0.0.1:8188",
+                             FixturesDir / "comfyui_workflow.json",
+                             ins, "x", getTempDir(), pollIntervalMs = 0, maxAttempts = 1)
+    check r.success == false
+    check "500" in r.error
+
+# ============================================================
+# Suite: veo + flash (QueueMock helper + tests)
+# ============================================================
+import ../src/broll/veo
+import ../src/broll/flash
+import std/tables
+
+## QueueMock: extends HttpClientLike to return different responses per call
+## for a given URL substring (used to simulate LRO state machine transitions).
+## Falls back to a registered MockHttpClient for non-queued URLs.
+type QueueMock = ref object of HttpClientLike
+  inner: MockHttpClient
+  queues: Table[string, seq[HttpResponse]]  # key = url substring, value = fifo
+
+proc newQueueMock*(): QueueMock =
+  QueueMock(inner: newMockHttpClient(), queues: initTable[string, seq[HttpResponse]]())
+
+proc register*(q: QueueMock, meth: string, urlSubstring: string,
+               status: int, body: string) =
+  q.inner.register(meth, urlSubstring, status, body)
+
+proc enqueue*(q: QueueMock, meth: string, urlSubstring: string,
+              status: int, body: string) =
+  let key = meth.toUpperAscii & ":" & urlSubstring
+  if key notin q.queues:
+    q.queues[key] = @[]
+  q.queues[key].add (status, body)
+
+method get*(q: QueueMock, url: string): HttpResponse =
+  for k, queue in q.queues.mpairs:
+    if k.startsWith("GET:") and url.contains(k[4..^1]) and queue.len > 0:
+      let resp = queue[0]
+      queue.delete(0)
+      return resp
+  return q.inner.get(url)
+
+method post*(q: QueueMock, url: string, body: string,
+             contentType: string = "application/json"): HttpResponse =
+  for k, queue in q.queues.mpairs:
+    if k.startsWith("POST:") and url.contains(k[5..^1]) and queue.len > 0:
+      let resp = queue[0]
+      queue.delete(0)
+      return resp
+  return q.inner.post(url, body, contentType)
+
+suite "veo cost":
+  test "estimateVeoCost fast tier":
+    # 2 clips * 8s * $0.15 = $2.40
+    let cost = estimateVeoCost(2, "veo-3.0-fast-generate-001")
+    check abs(cost - 2.4) < 0.001
+
+  test "estimateVeoCost standard tier":
+    # 1 clip * 8s * $0.40 = $3.20
+    let cost = estimateVeoCost(1, "veo-3.0-generate-001")
+    check abs(cost - 3.20) < 0.001
+
+  test "confirmVeoCost passes with autoYes":
+    check confirmVeoCost(5, "veo-3.0-fast-generate-001", isTty=false, autoYes=true) == true
+
+  test "confirmVeoCost rejects non-tty without autoYes":
+    check confirmVeoCost(5, "veo-3.0-fast-generate-001", isTty=false, autoYes=false) == false
+
+  test "confirmVeoCost reads y on tty":
+    check confirmVeoCost(1, "veo-3.0-fast-generate-001", isTty=true, autoYes=false,
+                          readLineFn = proc(): string = "y") == true
+
+  test "confirmVeoCost reads n on tty":
+    check confirmVeoCost(1, "veo-3.0-fast-generate-001", isTty=true, autoYes=false,
+                          readLineFn = proc(): string = "no") == false
+
+suite "veo provider":
+  test "veoGenerate empty key short-circuits":
+    let m = newMockHttpClient()
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 8000, pauseMs: 8000)
+    let r = veoGenerate(m, "", "veo-3.0-fast-generate-001", ins, "p", getTempDir(),
+                         pollIntervalMs=0, maxAttempts=1)
+    check r.success == false
+    check "GEMINI_API_KEY" in r.error
+
+  test "veoGenerate full happy path with completed LRO":
+    let fixture = parseJson(readFile(FixturesDir / "veo_lro_response.json"))
+    let inProgressStr = $fixture["inProgress"]
+    let completedStr = $fixture["completed"]
+    let q = newQueueMock()
+    # POST :predictLongRunning returns the inProgress payload (has the operation name)
+    q.register("POST", ":predictLongRunning", 200, inProgressStr)
+    # First GET /operations/ -> inProgress (done=false), second -> completed (done=true)
+    q.enqueue("GET", "/operations/", 200, inProgressStr)
+    q.enqueue("GET", "/operations/", 200, completedStr)
+    # Download the video file bytes
+    q.register("GET", "/files/xyz", 200, "FAKE_VEO_MP4")
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 8000, pauseMs: 8000)
+    let testOutDir = getTempDir() / "honeyclip_veo_test"
+    let r = veoGenerate(q, "FAKE_KEY", "veo-3.0-fast-generate-001", ins, "p",
+                         testOutDir, pollIntervalMs=0, maxAttempts=5)
+    check r.success == true
+    check r.actualDurationMs == 8000
+    check fileExists(r.clipPath)
+    removeDir(testOutDir)
+
+  test "veoGenerate surfaces error from errored LRO":
+    let fixture = parseJson(readFile(FixturesDir / "veo_lro_response.json"))
+    let erroredStr = $fixture["errored"]
+    let m = newMockHttpClient()
+    m.register("POST", ":predictLongRunning", 200,
+               """{"name":"models/veo-3.0-fast-generate-001/operations/err1"}""")
+    m.register("GET", "/operations/err1", 200, erroredStr)
+    let ins = brollAnalyze.BrollInsertion(startMs: 0, endMs: 8000, pauseMs: 8000)
+    let r = veoGenerate(m, "FAKE_KEY", "veo-3.0-fast-generate-001", ins, "p",
+                         getTempDir(), pollIntervalMs=0, maxAttempts=2)
+    check r.success == false
+    check "Quota" in r.error
+
+suite "flash rewrite":
+  test "rewritePrompt returns context on empty key":
+    let m = newMockHttpClient()
+    check rewritePrompt(m, "", "hello world") == "hello world"
+
+  test "rewritePrompt extracts candidates[0].content.parts[0].text":
+    let m = newMockHttpClient()
+    m.register("POST", ":generateContent", 200,
+               """{"candidates":[{"content":{"parts":[{"text":"a sunny park"}]}}]}""")
+    check rewritePrompt(m, "K", "we walked outside") == "a sunny park"
+
+  test "rewritePrompt falls back on non-200":
+    let m = newMockHttpClient()
+    m.register("POST", ":generateContent", 500, "")
+    check rewritePrompt(m, "K", "fallback text") == "fallback text"
+
+# ============================================================
+# Suite: fitting strategy + provider selection
+# ============================================================
+import ../src/broll/fitting
+import ../src/broll/provider
+
+suite "fitting strategy":
+  test "fsNone when within tolerance":
+    check selectFittingStrategy(3000, 3100) == fsNone
+    check selectFittingStrategy(3000, 2850) == fsNone
+
+  test "fsTruncate when actual exceeds":
+    check selectFittingStrategy(8000, 3000) == fsTruncate
+
+  test "fsPadFreeze for small gap":
+    check selectFittingStrategy(2700, 3100) == fsPadFreeze  # gap 400ms
+
+  test "fsPadSpeedRamp for medium gap":
+    check selectFittingStrategy(1500, 3000) == fsPadSpeedRamp  # gap 1500ms
+
+  test "fsRequestExtra for large gap":
+    check selectFittingStrategy(1000, 5000) == fsRequestExtra  # gap 4000ms
+
+  test "buildFittingCmd truncate has -t flag":
+    let cmd = buildFittingCmd("in.mp4", 3000, 8000, fsTruncate, "out.mp4")
+    check "-t" in cmd
+    check "3.000" in cmd
+
+  test "buildFittingCmd padFreeze has tpad":
+    let cmd = buildFittingCmd("in.mp4", 3000, 2700, fsPadFreeze, "out.mp4")
+    check "tpad=stop_mode=clone" in cmd
+
+  test "buildFittingCmd padSpeedRamp has setpts":
+    let cmd = buildFittingCmd("in.mp4", 3000, 1500, fsPadSpeedRamp, "out.mp4")
+    check "setpts=" in cmd
+
+suite "provider selection":
+  test "forced comfyui without workflow raises":
+    let m = newMockHttpClient()
+    expect ValueError:
+      discard resolveProvider("comfyui", "http://x", "", "", "veo-3.0-fast-generate-001", m)
+
+  test "forced veo without key raises":
+    let m = newMockHttpClient()
+    expect ValueError:
+      discard resolveProvider("veo", "http://x", "wf.json", "", "veo-3.0-fast-generate-001", m)
+
+  test "auto picks comfyui when reachable":
+    let m = newMockHttpClient()
+    m.register("GET", "/system_stats", 200, "{}")
+    let p = resolveProvider("auto", "http://127.0.0.1:8188",
+                            FixturesDir / "comfyui_workflow.json",
+                            "FAKE_KEY", "veo-3.0-fast-generate-001", m)
+    check p.kind == bpComfyUI
+
+  test "auto falls back to veo when comfy unreachable + key set":
+    let m = newMockHttpClient()
+    let p = resolveProvider("auto", "http://127.0.0.1:9999", "wf.json",
+                            "FAKE_KEY", "veo-3.0-fast-generate-001", m)
+    check p.kind == bpVeo
+
+  test "auto raises when neither available":
+    let m = newMockHttpClient()
+    expect ValueError:
+      discard resolveProvider("auto", "http://127.0.0.1:9999", "wf.json", "",
+                              "veo-3.0-fast-generate-001", m)
+
+# ============================================================
+# Suite: render plan + marker JSON
+# ============================================================
+import ../src/broll/render
+import ../src/broll/markers
+
+suite "render plan":
+  test "empty insertions yields single source segment":
+    let plan = buildSegmentPlan(60000, @[])
+    check plan.len == 1
+    check plan[0].kind == skSource
+    check plan[0].endMs == 60000
+
+  test "two insertions yield 5 alternating segments":
+    let inserts = @[
+      brollAnalyze.BrollInsertion(startMs: 10000, endMs: 13000, pauseMs: 3000),
+      brollAnalyze.BrollInsertion(startMs: 40000, endMs: 43000, pauseMs: 3000)
+    ]
+    let plan = buildSegmentPlan(60000, inserts)
+    check plan.len == 5
+    check plan[0].kind == skSource and plan[0].endMs == 10000
+    check plan[1].kind == skBroll and plan[1].sourceIndex == 0
+    check plan[2].kind == skSource and plan[2].startMs == 13000 and plan[2].endMs == 40000
+    check plan[3].kind == skBroll and plan[3].sourceIndex == 1
+    check plan[4].kind == skSource and plan[4].endMs == 60000
+
+  test "buildConcatList interleaves correctly":
+    let plan = @[
+      SegmentPlan(kind: skSource, startMs: 0, endMs: 10000, sourceIndex: -1),
+      SegmentPlan(kind: skBroll, startMs: 10000, endMs: 13000, sourceIndex: 0),
+      SegmentPlan(kind: skSource, startMs: 13000, endMs: 60000, sourceIndex: -1)
+    ]
+    let txt = buildConcatList(plan, @["s0.mp4", "s1.mp4"], @["b0.mp4"])
+    check "file 's0.mp4'" in txt
+    check "file 'b0.mp4'" in txt
+    check "file 's1.mp4'" in txt
+    check txt.count("file '") == 3
+
+  test "normalizeBrollClipCmd contains scale and libx264":
+    let cmd = normalizeBrollClipCmd("in.mp4", 1920, 1080, 24.0, "out.mp4")
+    check "scale=1920:1080" in cmd
+    check "libx264" in cmd
+    check "fps=24.000" in cmd
+
+suite "marker json":
+  test "writeBrollMarkersJson produces parseable JSON with all required keys":
+    let outPath = getTempDir() / "honeyclip_marker_test.json"
+    let inserts = @[brollAnalyze.BrollInsertion(
+      startMs: 18000, endMs: 21000, pauseMs: 3000,
+      score: 75.5'f32, sourceTag: "boundary", contextText: "hello world")]
+    let clips2 = @[ClipResult(success: true, clipPath: "/tmp/x.mp4", actualDurationMs: 3000)]
+    writeBrollMarkersJson("input.mp4", inserts, clips2, @["a sunny park"], outPath)
+    let parsed = parseJson(readFile(outPath))
+    check parsed["sourceVideo"].getStr == "input.mp4"
+    check parsed["insertions"].len == 1
+    let ins0 = parsed["insertions"][0]
+    for k in ["startMs", "endMs", "pauseMs", "score", "sourceTag",
+              "contextText", "prompt", "clipPath", "actualDurationMs", "success"]:
+      check ins0.hasKey(k)
+    check ins0["prompt"].getStr == "a sunny park"
+    removeFile(outPath)
+
+# ============================================================
+# Suite: broll cli
+# ============================================================
+import ../src/cmds/broll  # compile test: if this compiles, broll module is valid
+
+suite "broll cli":
+  test "broll module compiles":
+    # If unit_broll compiles successfully with ../src/cmds/broll imported, this passes.
+    discard
+
+  test "main.nim registers broll":
+    let mainSrc = readFile("src/main.nim")
+    check "broll" in mainSrc
+    check "\"broll\"" in mainSrc
+
+  test "help text prints all required flags (binary smoke -- only if built)":
+    skip()

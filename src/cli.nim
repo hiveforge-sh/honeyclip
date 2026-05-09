@@ -2,6 +2,7 @@
 const commands*: seq[tuple[name: string, help: string]] = @[
   ("analyze", "Analyze video and detect engaging clips (convenience workflow)"),
   ("batch", "Process multiple files with a TOML template"),
+  ("broll", "Auto-generate B-roll inserts at detected timeline points"),
   ("cache", ""),
   ("caption", "Generate and render captions from transcripts with styling and NLE export"),
   ("clips", "Detect and export engaging clips from video"),
