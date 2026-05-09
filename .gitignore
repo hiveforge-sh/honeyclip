@@ -54,3 +54,7 @@ help.txt
 tests/benchmark_output/
 tests/performance_validation_output/
 tests/performance_validation_results.json
+
+# Bundled MinGW runtime DLLs (copied next to honeyclip.exe)
+libgomp-1.dll
+libstdc++-6.dll

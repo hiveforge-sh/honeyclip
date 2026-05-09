@@ -353,6 +353,7 @@ Usage:
 
 Commands:
   analyze     Analyze video and detect engaging clips (recommended)
+  broll       Auto-generate B-roll inserts at detected timeline points
   cache       Manage face detection cache
   caption     Generate captions/subtitles
   clips       Extract engaging clips from video
