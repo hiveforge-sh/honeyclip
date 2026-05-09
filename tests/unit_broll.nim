@@ -122,3 +122,93 @@ suite "config":
   test "loadConfig returns zero-value when file missing":
     let cfg = loadConfig("/nonexistent/path.toml")
     check cfg.api.geminiKey == ""
+
+# ============================================================
+# Suite: broll detection
+# ============================================================
+import ../src/transcript/types as transcriptTypes
+import ../src/analyze/engagement_types
+import ../src/analyze/broll
+
+proc loadTranscriptFromJson(d: JsonNode): Transcript =
+  ## Parse a simplified broll_transcript.json structure into Transcript type.
+  ## speaker field in JSON is int (0+ = speaker index, matches TranscriptSegment.speaker).
+  result = newTranscript()
+  result.duration = d["duration"].getInt.int64
+  for segNode in d["transcript"]["segments"]:
+    var seg = TranscriptSegment(
+      startMs: segNode["startMs"].getInt.int64,
+      endMs: segNode["endMs"].getInt.int64,
+      text: segNode["text"].getStr,
+      speaker: segNode["speaker"].getInt,
+      words: @[]
+    )
+    for wNode in segNode["words"]:
+      seg.words.add Word(
+        text: wNode["text"].getStr,
+        startMs: wNode["startMs"].getInt.int64,
+        endMs: wNode["endMs"].getInt.int64,
+        speaker: wNode["speaker"].getInt
+      )
+    result.segments.add(seg)
+
+proc loadEngagementFromJson(d: JsonNode): EngagementTimeline =
+  ## Parse the "engagement" section of broll_transcript.json.
+  result.duration = d["engagement"]["duration"].getInt.int64
+  result.segments = @[]
+  for segNode in d["engagement"]["segments"]:
+    result.segments.add EngagementSegment(
+      startMs: segNode["startMs"].getInt.int64,
+      endMs: segNode["endMs"].getInt.int64,
+      score: segNode["score"].getFloat.float32
+    )
+
+suite "broll detection":
+  var t: Transcript
+  var e: EngagementTimeline
+
+  setup:
+    let raw = readFile(FixturesDir / "broll_transcript.json")
+    let d = parseJson(raw)
+    t = loadTranscriptFromJson(d)
+    e = loadEngagementFromJson(d)
+
+  test "rejects pauses shorter than minPauseMs":
+    # pauses: 9000-9500 (500ms), 35000-35400 (400ms), 46000-46100 (100ms) must be absent
+    let candidates = detectBrollInsertions(t, e, defaultBrollParams())
+    for c in candidates:
+      check c.pauseMs >= 800
+
+  test "speaker change boosts boundary component":
+    # The 18000-21000 pause has speaker 0->1 (speaker change); score must reflect
+    # boundary contribution of 0.3 * 100 = 30 at minimum.
+    let candidates = detectBrollInsertions(t, e, defaultBrollParams())
+    var found = false
+    for c in candidates:
+      if c.startMs == 18000:
+        check c.score >= 30.0'f32
+        found = true
+    check found
+
+  test "selection respects min-spacing":
+    let candidates = detectBrollInsertions(t, e, defaultBrollParams())
+    let picked = selectInsertions(candidates, defaultBrollParams(), 200000)
+    for i in 1 ..< picked.len:
+      check picked[i].startMs - picked[i-1].startMs >= 30_000
+
+  test "selection caps at maxInsertions when set":
+    var p = defaultBrollParams()
+    p.maxInsertions = 2
+    let candidates = detectBrollInsertions(t, e, p)
+    let picked = selectInsertions(candidates, p, 200000)
+    check picked.len <= 2
+
+  test "endMs clamped to maxPauseMs":
+    let candidates = detectBrollInsertions(t, e, defaultBrollParams())
+    for c in candidates:
+      check c.endMs - c.startMs <= 6000
+
+  test "fixture produces at least 3 selected insertions with defaults":
+    let candidates = detectBrollInsertions(t, e, defaultBrollParams())
+    let picked = selectInsertions(candidates, defaultBrollParams(), 200000)
+    check picked.len >= 3
