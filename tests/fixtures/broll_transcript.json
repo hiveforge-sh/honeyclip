@@ -1,0 +1,34 @@
+{
+  "duration": 200000,
+  "transcript": {
+    "segments": [
+      {"startMs": 0,      "endMs": 9000,   "speaker": 0, "text": "Welcome to the show. Today we will talk about something interesting.",
+       "words": [{"text":"Welcome","startMs":0,"endMs":600,"speaker":0}]},
+      {"startMs": 9500,   "endMs": 18000,  "speaker": 0, "text": "It is very technical but I will keep it simple.",
+       "words": []},
+      {"startMs": 21000,  "endMs": 35000,  "speaker": 1, "text": "Right, and from my side the experience was different entirely.",
+       "words": []},
+      {"startMs": 35400,  "endMs": 46000,  "speaker": 1, "text": "Brief follow-up here without much pause.",
+       "words": []},
+      {"startMs": 46100,  "endMs": 55000,  "speaker": 0, "text": "Quick reply with no real gap.",
+       "words": []},
+      {"startMs": 90000,  "endMs": 110000, "speaker": 0, "text": "Now a totally different topic shift after a long silence.",
+       "words": []},
+      {"startMs": 113000, "endMs": 130000, "speaker": 0, "text": "And here is another paragraph continuing the new topic.",
+       "words": []},
+      {"startMs": 160000, "endMs": 180000, "speaker": 1, "text": "Final segment after another large gap and speaker change.",
+       "words": []}
+    ]
+  },
+  "engagement": {
+    "duration": 200000,
+    "segments": [
+      {"startMs": 0,      "endMs": 20000,  "score": 30.0},
+      {"startMs": 20000,  "endMs": 50000,  "score": 65.0},
+      {"startMs": 50000,  "endMs": 90000,  "score": 40.0},
+      {"startMs": 90000,  "endMs": 130000, "score": 80.0},
+      {"startMs": 130000, "endMs": 160000, "score": 45.0},
+      {"startMs": 160000, "endMs": 200000, "score": 85.0}
+    ]
+  }
+}

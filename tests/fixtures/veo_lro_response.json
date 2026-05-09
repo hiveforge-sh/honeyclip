@@ -1,0 +1,28 @@
+{
+  "inProgress": {
+    "name": "models/veo-3.0-fast-generate-001/operations/abc123",
+    "metadata": {"@type": "type.googleapis.com/google.ai.generativelanguage.v1beta.PredictLongRunningMetadata"},
+    "done": false
+  },
+  "completed": {
+    "name": "models/veo-3.0-fast-generate-001/operations/abc123",
+    "done": true,
+    "response": {
+      "@type": "type.googleapis.com/google.ai.generativelanguage.v1beta.PredictLongRunningResponse",
+      "generateVideoResponse": {
+        "generatedSamples": [
+          {
+            "video": {
+              "uri": "https://generativelanguage.googleapis.com/v1beta/files/xyz?alt=media"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "errored": {
+    "name": "models/veo-3.0-fast-generate-001/operations/err1",
+    "done": true,
+    "error": {"code": 3, "message": "Quota exceeded"}
+  }
+}
