@@ -21,7 +21,7 @@ jobs:
             binary_name: honeyclip-macos-arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Homebrew
         if: runner.os != 'macOS'
         run: |
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Nim
         uses: jiro4989/setup-nim-action@v2
         with:
