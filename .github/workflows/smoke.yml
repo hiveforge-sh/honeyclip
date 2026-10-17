@@ -36,7 +36,7 @@ jobs:
           - os: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Python
         uses: actions/setup-python@v6
         with:
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Nim
         uses: jiro4989/setup-nim-action@v2
         with:
@@ -105,7 +105,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       
       - name: Setup Nim
         uses: jiro4989/setup-nim-action@v2
