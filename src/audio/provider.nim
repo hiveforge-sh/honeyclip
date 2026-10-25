@@ -101,19 +101,28 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
     result.err = "No readable audio stream in " & inputPath
     return
 
-  # T-22-04: confirm cost before any HTTP traffic.
-  if p.kind == apElevenlabs and (flags.denoise or flags.voiceIsolation):
-    if not confirmElevenlabsCost(probe.durationSec, isTty, autoYes):
-      result.err = "ElevenLabs cost not confirmed"
-      return
-
   let resampled = tmpDir / "resampled.wav"
   if not resampleTo48kMono(inputPath, resampled):
     result.err = "Failed to resample input to 48kHz mono"
     return
 
+  # The container banner can say `Duration: N/A` (some MKV/WebM/streamed
+  # files), so measure the audio that will actually be processed (WR-01).
+  var dur = probeAudio(resampled).durationSec
+  if dur <= 0.0:
+    # 48 kHz mono s16le: 96000 bytes per second after the 44-byte header.
+    dur = max(0.0, (getFileSize(resampled) - 44).float / 96000.0)
+  if dur <= 0.0: dur = probe.durationSec
+
+  # T-22-04: confirm cost before any HTTP traffic. An unknown duration is
+  # never auto-approved (confirmElevenlabsCost requires --yes or a prompt).
+  if p.kind == apElevenlabs and (flags.denoise or flags.voiceIsolation):
+    if not confirmElevenlabsCost(dur, isTty, autoYes):
+      result.err = "ElevenLabs cost not confirmed"
+      return
+
   var current = resampled
-  let big = probe.durationSec > chunkTriggerSec or
+  let big = dur > chunkTriggerSec or
             (fileExists(inputPath) and getFileSize(inputPath) > chunkTriggerBytes)
   if big:
     let chunks = chunkAtSilence(resampled, chunkSec, tmpDir / "chunks")

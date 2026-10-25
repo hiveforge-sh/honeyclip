@@ -20,7 +20,16 @@ proc estimateElevenlabsCost*(durationSec: float): float =
 proc confirmElevenlabsCost*(durationSec: float; isTty, autoYes: bool;
                             readLineFn: proc(): string = nil): bool =
   ## autoYes -> true; cost <= $1 -> true; non-TTY above $1 -> false; else prompt.
+  ## An unknown duration (<= 0) is never auto-approved (WR-01): it needs
+  ## --yes or an answer at the TTY prompt.
   if autoYes: return true
+  if durationSec <= 0.0:
+    if not isTty:
+      warning "Cannot determine the audio duration for the ElevenLabs cost estimate; pass --yes to upload anyway"
+      return false
+    echo "ElevenLabs audio isolation: duration unknown, so the cost cannot be estimated. Continue? [y/N]"
+    let answer = if readLineFn != nil: readLineFn() else: stdin.readLine()
+    return answer.strip.toLowerAscii in ["y", "yes"]
   let cost = estimateElevenlabsCost(durationSec)
   if cost <= 1.0 + 1e-9: return true
   if not isTty:

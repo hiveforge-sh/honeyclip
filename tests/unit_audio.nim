@@ -219,6 +219,11 @@ suite "elevenlabs cost":
     check confirmElevenlabsCost(6000.0, true, false, proc(): string = "y")
   test "> $1 TTY n":
     check not confirmElevenlabsCost(6000.0, true, false, proc(): string = "n")
+  test "WR-01: unknown duration is not auto-approved":
+    check not confirmElevenlabsCost(0.0, false, false)
+    check not confirmElevenlabsCost(0.0, true, false, proc(): string = "n")
+    check confirmElevenlabsCost(0.0, true, false, proc(): string = "y")
+    check confirmElevenlabsCost(0.0, false, true)
 
 suite "elevenlabs provider":
   let fixture = readFile("tests/fixtures/elevenlabs_isolator_response.bin")
