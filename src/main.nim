@@ -357,6 +357,7 @@ Commands:
   broll       Auto-generate B-roll inserts at detected timeline points
   cache       Manage face detection cache
   caption     Generate captions/subtitles
+  chapters    Auto-generate chapters from scene changes and engagement peaks
   clips       Extract engaging clips from video
   desc        Generate video descriptions
   engage      Analyze video engagement metrics
