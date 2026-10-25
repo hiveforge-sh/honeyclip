@@ -400,6 +400,26 @@ suite "audio enhance dispatch":
     let c = buildMuxCmd("v.mp4", "a.wav", "out.mp4")
     check "-c:v copy" in c
     check "-map 0:v -map 1:a" in c
+  test "multi-track mux replaces one track in place, copies the rest":
+    let c = buildMuxCmd("v.mp4", "a.wav", "out.mp4", audioTrack = 1, trackCount = 3)
+    check "-map 0:v -map 0:a:0 -map 1:a:0 -map 0:a:2" in c
+    check "-c:a copy -c:a:1 aac" in c
+    check "-map_metadata:s:a:1 0:s:a:1" in c
+  test "multi-track mux keeps other tracks bit-identical":
+    let vid = tmp / "mt.mp4"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("testsrc=duration=2:size=160x120:rate=10") & " -f lavfi -i " &
+      quoteShell("sine=f=300:d=2") & " -f lavfi -i " & quoteShell("sine=f=900:d=2") &
+      " -map 0 -map 1 -map 2 -pix_fmt yuv420p -c:a aac -shortest " & quoteShell(vid))
+    check probeAudio(vid).audioTracks == 2
+    let o = tmp / "mt_out.mp4"
+    check muxEnhancedAudio(vid, "tests/fixtures/audio_clean.wav", o, 0, 2)
+    check probeAudio(o).audioTracks == 2
+    proc md5Of(path: string; track: int): string =
+      execCmdEx("ffmpeg -loglevel error -i " & quoteShell(path) &
+                " -map 0:a:" & $track & " -c copy -f md5 -").output
+    check md5Of(vid, 1) == md5Of(o, 1)
+    check md5Of(vid, 0) != md5Of(o, 0)
   test "mux produces video with new audio":
     let vid = tmp / "v.mp4"
     discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
@@ -469,6 +489,13 @@ suite "cli enhance":
     check o.deEss == smOff
     check o.outputPath == "/tmp/out.mp4"
     check o.inputPath == "input.mp4"
+  test "--audio-track defaults to 1 and parses both forms":
+    check enhanceCmd.parseArgs(@["x.mp4"]).opts.audioTrack == 1
+    check enhanceCmd.parseArgs(@["--audio-track=3", "x.mp4"]).opts.audioTrack == 3
+    check enhanceCmd.parseArgs(@["--audio-track", "2", "x.mp4"]).opts.audioTrack == 2
+  test "--audio-track rejects 0 and non-numbers":
+    check enhanceCmd.parseArgs(@["--audio-track=0", "x.mp4"]).code != 0
+    check enhanceCmd.parseArgs(@["--audio-track=two", "x.mp4"]).code != 0
   test "unknown flag returns nonzero":
     check enhanceCmd.parseArgs(@["--bogus", "input.mp4"]).code != 0
   test "bad stage value returns nonzero":

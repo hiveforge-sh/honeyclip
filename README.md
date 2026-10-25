@@ -323,6 +323,7 @@ honeyclip enhance talk.mp4 --backend=elevenlabs --yes
 --de-reverb=MODE        on | off | auto (default: auto)
 --de-ess=MODE           on | off | auto (default: auto)
 --hum-removal=MODE      on | off | auto (default: auto)
+--audio-track N         Audio track to enhance, counting from 1 (default: 1)
 --audio-only            Write the cleaned WAV instead of a video
 -o, --output PATH       Output path (default: {input}.enhanced.{ext})
 --yes                   Skip the ElevenLabs cost confirmation
@@ -332,6 +333,18 @@ honeyclip enhance talk.mp4 --backend=elevenlabs --yes
 
 Exit codes: `0` success, `1` backend unavailable, enhancement failed or cost not
 confirmed, `2` bad arguments.
+
+### Multiple audio tracks
+
+Recordings with several audio tracks (OBS game/mic/chat tracks, for example)
+keep all of them. honeyclip enhances one track, track 1 unless you pass
+`--audio-track N`, and copies the others into the output unchanged, in their
+original order. It prints a warning naming the track it enhanced. With
+`--audio-only`, only the enhanced track is written.
+
+```bash
+honeyclip enhance stream.mp4 --audio-track 2   # enhance the mic track only
+```
 
 ### Notes
 

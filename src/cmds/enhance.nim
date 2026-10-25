@@ -6,7 +6,7 @@
 ## the cleaned WAV with --audio-only.
 
 import std/[parseopt, strutils, os, terminal]
-import ../audio/[provider, render]
+import ../audio/[provider, render, ffmpeg_chain]
 import ../analyze/audio_enhance
 import ../config
 import ../http_client
@@ -30,6 +30,8 @@ Options:
   --de-reverb=MODE        on | off | auto (default: auto)
   --de-ess=MODE           on | off | auto (default: auto)
   --hum-removal=MODE      on | off | auto (default: auto)
+  --audio-track N         Audio track to enhance, counting from 1 (default: 1).
+                            Other tracks are copied through unchanged.
   --audio-only            Write the cleaned WAV instead of a video
   -o, --output PATH       Output path (default: {input}.enhanced.{ext})
   --yes                   Skip the ElevenLabs cost confirmation
@@ -49,6 +51,7 @@ type
     backend*: string
     denoise*, voiceIsolation*, deReverb*, deEss*, humRemoval*: StageMode
     audioOnly*: bool
+    audioTrack*: int  ## 1-based, as shown to users
     outputPath*: string
     autoYes*: bool
     quiet*: bool
@@ -66,11 +69,12 @@ proc parseArgs*(args: seq[string]): tuple[opts: EnhanceOptions, code: int] =
   ## Pure argument parsing: returns exit code 0 to continue (or after --help,
   ## with opts.helpShown set) and 2 on usage errors.
   result.opts.backend = "auto"
+  result.opts.audioTrack = 1
   # `--flag value` and `-o value` are joined into `--flag=value` first;
   # parseopt only reliably handles the `=`/`:` forms.
   const valueFlags = ["-o", "--output", "--backend", "--denoise",
                       "--voice-isolation", "--de-reverb", "--de-ess",
-                      "--hum-removal"]
+                      "--hum-removal", "--audio-track"]
   var joined: seq[string]
   var i = 0
   while i < args.len:
@@ -95,6 +99,10 @@ proc parseArgs*(args: seq[string]): tuple[opts: EnhanceOptions, code: int] =
         of "de-ess": result.opts.deEss = parseStage(p.val)
         of "hum-removal": result.opts.humRemoval = parseStage(p.val)
         of "audio-only": result.opts.audioOnly = true
+        of "audio-track":
+          let n = parseInt(p.val)
+          if n < 1: raise newException(ValueError, "--audio-track must be 1 or more")
+          result.opts.audioTrack = n
         of "o", "output": result.opts.outputPath = p.val
         of "yes": result.opts.autoYes = true
         of "q", "quiet": result.opts.quiet = true
@@ -138,35 +146,61 @@ proc run*(args: seq[string]): int =
     stderr.writeLine "Error! " & e.msg
     return 1
 
-  let modes = (denoise: opts.denoise, voiceIsolation: opts.voiceIsolation,
-               deReverb: opts.deReverb, deEss: opts.deEss,
-               humRemoval: opts.humRemoval)
-  let flags = analyzeAudioForEnhancement(opts.inputPath, modes)
-  debug "stages: denoise=" & $flags.denoise & " voiceIsolation=" &
-        $flags.voiceIsolation & " humRemoval=" & $flags.humRemoval &
-        " deEss=" & $flags.deEss
+  let inExt = opts.inputPath.splitFile.ext.toLowerAscii
+  let audioInput = inExt in [".wav", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"]
+  let wantWav = opts.audioOnly or audioInput
+
+  let trackCount = probeAudio(opts.inputPath).audioTracks
+  let track = opts.audioTrack - 1
+  if trackCount > 0 and track >= trackCount:
+    stderr.writeLine "Error! --audio-track " & $opts.audioTrack & " requested but " &
+      opts.inputPath & " has " & $trackCount & " audio track(s)"
+    return 1
+  if trackCount > 1:
+    let others = if wantWav: "other tracks are not written with a WAV output"
+                 else: "passing the other " & $(trackCount - 1) &
+                       " through unchanged"
+    warning opts.inputPath & " has " & $trackCount & " audio tracks: enhancing track " &
+      $opts.audioTrack & ", " & others & " (choose with --audio-track N)"
 
   let outDir = getTempDir() / ("honeyclip_enhance_" & $getCurrentProcessId())
   defer:
     try: removeDir(outDir) except CatchableError: discard
+
+  # Multi-track input: work on the selected track alone so the analyzer and
+  # every backend see exactly the audio that gets enhanced.
+  var source = opts.inputPath
+  if trackCount > 1 or track > 0:
+    createDir(outDir)
+    source = outDir / "selected_track.wav"
+    if not extractAudioTrack(opts.inputPath, source, track):
+      stderr.writeLine "Error! could not read audio track " & $opts.audioTrack
+      return 1
+
+  let modes = (denoise: opts.denoise, voiceIsolation: opts.voiceIsolation,
+               deReverb: opts.deReverb, deEss: opts.deEss,
+               humRemoval: opts.humRemoval)
+  let flags = analyzeAudioForEnhancement(source, modes)
+  debug "stages: denoise=" & $flags.denoise & " voiceIsolation=" &
+        $flags.voiceIsolation & " humRemoval=" & $flags.humRemoval &
+        " deEss=" & $flags.deEss
+
   let http = newRealHttpClient(timeoutMs = 300_000)
   let tty = isatty(stdin) and isatty(stdout)
-  let res = provider.enhance(http, opts.inputPath, outDir, flags,
+  let res = provider.enhance(http, source, outDir / "work", flags,
                              opts.autoYes, tty)
   if res.outputPath == "":
     stderr.writeLine "Error! Enhancement failed: " &
       (if res.err != "": res.err else: "backend error")
     return 1
 
-  let inExt = opts.inputPath.splitFile.ext.toLowerAscii
-  let audioInput = inExt in [".wav", ".mp3", ".m4a", ".flac", ".aac", ".ogg", ".opus"]
-  let wantWav = opts.audioOnly or audioInput
   let finalOut =
     if opts.outputPath != "": opts.outputPath
     elif wantWav: opts.inputPath.changeFileExt("") & ".enhanced.wav"
     else: opts.inputPath.changeFileExt("") & ".enhanced" & inExt
   let ok = if wantWav: writeAudioOnly(res.outputPath, finalOut)
-           else: muxEnhancedAudio(opts.inputPath, res.outputPath, finalOut)
+           else: muxEnhancedAudio(opts.inputPath, res.outputPath, finalOut,
+                                  track, trackCount)
   if not ok:
     stderr.writeLine "Error! could not write output: " & finalOut
     return 1

@@ -14,6 +14,7 @@ type
     sampleRate*: int
     channels*: int
     durationSec*: float
+    audioTracks*: int
 
 proc ffBase(): string =
   quoteShell(ffmpegBin()) & " -hide_banner -nostats -y"
@@ -46,14 +47,17 @@ proc parseDuration(s: string): float =
     result = 0.0
 
 proc probeAudio*(path: string): AudioProbe =
-  ## Sample rate, channels and duration of the first audio stream, parsed
-  ## from the FFmpeg banner (no ffprobe in the in-tree build).
+  ## Sample rate, channels and duration of the first audio stream, plus the
+  ## number of audio streams, parsed from the FFmpeg banner (no ffprobe in
+  ## the in-tree build).
   if not fileExists(path): return
   let (output, _) = execCmdEx(ffBase() & " -i " & quoteShell(path))
   for line in output.splitLines:
     let l = line.strip
     if result.durationSec == 0.0 and l.startsWith("Duration:"):
       result.durationSec = parseDuration(l[9 .. ^1].split(',')[0])
+    if l.startsWith("Stream #") and "Audio:" in l:
+      inc result.audioTracks
     if result.sampleRate == 0 and "Audio:" in l:
       let fields = l.split("Audio:")[1].split(',')
       for i, f in fields:
@@ -120,6 +124,11 @@ proc decodeMp3ToWav*(inputPath, outputPath: string): bool =
   ## OQ-3: the ElevenLabs response is MP3; decode to WAV before filtering.
   runFf("-i " & quoteShell(inputPath) & " -f wav " & quoteShell(outputPath)) and
     fileExists(outputPath)
+
+proc extractAudioTrack*(inputPath, outputPath: string; track: int): bool =
+  ## Write audio stream `track` (0-based) of inputPath to a PCM WAV.
+  runFf("-i " & quoteShell(inputPath) & &" -map 0:a:{track} -vn -f wav " &
+        quoteShell(outputPath)) and fileExists(outputPath)
 
 proc resampleTo48kMono*(inputPath, outputPath: string): bool =
   ## -vn so a video input yields just its audio.

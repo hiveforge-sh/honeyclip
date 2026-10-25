@@ -1,20 +1,33 @@
 ## Final delivery of enhanced audio: mux into the source video (video stream
 ## copied) or write the cleaned WAV on its own.
-import std/[osproc, os, strutils]
+import std/[osproc, os, strutils, strformat]
 import ../analyze/audio_enhance
 
-proc buildMuxCmd*(videoPath, enhancedAudioPath, outputPath: string): string =
+proc buildMuxCmd*(videoPath, enhancedAudioPath, outputPath: string;
+                  audioTrack: int = 0; trackCount: int = 1): string =
   ## Pure command construction (testable). The enhanced WAV is re-encoded to
   ## AAC for MP4-family containers; other containers take FFmpeg's default.
+  ## With several source audio tracks, the enhanced audio replaces track
+  ## `audioTrack` (0-based) in place and the rest are stream-copied.
   let ext = outputPath.splitFile.ext.toLowerAscii
-  let audioCodec = if ext in [".mp4", ".m4v", ".mov", ".m4a"]: " -c:a aac -b:a 192k"
-                   else: ""
-  quoteShell(ffmpegBin()) & " -hide_banner -loglevel error -y -i " &
-    quoteShell(videoPath) & " -i " & quoteShell(enhancedAudioPath) &
-    " -c:v copy" & audioCodec & " -map 0:v -map 1:a " & quoteShell(outputPath)
+  let mp4Family = ext in [".mp4", ".m4v", ".mov", ".m4a"]
+  let head = quoteShell(ffmpegBin()) & " -hide_banner -loglevel error -y -i " &
+    quoteShell(videoPath) & " -i " & quoteShell(enhancedAudioPath) & " -c:v copy"
+  if trackCount <= 1:
+    let audioCodec = if mp4Family: " -c:a aac -b:a 192k" else: ""
+    return head & audioCodec & " -map 0:v -map 1:a " & quoteShell(outputPath)
+  let t = audioTrack
+  let encoder = if ext == ".webm": &"libopus -b:a:{t} 160k" else: &"aac -b:a:{t} 192k"
+  var maps = " -map 0:v"
+  for i in 0 ..< trackCount:
+    maps.add (if i == t: " -map 1:a:0" else: &" -map 0:a:{i}")
+  head & maps & &" -c:a copy -c:a:{t} {encoder} -map_metadata:s:a:{t} 0:s:a:{t} " &
+    quoteShell(outputPath)
 
-proc muxEnhancedAudio*(videoPath, enhancedAudioPath, outputPath: string): bool =
-  let (_, code) = execCmdEx(buildMuxCmd(videoPath, enhancedAudioPath, outputPath))
+proc muxEnhancedAudio*(videoPath, enhancedAudioPath, outputPath: string;
+                       audioTrack: int = 0; trackCount: int = 1): bool =
+  let (_, code) = execCmdEx(buildMuxCmd(videoPath, enhancedAudioPath, outputPath,
+                                        audioTrack, trackCount))
   code == 0 and fileExists(outputPath)
 
 proc writeAudioOnly*(enhancedAudioPath, outputPath: string): bool =
