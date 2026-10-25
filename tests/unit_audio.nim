@@ -304,13 +304,27 @@ suite "provider selection":
     check resolveProvider("auto", "", true).kind == apLocal
   test "auto without DFN + key -> elevenlabs":
     check resolveProvider("auto", "key123", false).kind == apElevenlabs
-  test "auto with neither lists both remediations":
-    try:
-      discard resolveProvider("auto", "", false)
-      check false
-    except ValueError as e:
-      check "pip install deepfilternet" in e.msg
-      check "ELEVENLABS_API_KEY" in e.msg
+  test "WR-10: auto with neither falls back to ffmpeg, naming both remediations":
+    let p = resolveProvider("auto", "", false)
+    check p.kind == apFfmpeg
+    check p.fromAuto
+    check "pip install deepfilternet" in noNeuralBackendMsg
+    check "ELEVENLABS_API_KEY" in noNeuralBackendMsg
+  test "WR-10: only auto-resolved providers are marked fromAuto":
+    check resolveProvider("auto", "", true).fromAuto
+    check resolveProvider("auto", "k", false).fromAuto
+    check not resolveProvider("local", "", true).fromAuto
+    check not resolveProvider("elevenlabs", "k").fromAuto
+    check not resolveProvider("ffmpeg", "").fromAuto
+  test "WR-10: a failing backend is reported as backendFailed":
+    let m = newMockHttpClient()
+    m.register("POST", "/audio-isolation", 500, "boom")
+    let r = AudioProvider(kind: apElevenlabs, apiKey: "k").enhance(
+      m, "tests/fixtures/audio_clean.wav", getTempDir() / ("hc_bf_" & $getCurrentProcessId()),
+      EnhancementFlags(denoise: true), true, false)
+    check r.outputPath == ""
+    check r.backendFailed
+    removeDir(getTempDir() / ("hc_bf_" & $getCurrentProcessId()))
   test "invalid backend names the bad value":
     try:
       discard resolveProvider("bogus", "")

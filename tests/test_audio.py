@@ -111,10 +111,12 @@ def python_has_df() -> bool:
 
 
 STUB_DF_ENHANCE = '''\
-import shutil, sys
+import os, shutil, sys
 from pathlib import Path
 
 def main():
+    if os.environ.get("HC_STUB_DF_FAIL"):
+        sys.exit("stub DeepFilterNet: simulated failure")
     # Mimics real DeepFilterNet naming: the model name is appended to the
     # output file unless --no-suffix is given.
     args = sys.argv[1:]
@@ -169,8 +171,11 @@ class EnhanceE2E(unittest.TestCase):
              "-c:a", "aac", str(path)],
             check=True, capture_output=True)
 
-    def env(self, stub_df=False, mock=None, key=None):
+    def env(self, stub_df=False, mock=None, key=None, df_fail=False):
         e = os.environ.copy()
+        e.pop("HC_STUB_DF_FAIL", None)
+        if df_fail:
+            e["HC_STUB_DF_FAIL"] = "1"
         e.pop("ELEVENLABS_API_KEY", None)
         e.pop("HONEYCLIP_ELEVENLABS_URL", None)
         # Keep a developer's real config.toml (and key) out of the run.
@@ -292,14 +297,42 @@ class EnhanceE2E(unittest.TestCase):
         self.assertIn("Warning!", r.stderr)
         self.assertIn("uploaded to ElevenLabs", r.stderr)
 
-    def test_no_backend_available_clean_error(self):
+    def test_no_backend_available_falls_back_to_ffmpeg(self):
+        """WR-10: auto with neither DeepFilterNet nor a key uses the FFmpeg
+        chain and says so (naming both remediations), even with -q."""
         if self.real_df:
             self.skipTest("a real DeepFilterNet is installed")
-        r = self.run_enhance([str(self.video)])
-        self.assertEqual(r.returncode, 1)
-        text = (r.stdout + r.stderr).lower()
+        out = self.out("auto_ff") / "o.wav"
+        r = self.run_enhance(["-q", "--audio-only", "-o", str(out), str(self.video)])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(out.exists())
+        text = r.stderr.lower()
+        self.assertIn("ffmpeg-only chain", text)
         self.assertIn("deepfilternet", text)
         self.assertIn("elevenlabs_api_key", text)
+
+    def test_auto_falls_back_when_local_backend_fails(self):
+        """WR-10: a DeepFilterNet failure under --backend=auto falls back to the
+        FFmpeg chain with a warning; no upload happens."""
+        m = self.mock()
+        out = self.out("auto_dffail") / "o.wav"
+        r = self.run_enhance(["--denoise=on", "--audio-only", "-o", str(out),
+                              str(self.video)], stub_df=True, df_fail=True,
+                             mock=m, key="test-key-not-real")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(out.exists())
+        self.assertIn("falling back to the FFmpeg-only chain", r.stderr)
+        self.assertEqual(m.requests, [])
+
+    def test_explicit_local_backend_does_not_fall_back(self):
+        """WR-10: --backend=local stays strict."""
+        out = self.out("local_dffail") / "o.wav"
+        r = self.run_enhance(["--backend=local", "--denoise=on", "--audio-only",
+                              "-o", str(out), str(self.video)],
+                             stub_df=True, df_fail=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn("falling back", r.stderr)
+        self.assertFalse(out.exists())
 
     def test_ffmpeg_backend_needs_no_model_or_key(self):
         out = self.out("ffbk") / "o.wav"

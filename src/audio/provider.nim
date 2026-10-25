@@ -8,6 +8,7 @@ import ../log
 type
   AudioProviderKind* = enum apLocal, apElevenlabs, apFfmpeg
   AudioProvider* = object
+    fromAuto*: bool  ## chosen by --backend=auto (may fall back; WR-10)
     case kind*: AudioProviderKind
     of apLocal, apFfmpeg: discard
     of apElevenlabs: apiKey*: string
@@ -15,6 +16,25 @@ type
     outputPath*: string
     backendUsed*: AudioProviderKind
     err*: string
+    backendFailed*: bool  ## the denoise/isolation backend itself failed
+
+proc backendName*(k: AudioProviderKind): string =
+  case k
+  of apLocal: "local (DeepFilterNet)"
+  of apElevenlabs: "elevenlabs"
+  of apFfmpeg: "ffmpeg"
+
+proc alwaysWarn*(msg: string) =
+  ## A warning -q cannot hide (log.warning can): used when honeyclip uploads
+  ## audio or substitutes a backend the user did not name.
+  try: stderr.writeLine "Warning! " & msg
+  except IOError: discard
+
+const noNeuralBackendMsg* =
+  "--backend=auto: no neural backend is available, so the FFmpeg-only chain " &
+  "is used. For better noise reduction install DeepFilterNet " &
+  "(pip install deepfilternet) or set ELEVENLABS_API_KEY " &
+  "(or [elevenlabs] apiKey in config.toml)."
 
 proc resolveProvider*(forceBackend, apiKey: string;
                       dfAvailable: bool): AudioProvider =
@@ -35,23 +55,19 @@ proc resolveProvider*(forceBackend, apiKey: string;
     return AudioProvider(kind: apElevenlabs, apiKey: apiKey)
   of "auto", "":
     if dfAvailable:
-      return AudioProvider(kind: apLocal)
+      return AudioProvider(kind: apLocal, fromAuto: true)
     if apiKey != "":
       # WR-02: the user never named a cloud backend, so the upload must be
-      # visible. Written straight to stderr: unlike log.warning, -q cannot
-      # hide it.
-      try:
-        stderr.writeLine "Warning! --backend=auto: DeepFilterNet is not installed and " &
-          "an ElevenLabs API key is set, so this audio will be uploaded to " &
-          "ElevenLabs (" & elevenlabsBaseUrl() & ") for processing. " &
-          "Use --backend=ffmpeg to keep it on this machine."
-      except IOError:
-        discard
-      return AudioProvider(kind: apElevenlabs, apiKey: apiKey)
-    raise newException(ValueError,
-      "No audio backend available.\n" &
-      "Install DeepFilterNet locally:  pip install deepfilternet\n" &
-      "Or set ELEVENLABS_API_KEY for the ElevenLabs API path (or [elevenlabs] apiKey in config.toml)")
+      # visible, and -q cannot hide it.
+      alwaysWarn "--backend=auto: DeepFilterNet is not installed and " &
+        "an ElevenLabs API key is set, so this audio will be uploaded to " &
+        "ElevenLabs (" & elevenlabsBaseUrl() & ") for processing. " &
+        "Use --backend=ffmpeg to keep it on this machine."
+      return AudioProvider(kind: apElevenlabs, apiKey: apiKey, fromAuto: true)
+    # WR-10: the FFmpeg chain always works, so auto uses it as the last
+    # resort instead of failing, and says so.
+    alwaysWarn noNeuralBackendMsg
+    return AudioProvider(kind: apFfmpeg, fromAuto: true)
   else:
     raise newException(ValueError, "Unknown --backend: " & forceBackend)
 
@@ -157,6 +173,7 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
       let r = runBackend(p, http, c, tmpDir / &"backend_{i:04}", flags)
       if not r.ok:
         result.err = r.err
+        result.backendFailed = true
         return
       cleaned.add r.outWav
     let joined = tmpDir / "joined.wav"
@@ -168,6 +185,7 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
     let r = runBackend(p, http, resampled, tmpDir / "backend", flags)
     if not r.ok:
       result.err = r.err
+      result.backendFailed = true
       return
     current = r.outWav
 

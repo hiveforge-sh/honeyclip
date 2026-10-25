@@ -9,16 +9,6 @@ proc pythonExe(): string =
   result = findExeOnPath("python3")
   if result == "": result = findExeOnPath("python")
 
-proc isDeepFilterAvailable*(): bool =
-  ## Detect DeepFilterNet via Python module import. Never raises.
-  let py = pythonExe()
-  if py == "": return false
-  try:
-    let (_, code) = execCmdEx(quoteShell(py) & " -c \"import df\"")
-    result = code == 0
-  except CatchableError:
-    result = false
-
 proc whichDeepFilter*(): string =
   ## Command prefix: the quoted absolute path of the `deepFilter` PATH script,
   ## "<quoted python> -m df.enhance", or "".
@@ -36,6 +26,14 @@ proc whichDeepFilter*(): string =
   except CatchableError:
     discard
   return ""
+
+proc isDeepFilterAvailable*(): bool =
+  ## True only when DeepFilterNet can actually run: the same check
+  ## runDeepFilter uses (`deepFilter --help` or `import df.enhance`, which
+  ## needs torch), not a bare `import df` that a partial install passes
+  ## (WR-10). Never raises.
+  try: whichDeepFilter() != ""
+  except CatchableError: false
 
 proc buildDeepFilterCmd*(cmdPrefix, inputWav, outDir: string): string =
   ## Pure command construction (testable); every path is shell-quoted.

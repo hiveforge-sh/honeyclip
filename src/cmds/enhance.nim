@@ -21,6 +21,11 @@ Arguments:
 
 Options:
   --backend=BACKEND       auto | local | elevenlabs | ffmpeg (default: auto)
+                            auto        local if DeepFilterNet works, else
+                                        elevenlabs if a key is set (warns
+                                        that audio is uploaded), else ffmpeg;
+                                        falls back to ffmpeg, with a warning,
+                                        if the chosen backend fails
                             local       DeepFilterNet (pip install deepfilternet)
                             elevenlabs  Voice Isolator API (ELEVENLABS_API_KEY
                                         or [elevenlabs] apiKey in config.toml)
@@ -204,8 +209,18 @@ proc run*(args: seq[string]): int =
 
   let http = newRealHttpClient(timeoutMs = 300_000)
   let tty = isatty(stdin) and isatty(stdout)
-  let res = provider.enhance(http, source, outDir / "work", flags,
+  var res = provider.enhance(http, source, outDir / "work", flags,
                              opts.autoYes, tty)
+  # WR-10: auto mode falls back to the always-available FFmpeg chain when the
+  # chosen backend itself fails, and says so. An explicit --backend=local or
+  # --backend=elevenlabs never falls back, and neither does a denied cost
+  # gate (backendFailed is false then).
+  if res.outputPath == "" and res.backendFailed and provider.fromAuto and
+     provider.kind != apFfmpeg:
+    alwaysWarn "--backend=auto: the " & backendName(provider.kind) &
+      " backend failed (" & res.err & "); falling back to the FFmpeg-only chain"
+    res = AudioProvider(kind: apFfmpeg, fromAuto: true).enhance(
+      http, source, outDir / "work_ffmpeg", flags, opts.autoYes, tty)
   if res.outputPath == "":
     stderr.writeLine "Error! Enhancement failed: " &
       (if res.err != "": res.err else: "backend error")
