@@ -231,6 +231,10 @@ suite "elevenlabs cost":
     check confirmElevenlabsCost(6000.0, true, false, proc(): string = "y")
   test "> $1 TTY n":
     check not confirmElevenlabsCost(6000.0, true, false, proc(): string = "n")
+  test "WR-08: EOF at the prompt is a no, not a crash":
+    let eof = proc(): string = raise newException(EOFError, "EOF")
+    check not confirmElevenlabsCost(6000.0, true, false, eof)
+    check not confirmElevenlabsCost(0.0, true, false, eof)
   test "WR-01: unknown duration is not auto-approved":
     check not confirmElevenlabsCost(0.0, false, false)
     check not confirmElevenlabsCost(0.0, true, false, proc(): string = "n")
