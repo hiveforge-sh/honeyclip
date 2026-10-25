@@ -262,3 +262,169 @@ suite "provider selection":
       check "bogus" in e.msg
   test "2-arg overload resolves with key present":
     check resolveProvider("auto", "k").kind in {apLocal, apElevenlabs}
+
+import ../src/audio/[ffmpeg_chain, render]
+
+proc freshDir(name: string): string =
+  result = getTempDir() / ("hc_test_" & name & "_" & $getCurrentProcessId())
+  removeDir(result)
+  createDir(result)
+
+suite "ffmpeg chain":
+  let tmp = freshDir("chain")
+  test "hum 50Hz notch":
+    check "equalizer=f=50:t=h:w=10:g=-40" in buildHumDeessCmd("a.wav", "b.wav", true, false, false)
+  test "hum 60Hz notch":
+    check "equalizer=f=60:t=h:w=10:g=-40" in buildHumDeessCmd("a.wav", "b.wav", false, true, false)
+  test "deesser":
+    check "deesser=" in buildHumDeessCmd("a.wav", "b.wav", false, false, true)
+  test "all off -> anull":
+    check "anull" in buildHumDeessCmd("a.wav", "b.wav", false, false, false)
+  test "paths with spaces and shell metacharacters are quoted":
+    let c = buildHumDeessCmd("my file & x.wav", "o;ut.wav", false, false, false)
+    check quoteShell("my file & x.wav") in c
+    check quoteShell("o;ut.wav") in c
+  test "runHumDeess produces output":
+    let o = tmp / "hd.wav"
+    check runHumDeess("tests/fixtures/audio_hum_50hz.wav", o,
+                      EnhancementFlags(humRemoval: true, deEss: true))
+    check fileExists(o)
+  test "loudnorm two-pass":
+    let o = tmp / "ln.wav"
+    check runLoudnormTwoPassSubprocess("tests/fixtures/audio_clean.wav", o)
+    check fileExists(o)
+  test "decodeMp3ToWav":
+    let o = tmp / "dec.wav"
+    check decodeMp3ToWav("tests/fixtures/elevenlabs_isolator_response.bin", o)
+    check probeAudio(o).sampleRate > 0
+  test "resampleTo48kMono":
+    let o = tmp / "r48.wav"
+    check resampleTo48kMono("tests/fixtures/audio_44k_stereo.wav", o)
+    let pr = probeAudio(o)
+    check pr.sampleRate == 48000
+    check pr.channels == 1
+  test "resampleFromWav restores rate/channels":
+    let o = tmp / "back.wav"
+    check resampleFromWav("tests/fixtures/audio_clean.wav", o, 44100, 2)
+    let pr = probeAudio(o)
+    check pr.sampleRate == 44100
+    check pr.channels == 2
+  test "probeAudio duration":
+    check abs(probeAudio("tests/fixtures/audio_clean.wav").durationSec - 5.0) < 0.1
+  removeDir(tmp)
+
+suite "audio enhance dispatch":
+  let tmp = freshDir("dispatch")
+  let allOn = EnhancementFlags(denoise: true, humRemoval: true, deEss: true)
+
+  proc makeGapped(path: string, sec: int) =
+    # 440 Hz tone with a 1s silent gap every 10s (chunk boundaries).
+    let cmd = "ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("sine=frequency=440:duration=" & $sec) &
+      " -af " & quoteShell("volume='if(lt(mod(t,10),9),1,0)':eval=frame") &
+      " -ar 48000 -ac 1 " & quoteShell(path)
+    discard execCmdEx(cmd)
+
+  test "chunkAtSilence splits a 30s file":
+    let src = tmp / "g30.wav"
+    makeGapped(src, 30)
+    let chunks = chunkAtSilence(src, 10.5, tmp / "chunks")
+    check chunks.len >= 2
+    for c in chunks:
+      check probeAudio(c).durationSec <= 11.5
+  test "chunkAtSilence short file returns input":
+    check chunkAtSilence("tests/fixtures/audio_clean.wav", 60.0) ==
+      @["tests/fixtures/audio_clean.wav"]
+  test "reassembleWithCrossfade duration":
+    let a = tmp / "ca.wav"
+    let b = tmp / "cb.wav"
+    makeGapped(a, 4)
+    makeGapped(b, 4)
+    let o = tmp / "cx.wav"
+    check reassembleWithCrossfade(@[a, b], o, 50)
+    check abs(probeAudio(o).durationSec - 7.95) < 0.1
+  test "ffmpeg-only backend end to end":
+    let r = AudioProvider(kind: apFfmpeg).enhance(
+      newMockHttpClient(), "tests/fixtures/audio_noisy.wav", tmp / "o1", allOn, false, false)
+    check r.outputPath != ""
+    check fileExists(r.outputPath)
+    check not dirExists(tmp / "o1.tmp")
+  test "chunked path end to end":
+    let src = tmp / "g30b.wav"
+    makeGapped(src, 30)
+    let r = AudioProvider(kind: apFfmpeg).enhance(
+      newMockHttpClient(), src, tmp / "o2", allOn, false, false,
+      chunkTriggerSec = 5.0, chunkSec = 10.5)
+    check r.outputPath != ""
+    check abs(probeAudio(r.outputPath).durationSec - 30.0) < 0.5
+  test "local backend (skipped without DeepFilterNet)":
+    if not isDeepFilterAvailable():
+      skip()
+    else:
+      let r = AudioProvider(kind: apLocal).enhance(
+        newMockHttpClient(), "tests/fixtures/audio_noisy.wav", tmp / "o3", allOn, false, false)
+      check fileExists(r.outputPath)
+  test "elevenlabs backend uses mock and decodes MP3":
+    let m = newMockHttpClient()
+    m.register("POST", "/audio-isolation", 200,
+               readFile("tests/fixtures/elevenlabs_isolator_response.bin"))
+    let r = AudioProvider(kind: apElevenlabs, apiKey: "k").enhance(
+      m, "tests/fixtures/audio_noisy.wav", tmp / "o4", allOn, false, false)
+    check r.outputPath != ""
+    check fileExists(r.outputPath)
+    check m.calls.len == 1
+    check m.calls[0].meth == "POST_MULTIPART"
+  test "cost gate denial makes no HTTP call":
+    let long = tmp / "long.wav"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("anullsrc=r=8000:cl=mono") & " -t 700 " & quoteShell(long))
+    let m = newMockHttpClient()
+    let r = AudioProvider(kind: apElevenlabs, apiKey: "k").enhance(
+      m, long, tmp / "o5", allOn, false, false)
+    check r.outputPath == ""
+    check m.calls.len == 0
+  test "writeAudioOnly copies":
+    let o = tmp / "ao.wav"
+    check writeAudioOnly("tests/fixtures/audio_clean.wav", o)
+    check fileExists(o)
+  test "mux command copies video and maps streams":
+    let c = buildMuxCmd("v.mp4", "a.wav", "out.mp4")
+    check "-c:v copy" in c
+    check "-map 0:v -map 1:a" in c
+  test "mux produces video with new audio":
+    let vid = tmp / "v.mp4"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("testsrc=duration=2:size=160x120:rate=10") & " -pix_fmt yuv420p " & quoteShell(vid))
+    let o = tmp / "muxed.mp4"
+    check muxEnhancedAudio(vid, "tests/fixtures/audio_clean.wav", o)
+    check probeAudio(o).sampleRate > 0
+  removeDir(tmp)
+
+suite "resample contract":
+  let tmp = freshDir("resample")
+  let allOn = EnhancementFlags(denoise: true, humRemoval: true, deEss: true)
+  test "44.1kHz stereo in -> 44.1kHz stereo out":
+    let r = AudioProvider(kind: apFfmpeg).enhance(
+      newMockHttpClient(), "tests/fixtures/audio_44k_stereo.wav", tmp / "a", allOn, false, false)
+    let pr = probeAudio(r.outputPath)
+    check pr.sampleRate == 44100
+    check pr.channels == 2
+  test "48kHz mono in -> 48kHz mono out":
+    let r = AudioProvider(kind: apFfmpeg).enhance(
+      newMockHttpClient(), "tests/fixtures/audio_clean.wav", tmp / "b", allOn, false, false)
+    let pr = probeAudio(r.outputPath)
+    check pr.sampleRate == 48000
+    check pr.channels == 1
+  test "probe of 44.1kHz fixture":
+    let pr = probeAudio("tests/fixtures/audio_44k_stereo.wav")
+    check pr.sampleRate == 44100
+    check pr.channels == 2
+  test "intermediate resampled.wav is 48kHz mono (keepTmp)":
+    let r = AudioProvider(kind: apFfmpeg).enhance(
+      newMockHttpClient(), "tests/fixtures/audio_44k_stereo.wav", tmp / "c", allOn, false, false,
+      keepTmp = true)
+    check r.outputPath != ""
+    let pr = probeAudio(tmp / "c.tmp" / "resampled.wav")
+    check pr.sampleRate == 48000
+    check pr.channels == 1
+  removeDir(tmp)
