@@ -174,7 +174,12 @@ proc run*(args: seq[string]): int =
     warning opts.inputPath & " has " & $trackCount & " audio tracks: enhancing track " &
       $opts.audioTrack & ", " & others & " (choose with --audio-track N)"
 
-  let outDir = getTempDir() / ("honeyclip_enhance_" & $getCurrentProcessId())
+  # WR-07: a unique, atomically created (0700 on POSIX) work dir; every
+  # intermediate file of this run lives inside it.
+  let outDir = try: createPrivateTempDir("honeyclip_enhance_")
+               except OSError as e:
+                 stderr.writeLine "Error! could not create a temporary directory: " & e.msg
+                 return 1
   defer:
     try: removeDir(outDir) except CatchableError: discard
 
@@ -182,7 +187,6 @@ proc run*(args: seq[string]): int =
   # every backend see exactly the audio that gets enhanced.
   var source = opts.inputPath
   if trackCount > 1 or track > 0:
-    createDir(outDir)
     source = outDir / "selected_track.wav"
     if not extractAudioTrack(opts.inputPath, source, track):
       stderr.writeLine "Error! could not read audio track " & $opts.audioTrack

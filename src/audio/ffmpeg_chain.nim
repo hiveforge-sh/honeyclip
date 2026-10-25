@@ -177,8 +177,9 @@ proc chunkAtSilence*(inputPath: string; maxChunkSec: float;
   ## reassembleWithCrossfade with the same duration preserves total length.
   let total = probeAudio(inputPath).durationSec
   if total <= 0.0 or total <= maxChunkSec: return @[inputPath]
+  # No chunkDir: a fresh private temp dir, never a guessable shared name (WR-07).
   let dir = if chunkDir != "": chunkDir
-            else: getTempDir() / ("honeyclip_chunks_" & $getCurrentProcessId())
+            else: createPrivateTempDir("honeyclip_chunks_")
   createDir(dir)
 
   let (sdOut, _) = execCmdEx(ffBase() & " -i " & quoteShell(inputPath) & " -af " &

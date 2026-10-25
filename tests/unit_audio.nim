@@ -143,6 +143,18 @@ suite "audio analyzer":
     check bin == "" or bin.isAbsolute
     removeDir(d)
 
+  test "WR-07: createPrivateTempDir makes a fresh unique directory":
+    let a = createPrivateTempDir("hc_priv_")
+    let b = createPrivateTempDir("hc_priv_")
+    check a != b
+    check dirExists(a) and dirExists(b)
+    check extractFilename(a).startsWith("hc_priv_")
+    check $getCurrentProcessId() notin extractFilename(a)
+    when defined(posix):
+      check getFilePermissions(a) == {fpUserRead, fpUserWrite, fpUserExec}
+    removeDir(a)
+    removeDir(b)
+
   test "ffmpegBin honours HONEYCLIP_FFMPEG first":
     let saved = getEnv("HONEYCLIP_FFMPEG")
     putEnv("HONEYCLIP_FFMPEG", "/custom/ffmpeg")

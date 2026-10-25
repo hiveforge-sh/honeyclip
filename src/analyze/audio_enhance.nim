@@ -7,7 +7,9 @@
 ## Probes shell out to FFmpeg with every user-derived path wrapped in
 ## quoteShell (T-22-03).
 
-import std/[osproc, os, strutils, json, math]
+import std/[osproc, os, strutils, json, math, tempfiles]
+when defined(posix):
+  import std/posix
 
 type
   StageMode* = enum smAuto, smOn, smOff
@@ -45,6 +47,20 @@ proc findExeOnPath*(exe: string): string =
       let cand = dir / exe
       if fileExists(cand): return cand
   return ""
+
+proc createPrivateTempDir*(prefix: string): string =
+  ## A new, uniquely named directory under getTempDir() (WR-07). The random
+  ## name comes from std/tempfiles and creation is atomic, so an existing
+  ## directory or symlink planted by another user is never reused; on POSIX
+  ## it is created 0700 so nobody else can read the audio inside.
+  for _ in 0 ..< 100:
+    let path = genTempPath(prefix, "")
+    when defined(posix):
+      if posix.mkdir(path.cstring, Mode(0o700)) == 0: return path
+      if errno != EEXIST: raiseOSError(osLastError(), path)
+    else:
+      if not existsOrCreateDir(path): return path
+  raise newException(OSError, "could not create a temporary directory in " & getTempDir())
 
 proc ffmpegBin*(): string =
   ## HONEYCLIP_FFMPEG override, then the in-tree build next to the honeyclip
@@ -101,19 +117,20 @@ proc probeRms(inputPath, prefilter: string): float =
 
 proc decodeMono(inputPath: string, sampleRate: int): seq[int16] =
   ## Decode up to maxProbeSeconds of audio to mono s16le samples.
-  let tmp = getTempDir() / ("honeyclip_probe_" & $getCurrentProcessId() & ".raw")
+  let tmpDir = try: createPrivateTempDir("honeyclip_probe_")
+               except OSError: return @[]
+  defer:
+    try: removeDir(tmpDir) except CatchableError: discard
+  let tmp = tmpDir / "probe.raw"
   let cmd = quoteShell(ffmpegBin()) & " -hide_banner -loglevel error -nostats -y -t " &
             $maxProbeSeconds & " -i " & quoteShell(inputPath) &
             " -ac 1 -ar " & $sampleRate & " -f s16le " & quoteShell(tmp)
   let (_, code) = execCmdEx(cmd)
   if code != 0 or not fileExists(tmp): return @[]
-  try:
-    let raw = readFile(tmp)
-    result = newSeq[int16](raw.len div 2)
-    for i in 0 ..< result.len:
-      result[i] = cast[int16](uint16(raw[2*i].uint8) or (uint16(raw[2*i+1].uint8) shl 8))
-  finally:
-    try: removeFile(tmp) except CatchableError: discard
+  let raw = readFile(tmp)
+  result = newSeq[int16](raw.len div 2)
+  for i in 0 ..< result.len:
+    result[i] = cast[int16](uint16(raw[2*i].uint8) or (uint16(raw[2*i+1].uint8) shl 8))
 
 proc bandRmsDb(samples: seq[int16], sampleRate: int, freq: float): float =
   ## Hann-windowed Goertzel: RMS level (dBFS) of a single sinusoidal component.
