@@ -26,7 +26,7 @@ const
   noiseFloorThresholdDb* = -55.0
   maxProbeSeconds = 30
 
-proc ffmpegBin(): string =
+proc ffmpegBin*(): string =
   ## HONEYCLIP_FFMPEG override, then the in-tree build, then PATH.
   let envBin = getEnv("HONEYCLIP_FFMPEG")
   if envBin != "": return envBin
