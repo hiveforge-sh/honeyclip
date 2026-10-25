@@ -907,7 +907,10 @@ proc ffmpegSetup(crossWindows: bool) =
                 var configureCmd = &"{configurePath}configure --prefix=\"{unixBuildPath}\" --enable-static " & args.join(" ")
                 let mingwBase = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64"
                 let mingwBin = mingwBase & "/bin"
-                let ccEnv = "CC=\"" & mingwBin & "/gcc.exe\" CXX=\"" & mingwBin & "/g++.exe\" "
+                var ccEnv = "CC=\"" & mingwBin & "/gcc.exe\" CXX=\"" & mingwBin & "/g++.exe\" "
+                # Pin binutils strings: Sysinternals strings.exe (WindowsApps) breaks x264's endian test
+                if package.name == "x264":
+                  ccEnv.add "STRINGS=\"" & mingwBin & "/strings.exe\" "
                 # Disable _FORTIFY_SOURCE: MinGW GCC 11.1.0 lacks __memset_chk/__memcpy_chk
                 let fortifyFix = "CFLAGS=\"-O2 -D_FORTIFY_SOURCE=0\" CXXFLAGS=\"-O2 -D_FORTIFY_SOURCE=0\" "
                 # Set CONFIG_SHELL to avoid libtool using Windows path with spaces
@@ -924,7 +927,7 @@ proc ffmpegSetup(crossWindows: bool) =
 var filters: seq[string]
 if enableWhisper:
   filters.add "whisper"
-filters.add "scale,pad,format,gblur,aformat,abuffer,abuffersink,aresample,atempo,anull,anullsrc,volume,loudnorm,asetrate".split(",")
+filters.add "scale,pad,format,gblur,aformat,abuffer,abuffersink,aresample,atempo,anull,anullsrc,volume,loudnorm,asetrate,astats,afftdn,highpass,equalizer,deesser,ametadata,anullsink,silencedetect,acrossfade".split(",")
 
 proc setupCommonFlags(packages: seq[Package]): string =
   var commonFlags = &"""
