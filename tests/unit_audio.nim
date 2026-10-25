@@ -437,6 +437,12 @@ suite "audio enhance dispatch":
     let o = tmp / "ao.wav"
     check writeAudioOnly("tests/fixtures/audio_clean.wav", o)
     check fileExists(o)
+  test "WR-04: writeAudioOnly transcodes to the output extension":
+    let o = tmp / "ao.mp3"
+    check writeAudioOnly("tests/fixtures/audio_clean.wav", o)
+    check fileExists(o)
+    check not readFile(o).startsWith("RIFF")
+    check "mp3" in execCmdEx("ffmpeg -hide_banner -i " & quoteShell(o)).output
   test "mux command copies video and maps streams":
     let c = buildMuxCmd("v.mp4", "a.wav", "out.mp4")
     check "-c:v copy" in c

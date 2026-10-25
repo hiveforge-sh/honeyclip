@@ -48,9 +48,21 @@ proc muxEnhancedAudio*(videoPath, enhancedAudioPath, outputPath: string;
       " could not be copied into " & outputPath.splitFile.ext &
       " output; they were left out"
 
+proc buildAudioOnlyCmd*(enhancedAudioPath, outputPath: string): string =
+  ## Transcode the enhanced WAV into whatever format outputPath's extension
+  ## names (FFmpeg picks the muxer and default encoder from it).
+  quoteShell(ffmpegBin()) & " -hide_banner -loglevel error -y -i " &
+    quoteShell(enhancedAudioPath) & " -vn " & quoteShell(outputPath)
+
 proc writeAudioOnly*(enhancedAudioPath, outputPath: string): bool =
-  try:
-    copyFile(enhancedAudioPath, outputPath)
-    result = true
-  except CatchableError:
-    result = false
+  ## A .wav output is a plain copy; anything else (.mp3, .m4a, .flac, ...)
+  ## is transcoded so the bytes match the extension (WR-04). An extension
+  ## FFmpeg cannot write fails instead of producing a mislabelled WAV.
+  if outputPath.splitFile.ext.toLowerAscii == ".wav":
+    try:
+      copyFile(enhancedAudioPath, outputPath)
+      return true
+    except CatchableError:
+      return false
+  let (_, code) = execCmdEx(buildAudioOnlyCmd(enhancedAudioPath, outputPath))
+  code == 0 and fileExists(outputPath)

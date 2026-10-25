@@ -32,7 +32,8 @@ Options:
   --hum-removal=MODE      on | off | auto (default: auto)
   --audio-track N         Audio track to enhance, counting from 1 (default: 1).
                             Other tracks are copied through unchanged.
-  --audio-only            Write the cleaned WAV instead of a video
+  --audio-only            Write only the cleaned audio: a WAV by default, or
+                            the format -o names (e.g. clean.mp3, clean.m4a)
   -o, --output PATH       Output path (default: {input}.enhanced.{ext})
   --yes                   Skip the ElevenLabs cost confirmation
   -q, --quiet             Suppress progress output
