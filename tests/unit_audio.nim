@@ -71,3 +71,62 @@ suite "config":
       if "apiKey" in line or "ELEVENLABS_API_KEY" in line:
         for bad in ["info(", "warning(", "error(", "debug("]:
           check bad notin line
+
+import ../src/analyze/audio_enhance
+
+suite "audio analyzer":
+  let stats = parseFile("tests/fixtures/audio_stats.json")
+  let allOff = (denoise: smOff, voiceIsolation: smOff, deReverb: smOff,
+                deEss: smOff, humRemoval: smOff)
+  let allOn = (denoise: smOn, voiceIsolation: smOn, deReverb: smOn,
+               deEss: smOn, humRemoval: smOn)
+  let allAuto = (denoise: smAuto, voiceIsolation: smAuto, deReverb: smAuto,
+                 deEss: smAuto, humRemoval: smAuto)
+
+  test "detectHum true when 50Hz band above -50 dBFS":
+    check detectHum(stats)
+
+  test "detectHum false when both bands at or below -50 dBFS":
+    var s = stats.copy
+    s["rms_50hz_band_dbfs"] = newJFloat(-60.0)
+    check not detectHum(s)
+
+  test "detectSibilance true on fixture ratio":
+    check detectSibilance(stats)
+    var s = stats.copy
+    s["rms_4khz_plus_dbfs"] = newJFloat(-60.0)
+    check not detectSibilance(s)
+
+  test "detectNoise true above -55 dBFS":
+    check detectNoise(stats)
+    var s = stats.copy
+    s["afftdn_noise_floor_dbfs"] = newJFloat(-70.0)
+    check not detectNoise(s)
+
+  test "all smOff yields all-false flags":
+    let f = analyzeAudioForEnhancement("tests/fixtures/audio_hum_50hz.wav", allOff)
+    check not (f.denoise or f.voiceIsolation or f.deReverb or f.deEss or f.humRemoval)
+
+  test "all smOn yields all-true flags":
+    let f = analyzeAudioForEnhancement("tests/fixtures/audio_clean.wav", allOn)
+    check f.denoise and f.voiceIsolation and f.deReverb and f.deEss and f.humRemoval
+
+  test "smAuto on real fixtures":
+    let hum = analyzeAudioForEnhancement("tests/fixtures/audio_hum_50hz.wav", allAuto)
+    check hum.humRemoval
+    let sib = analyzeAudioForEnhancement("tests/fixtures/audio_sibilant.wav", allAuto)
+    check sib.deEss
+    let noisy = analyzeAudioForEnhancement("tests/fixtures/audio_noisy.wav", allAuto)
+    check noisy.denoise
+    check noisy.humRemoval  # 60 Hz tone mixed in
+    let clean = analyzeAudioForEnhancement("tests/fixtures/audio_clean.wav", allAuto)
+    check not clean.humRemoval
+    check not clean.deEss
+    check not clean.denoise
+
+  test "runAstatsProbe returns numeric fields":
+    let s = runAstatsProbe("tests/fixtures/audio_hum_50hz.wav")
+    check s.hasKey("rms_full_dbfs")
+    check s["rms_full_dbfs"].kind == JFloat
+    check s["rms_full_dbfs"].getFloat < 0.0
+    check s.hasKey("lavfi.astats.Overall.RMS_level")
