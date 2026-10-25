@@ -14,8 +14,8 @@ type
 
   EnhancementFlags* = object
     denoise*: bool
-    voiceIsolation*: bool  ## always false here; set by the API provider
-    deReverb*: bool        ## always false here; set by the local provider
+    voiceIsolation*: bool  ## never detected; provider.applyProviderStages sets it
+    deReverb*: bool        ## never detected; no backend implements it yet
     deEss*: bool
     humRemoval*: bool
 

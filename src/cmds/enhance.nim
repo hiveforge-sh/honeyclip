@@ -26,8 +26,10 @@ Options:
                                         or [elevenlabs] apiKey in config.toml)
                             ffmpeg      FFmpeg-only chain, no neural model
   --denoise=MODE          on | off | auto (default: auto)
-  --voice-isolation=MODE  on | off | auto (default: auto)
-  --de-reverb=MODE        on | off | auto (default: auto)
+  --voice-isolation=MODE  on | off | auto (default: auto). ElevenLabs only;
+                            auto means on with --backend=elevenlabs
+  --de-reverb=MODE        off | auto (default: auto). Reserved: no backend
+                            de-reverbs yet, so `on` is rejected
   --de-ess=MODE           on | off | auto (default: auto)
   --hum-removal=MODE      on | off | auto (default: auto)
   --audio-track N         Audio track to enhance, counting from 1 (default: 1).
@@ -139,6 +141,11 @@ proc run*(args: seq[string]): int =
     return 1
   if opts.quiet: quiet = true
   if opts.debug: isDebug = true
+  if opts.deReverb == smOn:
+    # WR-05: no backend de-reverbs (DeepFilterNet does not), so refuse
+    # rather than accept the flag and do nothing.
+    stderr.writeLine "Error! --de-reverb=on is not supported: no backend implements de-reverberation yet"
+    return 2
   if ffmpegBin() == "":
     stderr.writeLine "Error! ffmpeg not found: set HONEYCLIP_FFMPEG or put ffmpeg on PATH"
     return 1
@@ -184,7 +191,9 @@ proc run*(args: seq[string]): int =
   let modes = (denoise: opts.denoise, voiceIsolation: opts.voiceIsolation,
                deReverb: opts.deReverb, deEss: opts.deEss,
                humRemoval: opts.humRemoval)
-  let flags = analyzeAudioForEnhancement(source, modes)
+  var flags = analyzeAudioForEnhancement(source, modes)
+  for w in provider.applyProviderStages(flags, opts.voiceIsolation):
+    warning w
   debug "stages: denoise=" & $flags.denoise & " voiceIsolation=" &
         $flags.voiceIsolation & " humRemoval=" & $flags.humRemoval &
         " deEss=" & $flags.deEss

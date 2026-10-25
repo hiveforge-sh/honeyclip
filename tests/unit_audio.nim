@@ -301,6 +301,21 @@ suite "provider selection":
       check false
     except ValueError as e:
       check "bogus" in e.msg
+  test "WR-05: elevenlabs turns voice isolation on unless it is forced off":
+    var f = EnhancementFlags()
+    check applyProviderStages(AudioProvider(kind: apElevenlabs, apiKey: "k"), f, smAuto).len == 0
+    check f.voiceIsolation
+    var g = EnhancementFlags()
+    discard applyProviderStages(AudioProvider(kind: apElevenlabs, apiKey: "k"), g, smOff)
+    check not g.voiceIsolation
+  test "WR-05: forcing voice isolation on a local backend warns":
+    var f = EnhancementFlags(voiceIsolation: true)
+    let w = applyProviderStages(AudioProvider(kind: apFfmpeg), f, smOn)
+    check w.len == 1
+    check "elevenlabs" in w[0]
+    check not f.voiceIsolation
+    var g = EnhancementFlags()
+    check applyProviderStages(AudioProvider(kind: apLocal), g, smAuto).len == 0
   test "2-arg overload resolves with key present":
     check resolveProvider("auto", "k").kind in {apLocal, apElevenlabs}
 

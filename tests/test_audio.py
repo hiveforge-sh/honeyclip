@@ -225,6 +225,12 @@ class EnhanceE2E(unittest.TestCase):
         r = self.run_enhance([str(self.tmp / "nope.mp4")])
         self.assertEqual(r.returncode, 1)
 
+    def test_de_reverb_on_is_rejected(self):
+        """WR-05: no backend de-reverbs, so --de-reverb=on is a usage error."""
+        r = self.run_enhance(["--backend=ffmpeg", "--de-reverb=on", str(self.video)])
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("de-reverb", r.stderr)
+
     # -- backends ------------------------------------------------------------
 
     def test_enhance_local_path(self):
@@ -335,6 +341,17 @@ class EnhanceE2E(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(len(m.requests), 1)
         self.assertTrue(out.exists())
+
+    def test_elevenlabs_isolates_even_when_denoise_off(self):
+        """WR-05: --backend=elevenlabs with voice isolation left on auto still
+        calls the isolator when the denoise stage is off."""
+        m = self.mock()
+        out = self.out("vi_auto") / "o.wav"
+        r = self.run_enhance(["--backend=elevenlabs", "--denoise=off", "--audio-only",
+                              "-o", str(out), str(self.video)],
+                             mock=m, key="test-key-not-real")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(len(m.requests), 1)
 
     # -- stage opt-out -------------------------------------------------------
 

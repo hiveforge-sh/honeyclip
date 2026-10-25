@@ -60,6 +60,23 @@ proc resolveProvider*(forceBackend, apiKey: string): AudioProvider =
   let needsDf = forceBackend.toLowerAscii in ["local", "auto", ""]
   resolveProvider(forceBackend, apiKey, needsDf and isDeepFilterAvailable())
 
+proc applyProviderStages*(p: AudioProvider; flags: var EnhancementFlags;
+                          voiceIsolation: StageMode): seq[string] =
+  ## Provider-driven stages (WR-05). Voice isolation is what the ElevenLabs
+  ## backend does, so `auto` means on there: choosing --backend=elevenlabs
+  ## must not silently skip the call (and the cost gate) because the noise
+  ## heuristic found the audio clean. Other backends cannot isolate voices;
+  ## returns the warnings to show when the user forced it on anyway.
+  case p.kind
+  of apElevenlabs:
+    if voiceIsolation == smAuto: flags.voiceIsolation = true
+  of apLocal, apFfmpeg:
+    flags.voiceIsolation = false
+    if voiceIsolation == smOn:
+      let name = if p.kind == apLocal: "local" else: "ffmpeg"
+      result.add "--voice-isolation=on is only supported by --backend=elevenlabs; " &
+        "the " & name & " backend ignores it (use --denoise to control noise reduction)"
+
 const
   chunkTriggerSecDefault* = 3600.0
   chunkTriggerBytes* = 500'i64 * 1024 * 1024
