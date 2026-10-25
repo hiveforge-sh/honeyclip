@@ -308,6 +308,31 @@ class EnhanceE2E(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue(probe(out)["audio"])
 
+    def audio_start(self, path: Path) -> float:
+        r = subprocess.run([self.ffmpeg, "-hide_banner", "-nostats", "-i", str(path),
+                            "-map", "0:a:0", "-frames:a", "1", "-af", "ashowinfo",
+                            "-f", "null", "-"], capture_output=True, text=True)
+        m = re.search(r"n:0 .*?pts_time:([-\d.]+)", r.stderr)
+        self.assertIsNotNone(m, r.stderr)
+        return float(m.group(1))
+
+    def test_audio_delay_survives_the_mux(self):
+        """WR-09: a source whose audio starts 0.5s after the video keeps that
+        offset in the enhanced output."""
+        src = self.out("delay") / "delayed.mp4"
+        subprocess.run(
+            [self.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+             "testsrc=duration=3:size=320x240:rate=15", "-itsoffset", "0.5",
+             "-i", str(FIXTURES / "audio_noisy.wav"), "-t", "3", "-c:v", "libx264",
+             "-pix_fmt", "yuv420p", "-c:a", "aac", str(src)],
+            check=True, capture_output=True)
+        before = self.audio_start(src)
+        self.assertGreater(before, 0.4)
+        r = self.run_enhance(["--backend=ffmpeg", str(src)])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        after = self.audio_start(src.with_name("delayed.enhanced.mp4"))
+        self.assertAlmostEqual(after, before, delta=0.05)
+
     # -- cost gate (T-22-04) -------------------------------------------------
 
     def _long_video(self):

@@ -16,6 +16,8 @@ type
     channels*: int
     durationSec*: float
     audioTracks*: int
+    containerStart*: float   ## banner `start:` of the input
+    audioStarts*: seq[float] ## per audio stream `start X` (0 when not shown)
 
 proc ffBase(): string =
   quoteShell(ffmpegBin()) & " -hide_banner -nostats -y"
@@ -57,8 +59,20 @@ proc probeAudio*(path: string): AudioProbe =
     let l = line.strip
     if result.durationSec == 0.0 and l.startsWith("Duration:"):
       result.durationSec = parseDuration(l[9 .. ^1].split(',')[0])
+      for f in l.split(','):
+        let ft = f.strip
+        if ft.startsWith("start:"):
+          try: result.containerStart = parseFloat(ft[6 .. ^1].strip)
+          except ValueError: discard
     if l.startsWith("Stream #") and "Audio:" in l:
       inc result.audioTracks
+      var st = 0.0
+      for f in l.split(','):
+        let ft = f.strip
+        if ft.startsWith("start "):
+          try: st = parseFloat(ft[6 .. ^1].split(' ')[0])
+          except ValueError: discard
+      result.audioStarts.add st
     if result.sampleRate == 0 and "Audio:" in l:
       let fields = l.split("Audio:")[1].split(',')
       for i, f in fields:
@@ -69,6 +83,27 @@ proc probeAudio*(path: string): AudioProbe =
           if i + 1 < fields.len:
             result.channels = parseChannels(fields[i + 1])
           break
+
+proc audioStartOffset*(path: string; track: int = 0): float =
+  ## When audio stream `track` starts, in seconds, on the timeline FFmpeg
+  ## gives input 0 of a mux (input start already subtracted). Extracted and
+  ## enhanced WAVs always start at 0, so the mux must shift them by this
+  ## much to keep the source's A/V offset (WR-09). Measured from the first
+  ## decoded frame (ashowinfo), which matches what the WAV extraction keeps;
+  ## falls back to the banner's stream `start` when that filter is missing.
+  let (output, code) = execCmdEx(ffBase() & " -loglevel info -i " & quoteShell(path) &
+    &" -map 0:a:{track} -frames:a 1 -af ashowinfo -f null -")
+  if code == 0:
+    for line in output.splitLines:
+      if "ashowinfo" in line and " n:0 " in line:
+        for tok in line.splitWhitespace:
+          if tok.startsWith("pts_time:"):
+            try: return parseFloat(tok[9 .. ^1])
+            except ValueError: discard
+  let p = probeAudio(path)
+  if track >= 0 and track < p.audioStarts.len and p.audioStarts[track] != 0.0:
+    return p.audioStarts[track] - p.containerStart
+  0.0
 
 proc buildHumDeessCmd*(inputPath, outputPath: string,
                        notch50Hz, notch60Hz, deEss: bool): string =

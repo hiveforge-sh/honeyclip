@@ -215,9 +215,15 @@ proc run*(args: seq[string]): int =
     if opts.outputPath != "": opts.outputPath
     elif wantWav: opts.inputPath.changeFileExt("") & ".enhanced.wav"
     else: opts.inputPath.changeFileExt("") & ".enhanced" & inExt
-  let ok = if wantWav: writeAudioOnly(res.outputPath, finalOut)
-           else: muxEnhancedAudio(opts.inputPath, res.outputPath, finalOut,
-                                  track, trackCount)
+  var ok: bool
+  if wantWav:
+    ok = writeAudioOnly(res.outputPath, finalOut)
+  else:
+    # WR-09: the enhanced WAV starts at 0; keep the source audio's offset.
+    let offset = audioStartOffset(opts.inputPath, max(track, 0))
+    debug "audio start offset: " & $offset & "s"
+    ok = muxEnhancedAudio(opts.inputPath, res.outputPath, finalOut,
+                          track, trackCount, audioOffset = offset)
   if not ok:
     stderr.writeLine "Error! could not write output: " & finalOut
     return 1

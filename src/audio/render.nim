@@ -6,18 +6,21 @@ import ../log
 
 proc buildMuxCmd*(videoPath, enhancedAudioPath, outputPath: string;
                   audioTrack: int = 0; trackCount: int = 1;
-                  keepExtra: bool = true): string =
+                  keepExtra: bool = true; audioOffset: float = 0.0): string =
   ## Pure command construction (testable). The enhanced WAV is re-encoded to
   ## AAC for MP4-family containers; other containers take FFmpeg's default.
   ## With several source audio tracks, the enhanced audio replaces track
   ## `audioTrack` (0-based) in place and the rest are stream-copied.
   ## Video is optional (`0:v?`) so audio-only containers mux too. With
   ## keepExtra, subtitle and attachment streams and chapters are copied
-  ## through as well (WR-03).
+  ## through as well (WR-03). audioOffset (seconds, see
+  ## ffmpeg_chain.audioStartOffset) shifts the enhanced audio so the source's
+  ## A/V offset survives (WR-09).
   let ext = outputPath.splitFile.ext.toLowerAscii
   let mp4Family = ext in [".mp4", ".m4v", ".mov", ".m4a"]
+  let shift = if abs(audioOffset) >= 0.0005: &" -itsoffset {audioOffset:.6f}" else: ""
   let head = quoteShell(ffmpegBin()) & " -hide_banner -loglevel error -y -i " &
-    quoteShell(videoPath) & " -i " & quoteShell(enhancedAudioPath) & " -c:v copy"
+    quoteShell(videoPath) & shift & " -i " & quoteShell(enhancedAudioPath) & " -c:v copy"
   let extra = if keepExtra: " -map 0:s? -map 0:t? -c:s copy -c:t copy -map_chapters 0"
               else: " -map_chapters 0"
   if trackCount <= 1:
@@ -33,15 +36,18 @@ proc buildMuxCmd*(videoPath, enhancedAudioPath, outputPath: string;
     quoteShell(outputPath)
 
 proc muxEnhancedAudio*(videoPath, enhancedAudioPath, outputPath: string;
-                       audioTrack: int = 0; trackCount: int = 1): bool =
+                       audioTrack: int = 0; trackCount: int = 1;
+                       audioOffset: float = 0.0): bool =
   ## Copies subtitles/attachments/chapters when the output container accepts
   ## them; if it does not (e.g. ASS subtitles into .mp4), retries without
   ## them and says so instead of dropping them silently.
   let (_, code) = execCmdEx(buildMuxCmd(videoPath, enhancedAudioPath, outputPath,
-                                        audioTrack, trackCount))
+                                        audioTrack, trackCount,
+                                        audioOffset = audioOffset))
   if code == 0 and fileExists(outputPath): return true
   let (_, code2) = execCmdEx(buildMuxCmd(videoPath, enhancedAudioPath, outputPath,
-                                         audioTrack, trackCount, keepExtra = false))
+                                         audioTrack, trackCount, keepExtra = false,
+                                         audioOffset = audioOffset))
   result = code2 == 0 and fileExists(outputPath)
   if result:
     warning "Subtitle/attachment streams of " & videoPath &

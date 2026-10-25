@@ -539,6 +539,26 @@ suite "audio enhance dispatch":
     let o = tmp / "aonly_out.mka"
     check muxEnhancedAudio(src, "tests/fixtures/audio_clean.wav", o)
     check probeAudio(o).sampleRate > 0
+  test "WR-09: mux shifts the enhanced audio by the source offset":
+    check "-i " & quoteShell("v.mp4") & " -itsoffset 0.478667 -i " & quoteShell("a.wav") in
+      buildMuxCmd("v.mp4", "a.wav", "out.mp4", audioOffset = 0.478667)
+    check "itsoffset" notin buildMuxCmd("v.mp4", "a.wav", "out.mp4")
+    check "itsoffset" notin buildMuxCmd("v.mp4", "a.wav", "out.mp4", audioOffset = 0.0001)
+  test "WR-09: audioStartOffset measures an audio delay":
+    let plain = tmp / "plain_av.mp4"
+    let delayed = tmp / "delayed_av.mp4"
+    let gen = "ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("testsrc=duration=2:size=160x120:rate=10")
+    discard execCmdEx(gen & " -i " & quoteShell("tests/fixtures/audio_clean.wav") &
+      " -t 2 -pix_fmt yuv420p -c:a aac " & quoteShell(plain))
+    discard execCmdEx(gen & " -itsoffset 0.5 -i " & quoteShell("tests/fixtures/audio_clean.wav") &
+      " -t 2 -pix_fmt yuv420p -c:a aac " & quoteShell(delayed))
+    check abs(audioStartOffset(plain)) < 0.03
+    check abs(audioStartOffset(delayed) - 0.5) < 0.05
+    let o = tmp / "delayed_out.mp4"
+    check muxEnhancedAudio(delayed, "tests/fixtures/audio_clean.wav", o,
+                           audioOffset = audioStartOffset(delayed))
+    check abs(audioStartOffset(o) - audioStartOffset(delayed)) < 0.05
   test "mux produces video with new audio":
     let vid = tmp / "v.mp4"
     discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
