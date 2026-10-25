@@ -58,7 +58,7 @@ method postMultipart*(c: RealHttpClient, url: string,
                       extraHeaders: openArray[tuple[key, val: string]] = @[]
                      ): HttpResponse =
   var mp = newMultipartData()
-  mp.add(fieldName, fileBytes, filename, "audio/wav")
+  mp.add(fieldName, fileBytes, filename, "audio/wav", useStream = false)  # bytes in memory, not a file path
   var hdrs = newHttpHeaders()
   for (k, v) in extraHeaders:
     hdrs[k] = v
