@@ -759,6 +759,14 @@ def main():
     if broll_result.returncode != 0:
         sys.exit(broll_result.returncode)
 
+    # Phase 22 - audio enhancement subcommand
+    print("\nRunning Phase 22 audio enhancement E2E...")
+    audio_result = subprocess.run(
+        [sys.executable, str(Path(__file__).parent / "test_audio.py")],
+        capture_output=False)
+    if audio_result.returncode != 0:
+        sys.exit(audio_result.returncode)
+
 
 if __name__ == "__main__":
     main()
