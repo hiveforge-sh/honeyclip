@@ -26,18 +26,47 @@ proc runFf(args: string): bool =
   let (_, code) = execCmdEx(ffBase() & " -loglevel error " & args)
   code == 0
 
-proc parseChannels(token: string): int =
-  let t = token.strip.toLowerAscii
+proc parseChannels*(token: string): int =
+  ## Channel count from the layout token of an FFmpeg `Audio:` banner line;
+  ## 0 when unknown (never a guess). Handles the `(side)`/`(wide)`/`(back)`
+  ## suffix variants, `X.Y` and `X.Y.Z` layouts (5.1, 7.1.4, 22.2), named
+  ## layouts, `N channels` and custom `FL+FR+LFE` lists (WR-11).
+  var t = token.strip.toLowerAscii
+  if t.endsWith(" channels") or " channels (" in t:
+    try: return parseInt(t.split(' ')[0]) except ValueError: return 0
+  let paren = t.find('(')
+  if paren > 0: t = t[0 ..< paren].strip
   case t
-  of "mono": 1
-  of "stereo": 2
-  of "quad": 4
-  else:
-    if t.endsWith(" channels"):
-      try: parseInt(t.split(' ')[0]) except ValueError: 2
-    elif t.len == 3 and t[1] == '.':
-      try: parseInt($t[0]) + parseInt($t[2]) except ValueError: 2
-    else: 2
+  of "mono": return 1
+  of "stereo", "downmix", "binaural": return 2
+  of "quad": return 4
+  of "hexagonal": return 6
+  of "octagonal", "cube": return 8
+  of "hexadecagonal": return 16
+  else: discard
+  if '+' in t:
+    return t.split('+').len
+  let parts = t.split('.')
+  if parts.len in 2 .. 3:
+    var total = 0
+    for part in parts:
+      try: total += parseInt(part)
+      except ValueError: return 0
+    return total
+  0
+
+proc probeChannelsDecoded(path: string): int =
+  ## Fallback for layouts parseChannels does not know: decode one frame of
+  ## the first audio stream and read ashowinfo's `channels:`; 0 if unknown.
+  let (output, code) = execCmdEx(ffBase() & " -loglevel info -i " & quoteShell(path) &
+    " -map 0:a:0 -frames:a 1 -af ashowinfo -f null -")
+  if code != 0: return 0
+  for line in output.splitLines:
+    if "ashowinfo" in line and " n:0 " in line:
+      for tok in line.splitWhitespace:
+        if tok.startsWith("channels:"):
+          try: return parseInt(tok[9 .. ^1]) except ValueError: return 0
+  0
 
 proc parseDuration(s: string): float =
   ## "HH:MM:SS.xx" -> seconds; 0 when unparsable.
@@ -83,6 +112,8 @@ proc probeAudio*(path: string): AudioProbe =
           if i + 1 < fields.len:
             result.channels = parseChannels(fields[i + 1])
           break
+  if result.sampleRate > 0 and result.channels == 0:
+    result.channels = probeChannelsDecoded(path)
 
 proc audioStartOffset*(path: string; track: int = 0): float =
   ## When audio stream `track` starts, in seconds, on the timeline FFmpeg

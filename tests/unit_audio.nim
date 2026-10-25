@@ -395,6 +395,33 @@ suite "ffmpeg chain":
     let pr = probeAudio(o)
     check pr.sampleRate == 44100
     check pr.channels == 2
+  test "WR-11: channel layouts with suffixes and named layouts":
+    check parseChannels(" mono") == 1
+    check parseChannels(" stereo") == 2
+    check parseChannels(" 5.1") == 6
+    check parseChannels(" 5.1(side)") == 6
+    check parseChannels(" 7.1(wide)") == 8
+    check parseChannels(" 7.1(wide-side)") == 8
+    check parseChannels(" 5.0(side)") == 5
+    check parseChannels(" quad(side)") == 4
+    check parseChannels(" downmix") == 2
+    check parseChannels(" hexagonal") == 6
+    check parseChannels(" 7.1.4") == 12
+    check parseChannels(" 22.2") == 24
+    check parseChannels(" 3 channels") == 3
+    check parseChannels(" 6 channels (FL+FR+FC+LFE+BL+BR)") == 6
+    check parseChannels(" FL+FR+LFE") == 3
+    check parseChannels(" fltp") == 0
+  test "WR-11: a 5.1(side) source keeps 6 channels through enhance":
+    let src = tmp / "surround.wav"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("sine=f=440:d=2") & " -af " &
+      quoteShell("aformat=channel_layouts=5.1(side)") & " -ar 48000 " & quoteShell(src))
+    check probeAudio(src).channels == 6
+    let r = AudioProvider(kind: apFfmpeg).enhance(newMockHttpClient(), src, tmp / "surr",
+      EnhancementFlags(denoise: true), false, false)
+    check r.outputPath != ""
+    check probeAudio(r.outputPath).channels == 6
   test "probeAudio duration":
     check abs(probeAudio("tests/fixtures/audio_clean.wav").durationSec - 5.0) < 0.1
   removeDir(tmp)

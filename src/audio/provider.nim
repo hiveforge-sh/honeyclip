@@ -139,8 +139,12 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
       try: removeDir(tmpDir) except CatchableError: discard
 
   let probe = probeAudio(inputPath)
-  if probe.sampleRate <= 0 or probe.channels <= 0:
+  if probe.sampleRate <= 0:
     result.err = "No readable audio stream in " & inputPath
+    return
+  if probe.channels <= 0:
+    # WR-11: never guess (a guess of 2 silently downmixed 5.1 sources).
+    result.err = "Could not determine the channel layout of the audio in " & inputPath
     return
 
   let resampled = tmpDir / "resampled.wav"
