@@ -37,7 +37,16 @@ proc resolveProvider*(forceBackend, apiKey: string;
     if dfAvailable:
       return AudioProvider(kind: apLocal)
     if apiKey != "":
-      info "DeepFilterNet not found; falling back to ElevenLabs"
+      # WR-02: the user never named a cloud backend, so the upload must be
+      # visible. Written straight to stderr: unlike log.warning, -q cannot
+      # hide it.
+      try:
+        stderr.writeLine "Warning! --backend=auto: DeepFilterNet is not installed and " &
+          "an ElevenLabs API key is set, so this audio will be uploaded to " &
+          "ElevenLabs (" & elevenlabsBaseUrl() & ") for processing. " &
+          "Use --backend=ffmpeg to keep it on this machine."
+      except IOError:
+        discard
       return AudioProvider(kind: apElevenlabs, apiKey: apiKey)
     raise newException(ValueError,
       "No audio backend available.\n" &

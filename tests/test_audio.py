@@ -278,10 +278,13 @@ class EnhanceE2E(unittest.TestCase):
             self.skipTest("a real DeepFilterNet is installed")
         m = self.mock()
         out = self.out("auto_api") / "o.wav"
-        r = self.run_enhance(["--denoise=on", "--audio-only", "-o", str(out), str(self.video)],
-                             mock=m, key="test-key-not-real")
+        r = self.run_enhance(["-q", "--denoise=on", "--audio-only", "-o", str(out),
+                              str(self.video)], mock=m, key="test-key-not-real")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(len(m.requests), 1)
+        # WR-02: the upload is announced with a warning that -q cannot hide.
+        self.assertIn("Warning!", r.stderr)
+        self.assertIn("uploaded to ElevenLabs", r.stderr)
 
     def test_no_backend_available_clean_error(self):
         if self.real_df:
