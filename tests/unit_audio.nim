@@ -144,7 +144,18 @@ suite "deepfilter provider":
 
   test "command construction quotes both paths":
     let c = buildDeepFilterCmd("deepFilter", "in dir/a b.wav", "out dir")
-    check c == "deepFilter -o " & quoteShell("out dir") & " " & quoteShell("in dir/a b.wav")
+    check c == "deepFilter --no-suffix -o " & quoteShell("out dir") & " " & quoteShell("in dir/a b.wav")
+
+  test "CR-01: output resolves the --no-suffix name, else a suffixed one":
+    let d = getTempDir() / ("hc_df_resolve_" & $getCurrentProcessId())
+    removeDir(d)
+    createDir(d)
+    check resolveDeepFilterOutput("x/resampled.wav", d) == ""
+    writeFile(d / "resampled_DeepFilterNet3.wav", "RIFF")
+    check resolveDeepFilterOutput("x/resampled.wav", d) == d / "resampled_DeepFilterNet3.wav"
+    writeFile(d / "resampled.wav", "RIFF")
+    check resolveDeepFilterOutput("x/resampled.wav", d) == d / "resampled.wav"
+    removeDir(d)
 
   test "runDeepFilter output path / missing-tool error":
     let tmp = getTempDir() / "hc_df_test"
@@ -157,7 +168,7 @@ suite "deepfilter provider":
     removeDir(tmp)
 
   test "fallback prefix form is a python -m invocation":
-    check buildDeepFilterCmd("python -m df.enhance", "a.wav", "o").startsWith("python -m df.enhance -o ")
+    check buildDeepFilterCmd("python -m df.enhance", "a.wav", "o").startsWith("python -m df.enhance --no-suffix -o ")
 
   test "T-22-03: subprocess command quotes inputWav and outDir":
     let src = readFile("src/audio/deepfilter.nim")

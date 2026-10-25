@@ -115,11 +115,14 @@ import shutil, sys
 from pathlib import Path
 
 def main():
+    # Mimics real DeepFilterNet naming: the model name is appended to the
+    # output file unless --no-suffix is given.
     args = sys.argv[1:]
     out = Path(args[args.index("-o") + 1])
     src = Path(args[-1])
     out.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(src, out / src.name)
+    name = src.name if "--no-suffix" in args else src.stem + "_DeepFilterNet3" + src.suffix
+    shutil.copyfile(src, out / name)
 
 if __name__ == "__main__":
     main()
