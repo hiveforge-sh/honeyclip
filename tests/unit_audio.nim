@@ -440,10 +440,18 @@ suite "audio enhance dispatch":
   test "mux command copies video and maps streams":
     let c = buildMuxCmd("v.mp4", "a.wav", "out.mp4")
     check "-c:v copy" in c
-    check "-map 0:v -map 1:a" in c
+    check "-map 0:v? -map 1:a" in c
+  test "WR-03: mux keeps subtitles, attachments and chapters":
+    let c = buildMuxCmd("v.mkv", "a.wav", "out.mkv")
+    check "-map 0:s? -map 0:t? -c:s copy -c:t copy" in c
+    check "-map_chapters 0" in c
+    let bare = buildMuxCmd("v.mkv", "a.wav", "out.mkv", keepExtra = false)
+    check "0:s?" notin bare
+    check "-map 0:v? -map 0:a:0 -map 1:a:0" in
+      buildMuxCmd("v.mkv", "a.wav", "out.mkv", 1, 2)
   test "multi-track mux replaces one track in place, copies the rest":
     let c = buildMuxCmd("v.mp4", "a.wav", "out.mp4", audioTrack = 1, trackCount = 3)
-    check "-map 0:v -map 0:a:0 -map 1:a:0 -map 0:a:2" in c
+    check "-map 0:v? -map 0:a:0 -map 1:a:0 -map 0:a:2" in c
     check "-c:a copy -c:a:1 aac" in c
     check "-map_metadata:s:a:1 0:s:a:1" in c
   test "multi-track mux keeps other tracks bit-identical":
@@ -461,6 +469,25 @@ suite "audio enhance dispatch":
                 " -map 0:a:" & $track & " -c copy -f md5 -").output
     check md5Of(vid, 1) == md5Of(o, 1)
     check md5Of(vid, 0) != md5Of(o, 0)
+  test "WR-03: mux preserves a subtitle track":
+    let srt = tmp / "s.srt"
+    writeFile(srt, "1\n00:00:00,000 --> 00:00:01,500\nhello\n\n")
+    let vid = tmp / "sub.mp4"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("testsrc=duration=2:size=160x120:rate=10") & " -i " & quoteShell(srt) &
+      " -map 0 -map 1 -pix_fmt yuv420p -c:s mov_text " & quoteShell(vid))
+    let o = tmp / "sub_out.mp4"
+    check muxEnhancedAudio(vid, "tests/fixtures/audio_clean.wav", o)
+    let banner = execCmdEx("ffmpeg -hide_banner -i " & quoteShell(o)).output
+    check "Subtitle:" in banner
+    check "Audio:" in banner
+  test "WR-03: mux into an audio-only container (no video stream)":
+    let src = tmp / "aonly.mka"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -i " &
+      quoteShell("tests/fixtures/audio_clean.wav") & " -c:a flac " & quoteShell(src))
+    let o = tmp / "aonly_out.mka"
+    check muxEnhancedAudio(src, "tests/fixtures/audio_clean.wav", o)
+    check probeAudio(o).sampleRate > 0
   test "mux produces video with new audio":
     let vid = tmp / "v.mp4"
     discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
