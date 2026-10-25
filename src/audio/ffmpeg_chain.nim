@@ -143,6 +143,30 @@ proc resampleFromWav*(inputPath, outputPath: string;
 
 const crossfadeMsDefault* = 50
 
+proc chunkBounds*(total, maxChunkSec: float; cuts: seq[float];
+                  overlap: float): seq[float] =
+  ## Chunk boundaries @[0.0, ..., total]: each cut is the latest silence
+  ## midpoint in (cur + 10% of max, cur + max], else a hard cut, so no chunk
+  ## exceeds maxChunkSec. WR-06: the last chunk is never shorter than
+  ## max(1s, 4 * overlap). A tiny tail (0.02s of a 1200.02s file) is shorter
+  ## than the crossfade, which breaks the length-preserving reassembly, and
+  ## backends may reject it; the cut before it moves earlier instead.
+  let minTail = max(1.0, 4.0 * overlap)
+  result = @[0.0]
+  var cur = 0.0
+  while total - cur > maxChunkSec:
+    var limit = cur + maxChunkSec
+    if total - limit < minTail and total - minTail > cur:
+      limit = total - minTail
+    var best = -1.0
+    for c in cuts:
+      if c > cur + maxChunkSec * 0.1 and c <= limit and c > best:
+        best = c
+    if best < 0.0: best = limit
+    result.add best
+    cur = best
+  result.add total
+
 proc chunkAtSilence*(inputPath: string; maxChunkSec: float;
                      chunkDir: string = "";
                      overlapMs: int = crossfadeMsDefault): seq[string] =
@@ -174,20 +198,8 @@ proc chunkAtSilence*(inputPath: string; maxChunkSec: float;
     let e = if i < ends.len: ends[i] else: total
     cuts.add (starts[i] + e) / 2.0
 
-  var bounds: seq[float] = @[0.0]
-  var cur = 0.0
-  while total - cur > maxChunkSec:
-    var best = cur + maxChunkSec
-    # latest silence midpoint in (cur + 10% of max, cur + max]
-    for c in cuts:
-      if c > cur + maxChunkSec * 0.1 and c <= cur + maxChunkSec and
-         (best == cur + maxChunkSec or c > best):
-        best = c
-    bounds.add best
-    cur = best
-  bounds.add total
-
   let overlap = overlapMs.float / 1000.0
+  let bounds = chunkBounds(total, maxChunkSec, cuts, overlap)
   for i in 0 ..< bounds.len - 1:
     let outp = dir / &"chunk_{i:04}.wav"
     let stop = if i < bounds.len - 2: min(bounds[i+1] + overlap, total)

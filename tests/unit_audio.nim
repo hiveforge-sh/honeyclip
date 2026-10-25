@@ -397,6 +397,20 @@ suite "audio enhance dispatch":
     let o = tmp / "rt.wav"
     check reassembleWithCrossfade(chunks, o)
     check abs(probeAudio(o).durationSec - probeAudio(src).durationSec) < 0.02
+  test "WR-06: chunkBounds never leaves a tail shorter than 1s":
+    let b = chunkBounds(1200.02, 600.0, @[], 0.05)
+    check b[0] == 0.0 and b[^1] == 1200.02
+    check b[^1] - b[^2] >= 1.0 - 1e-9
+    for i in 0 ..< b.len - 1:
+      check b[i+1] - b[i] <= 600.0 + 1e-9
+    # a silence just before the end must not be chosen as the last cut
+    let s = chunkBounds(21.02, 10.5, @[20.9], 0.05)
+    check s.len == 4
+    check s[^1] - s[^2] >= 1.0 - 1e-9
+    for i in 0 ..< s.len - 1:
+      check s[i+1] - s[i] <= 10.5 + 1e-9
+    # ordinary case unchanged: cut at the silence
+    check chunkBounds(15.0, 10.0, @[8.0], 0.05) == @[0.0, 8.0, 15.0]
   test "chunkAtSilence short file returns input":
     check chunkAtSilence("tests/fixtures/audio_clean.wav", 60.0) ==
       @["tests/fixtures/audio_clean.wav"]
