@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Workflow, Performance & AI Features
 status: executing
 stopped_at: Phase 21 context gathered
-last_updated: "2026-10-25T00:23:00.824Z"
+last_updated: "2026-10-25T00:27:45.873Z"
 last_activity: 2026-10-25
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 24
-  completed_plans: 21
+  completed_plans: 22
   percent: 70
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 22 (ai-audio-enhancement) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-10-25
 
@@ -129,6 +129,7 @@ Major architectural decisions across milestones:
 - [Phase 20-01]: Progress parsing from FFmpeg stderr (time= and speed= patterns for live updates)
 - [Phase 20]: Platform-agnostic path assertions using endsWith and contains instead of exact string equality
 - [Phase 22-01]: Hum band levels via Goertzel on decoded PCM; noise floor via >8kHz residual; ffmpeg resolved from HONEYCLIP_FFMPEG, build/ffmpeg, then PATH
+- [Phase 22]: [22-02] resolveProvider has a dfAvailable-injectable overload for deterministic tests
 
 ### Pending Todos
 
@@ -142,7 +143,7 @@ None — all tech debt items from v1.0 addressed in v1.1.
 
 ## Session Continuity
 
-Last session: 2026-10-25T00:22:52.950Z
+Last session: 2026-10-25T00:27:39.113Z
 Stopped at: Phase 21 context gathered
 Resume file: None
 Next: /gsd-plan-phase 21
