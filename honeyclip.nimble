@@ -57,9 +57,11 @@ task test, "Run unit tests":
     let gcc = findWindowsGcc()
     exec &"nim c {flags} --gcc.exe:\"{gcc}\" --gcc.linkerexe:\"{gcc}\" -r tests/unit"
     exec &"nim c {flags} --gcc.exe:\"{gcc}\" --gcc.linkerexe:\"{gcc}\" --path:src -r tests/unit_broll"
+    exec &"nim c {flags} --gcc.exe:\"{gcc}\" --gcc.linkerexe:\"{gcc}\" --path:src -r tests/unit_audio"
   else:
     exec &"nim c {flags} -r tests/unit"
     exec &"nim c {flags} --path:src -r tests/unit_broll"
+    exec &"nim c {flags} --path:src -r tests/unit_audio"
 
 task bench, "Run performance benchmarks":
   echo "Running performance benchmarks..."
