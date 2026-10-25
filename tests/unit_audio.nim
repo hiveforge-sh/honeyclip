@@ -428,3 +428,50 @@ suite "resample contract":
     check pr.sampleRate == 48000
     check pr.channels == 1
   removeDir(tmp)
+
+import ../src/cmds/enhance as enhanceCmd
+
+suite "cli enhance":
+  test "defaults":
+    let (o, code) = enhanceCmd.parseArgs(@["input.mp4"])
+    check code == 0
+    check o.inputPath == "input.mp4"
+    check o.backend == "auto"
+    check o.denoise == smAuto and o.voiceIsolation == smAuto and
+          o.deReverb == smAuto and o.deEss == smAuto and o.humRemoval == smAuto
+    check not o.audioOnly
+    check not o.autoYes
+  test "explicit flags":
+    let (o, code) = enhanceCmd.parseArgs(@["--backend=elevenlabs", "--denoise=on",
+      "--hum-removal=off", "--audio-only", "--yes", "input.mp4"])
+    check code == 0
+    check o.backend == "elevenlabs"
+    check o.denoise == smOn
+    check o.humRemoval == smOff
+    check o.audioOnly
+    check o.autoYes
+    check o.inputPath == "input.mp4"
+  test "per-stage flags and -o with separate value":
+    let (o, code) = enhanceCmd.parseArgs(@["--voice-isolation=auto", "--de-reverb=on",
+      "--de-ess=off", "-o", "/tmp/out.mp4", "input.mp4"])
+    check code == 0
+    check o.voiceIsolation == smAuto
+    check o.deReverb == smOn
+    check o.deEss == smOff
+    check o.outputPath == "/tmp/out.mp4"
+    check o.inputPath == "input.mp4"
+  test "unknown flag returns nonzero":
+    check enhanceCmd.parseArgs(@["--bogus", "input.mp4"]).code != 0
+  test "bad stage value returns nonzero":
+    check enhanceCmd.parseArgs(@["--denoise=maybe", "input.mp4"]).code != 0
+  test "--help returns 0 and flags help":
+    let (o, code) = enhanceCmd.parseArgs(@["--help"])
+    check code == 0
+    check o.helpShown
+    check "usage: honeyclip enhance" in enhanceCmd.helpText
+  test "-q and --debug":
+    let (o, _) = enhanceCmd.parseArgs(@["-q", "--debug", "x.mp4"])
+    check o.quiet and o.debug and o.inputPath == "x.mp4"
+  test "registered in main.nim and cli.nim":
+    check "(\"enhance\"" in readFile("src/main.nim")
+    check "(\"enhance\"" in readFile("src/cli.nim")

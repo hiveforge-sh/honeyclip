@@ -7,7 +7,7 @@ import cli
 import edit
 import log
 import ffmpeg
-import cmds/[info, desc, batch, broll as brollCmd, cache, levels, subdump, transcript, whisper, caption, chapters as chaptersCmd, engagement, clips as clipsCmd, preview as previewCmd, reframe as reframeCmd, exportcmd, analyze, meta]
+import cmds/[info, desc, batch, broll as brollCmd, enhance as enhanceCmd, cache, levels, subdump, transcript, whisper, caption, chapters as chaptersCmd, engagement, clips as clipsCmd, preview as previewCmd, reframe as reframeCmd, exportcmd, analyze, meta]
 import util/[color, fun]
 import palet/edit
 import analyze/presets
@@ -30,6 +30,7 @@ const cmdHandlers: seq[Command] = @[
   ("clips", clipsCmd.main),
   ("desc", desc.main),
   ("engage", engagement.main),
+  ("enhance", enhanceCmd.main),
   ("export", exportcmd.main),
   ("info", info.main),
   ("levels", levels.main),
@@ -359,6 +360,7 @@ Commands:
   clips       Extract engaging clips from video
   desc        Generate video descriptions
   engage      Analyze video engagement metrics
+  enhance     Enhance audio quality with AI noise reduction and normalization
   export      Export clips with multi-aspect and preview support
   info        Show media file information
   levels      Show audio levels
@@ -379,12 +381,17 @@ For full options: honeyclip --help
 """
       quit(0)
   else:
-    for (command, cmdHandler) in zip(commands, cmdHandlers):
+    # Look handlers up by name: `commands` and `cmdHandlers` differ in length
+    # (chapters/preview), so pairing them positionally mis-dispatches.
+    for command in commands:
       if paramStr(1) == command.name:
         if paramCount() < 2 and command.help != "":
           echo command.help
         else:
-          cmdHandler.handler(commandLineParams()[1..^1])
+          for cmdHandler in cmdHandlers:
+            if cmdHandler.name == command.name:
+              cmdHandler.handler(commandLineParams()[1..^1])
+              break
         quit(0)
 
   var args = mainArgs()

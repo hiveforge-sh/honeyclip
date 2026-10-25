@@ -8,6 +8,7 @@ const commands*: seq[tuple[name: string, help: string]] = @[
   ("clips", "Detect and export engaging clips from video"),
   ("desc", "Display a media file's description metadata"),
   ("engage", "Analyze video engagement (audio, motion, speech, faces)"),
+  ("enhance", "Enhance audio quality with AI noise reduction and normalization"),
   ("export", "Export clips with multi-aspect support, NLE markers, and score visualization"),
   ("info", "Retrieve information and properties about media files"),
   ("levels", "Display loudness over time"),
