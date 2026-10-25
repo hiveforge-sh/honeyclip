@@ -332,6 +332,15 @@ suite "audio enhance dispatch":
     check chunks.len >= 2
     for c in chunks:
       check probeAudio(c).durationSec <= 11.5
+  test "chunk then reassemble preserves total duration":
+    # Each crossfade must consume chunk overlap, not source audio (A/V sync).
+    let src = tmp / "g45.wav"
+    makeGapped(src, 45)
+    let chunks = chunkAtSilence(src, 10.5, tmp / "rt_chunks")
+    check chunks.len >= 4
+    let o = tmp / "rt.wav"
+    check reassembleWithCrossfade(chunks, o)
+    check abs(probeAudio(o).durationSec - probeAudio(src).durationSec) < 0.02
   test "chunkAtSilence short file returns input":
     check chunkAtSilence("tests/fixtures/audio_clean.wav", 60.0) ==
       @["tests/fixtures/audio_clean.wav"]

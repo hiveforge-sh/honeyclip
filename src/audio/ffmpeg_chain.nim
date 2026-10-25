@@ -131,11 +131,16 @@ proc resampleFromWav*(inputPath, outputPath: string;
   runFf("-i " & quoteShell(inputPath) & &" -ar {sampleRate} -ac {channels} " &
         quoteShell(outputPath)) and fileExists(outputPath)
 
+const crossfadeMsDefault* = 50
+
 proc chunkAtSilence*(inputPath: string; maxChunkSec: float;
-                     chunkDir: string = ""): seq[string] =
+                     chunkDir: string = "";
+                     overlapMs: int = crossfadeMsDefault): seq[string] =
   ## Duration <= maxChunkSec returns @[inputPath]. Otherwise split at the
   ## midpoint of detected silences, never exceeding maxChunkSec per chunk
   ## (hard cut when a window holds no silence). Chunks are PCM WAVs.
+  ## Every chunk but the last runs overlapMs past its boundary so that
+  ## reassembleWithCrossfade with the same duration preserves total length.
   let total = probeAudio(inputPath).durationSec
   if total <= 0.0 or total <= maxChunkSec: return @[inputPath]
   let dir = if chunkDir != "": chunkDir
@@ -172,15 +177,18 @@ proc chunkAtSilence*(inputPath: string; maxChunkSec: float;
     cur = best
   bounds.add total
 
+  let overlap = overlapMs.float / 1000.0
   for i in 0 ..< bounds.len - 1:
     let outp = dir / &"chunk_{i:04}.wav"
-    if not runFf(&"-ss {bounds[i]:.3f} -to {bounds[i+1]:.3f} -i " &
+    let stop = if i < bounds.len - 2: min(bounds[i+1] + overlap, total)
+               else: bounds[i+1]
+    if not runFf(&"-ss {bounds[i]:.3f} -to {stop:.3f} -i " &
                  quoteShell(inputPath) & " -vn " & quoteShell(outp)):
       return @[inputPath]
     result.add outp
 
 proc reassembleWithCrossfade*(chunks: seq[string]; outputPath: string;
-                              crossfadeMs: int = 50): bool =
+                              crossfadeMs: int = crossfadeMsDefault): bool =
   if chunks.len == 0: return false
   if chunks.len == 1:
     try:
