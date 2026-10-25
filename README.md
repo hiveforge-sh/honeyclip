@@ -17,6 +17,7 @@
 - **Speaker tracking & reframing** — Auto-center speakers for vertical video with `reframe`
 - **Transcript extraction** — Word-level timestamps with speaker diarization via `transcript`
 - **Caption rendering** — Burn styled captions into video with `caption`
+- **Audio enhancement** � Denoise, de-hum, de-ess and loudness-normalize with `enhance`
 - **Multi-format export** — Premiere, DaVinci Resolve, Final Cut Pro, and more
 
 ## Quick Start
@@ -233,6 +234,115 @@ at internal services unintentionally — honeyclip does not validate the host.
 honeyclip is otherwise offline-first. The `broll` subcommand is the only one that
 talks to external services (ComfyUI on localhost or Gemini APIs). API keys are
 read from env first, config file second, and never written to logs.
+
+## Audio Enhancement
+
+`honeyclip enhance` cleans up speech audio: noise reduction, hum removal,
+de-essing and loudness normalization to -16 LUFS. It writes the input video
+with the cleaned audio swapped in (video stream copied, not re-encoded), or just
+the cleaned WAV with `--audio-only`.
+
+```bash
+honeyclip enhance input.mp4
+# Writes input.enhanced.mp4
+
+honeyclip enhance input.mp4 --audio-only -o cleaned.wav
+```
+
+Audio files (`.wav`, `.mp3`, `.m4a`, `.flac`, ...) are accepted too and produce a WAV.
+
+By default each stage is `auto`: honeyclip scans the audio for 50/60 Hz hum,
+sibilance and a high noise floor, and only runs the stages the audio needs.
+Loudness normalization (two-pass `loudnorm`) always runs.
+
+**Requirement:** the enhancement chain runs through an `ffmpeg` command-line
+program. honeyclip's bundled FFmpeg build has no CLI, so install a system
+`ffmpeg` on your `PATH` (or point `HONEYCLIP_FFMPEG` at one). Lookup order:
+`HONEYCLIP_FFMPEG`, then `build/ffmpeg`, then `PATH`.
+
+### Backends
+
+| `--backend`  | What it uses | Needs |
+|--------------|--------------|-------|
+| `auto` (default) | DeepFilterNet if installed, else ElevenLabs if a key is set | One of the two below; otherwise exits 1 with instructions |
+| `local`      | [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet), runs on your machine | `pip install deepfilternet` (Python 3 on `PATH` as `python3` or `python`) |
+| `elevenlabs` | ElevenLabs Voice Isolator API | `ELEVENLABS_API_KEY` |
+| `ffmpeg`     | FFmpeg-only chain (`afftdn` denoise, hum notch, de-ess, loudnorm); no neural model, no network | Just `ffmpeg` |
+
+ElevenLabs key: set it in the environment, or put it in the config file.
+
+```bash
+export ELEVENLABS_API_KEY="your-key-here"
+```
+
+- Linux/macOS: `$XDG_CONFIG_HOME/honeyclip/config.toml` (default `~/.config/honeyclip/config.toml`)
+- Windows: `%APPDATA%\honeyclip\config.toml`
+
+```toml
+[elevenlabs]
+apiKey = "your-key-here"
+```
+
+Restrict the file with `chmod 600 ~/.config/honeyclip/config.toml` and keep it
+out of version control. The key is sent only to ElevenLabs as a request header
+and is never logged.
+
+### Stage control
+
+`--denoise`, `--voice-isolation`, `--de-reverb`, `--de-ess` and `--hum-removal`
+each take `on`, `off` or `auto` (default `auto`).
+
+```bash
+honeyclip enhance talk.mp4 --hum-removal=on --de-ess=off
+honeyclip enhance talk.mp4 --denoise=off --voice-isolation=off   # only hum/de-ess/loudness
+```
+
+The neural backends are the denoise/voice-isolation step: with `--denoise=off` the
+local backend does not run DeepFilterNet, and the ElevenLabs backend makes no API
+call (and asks no cost question) when both `--denoise` and `--voice-isolation`
+resolve to off. De-reverb and voice isolation are never chosen by `auto`; request
+them explicitly.
+
+### Cost (ElevenLabs)
+
+The API is billed at roughly **$0.10 per minute** of audio. Runs estimated at
+$1.00 or less (10 minutes) go ahead. Above that, honeyclip asks for confirmation
+on a terminal and **refuses to run** non-interactively (scripts, CI) unless you
+pass `--yes`. The check happens before anything is uploaded.
+
+```bash
+honeyclip enhance talk.mp4 --backend=elevenlabs --yes
+```
+
+### Options
+
+```
+--backend=BACKEND       auto | local | elevenlabs | ffmpeg (default: auto)
+--denoise=MODE          on | off | auto (default: auto)
+--voice-isolation=MODE  on | off | auto (default: auto)
+--de-reverb=MODE        on | off | auto (default: auto)
+--de-ess=MODE           on | off | auto (default: auto)
+--hum-removal=MODE      on | off | auto (default: auto)
+--audio-only            Write the cleaned WAV instead of a video
+-o, --output PATH       Output path (default: {input}.enhanced.{ext})
+--yes                   Skip the ElevenLabs cost confirmation
+-q, --quiet             Suppress progress output
+--debug                 Show debug information
+```
+
+Exit codes: `0` success, `1` backend unavailable, enhancement failed or cost not
+confirmed, `2` bad arguments.
+
+### Notes
+
+- The audio is resampled to 48 kHz mono for processing and restored to the source
+  sample rate and channel count afterwards. In an `.mp4`/`.mov` output the audio is
+  re-encoded as AAC 192k; the video stream is copied.
+- Inputs longer than one hour (or over 500 MB) are split at silences, enhanced in
+  pieces and rejoined with crossfades. The same applies to API uploads.
+- Neither neural backend is bundled. DeepFilterNet is a separate Python install, and
+  ElevenLabs is a network service: like `broll`, using it sends your audio off
+  machine. `--backend=local` and `--backend=ffmpeg` stay fully offline.
 
 ## License
 
