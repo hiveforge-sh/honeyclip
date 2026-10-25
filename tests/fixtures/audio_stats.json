@@ -1,0 +1,10 @@
+{
+  "rms_full_dbfs": -22.5,
+  "rms_4khz_plus_dbfs": -34.0,
+  "rms_50hz_band_dbfs": -32.0,
+  "rms_60hz_band_dbfs": -75.0,
+  "afftdn_noise_floor_dbfs": -48.0,
+  "duration_sec": 5.0,
+  "sample_rate": 48000,
+  "channels": 1
+}
