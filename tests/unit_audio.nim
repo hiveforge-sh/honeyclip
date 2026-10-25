@@ -35,3 +35,39 @@ suite "http multipart":
     let b = HttpClientLike()
     expect CatchableError:
       discard b.postMultipart("http://x", "audio", "d", "f.wav")
+
+import ../src/config
+
+suite "config":
+  let tmpDir = getTempDir() / "honeyclip_unit_audio_cfg"
+  setup:
+    createDir(tmpDir)
+    delEnv("ELEVENLABS_API_KEY")
+  teardown:
+    delEnv("ELEVENLABS_API_KEY")
+    try: removeDir(tmpDir) except CatchableError: discard
+
+  test "env var wins over TOML":
+    let p = tmpDir / "c.toml"
+    writeFile(p, "[elevenlabs]\napiKey = \"from-toml\"\n")
+    putEnv("ELEVENLABS_API_KEY", "env-value")
+    check resolveElevenlabsKey(p) == "env-value"
+
+  test "TOML fallback when env unset":
+    let p = tmpDir / "c.toml"
+    writeFile(p, "[elevenlabs]\napiKey = \"from-toml\"\n")
+    check resolveElevenlabsKey(p) == "from-toml"
+
+  test "missing TOML returns empty":
+    check resolveElevenlabsKey(tmpDir / "nope.toml") == ""
+
+  test "TOML without elevenlabs section returns empty":
+    let p = tmpDir / "c.toml"
+    writeFile(p, "[api]\ngeminiKey = \"g\"\n")
+    check resolveElevenlabsKey(p) == ""
+
+  test "secret never co-occurs with log calls in config.nim":
+    for line in readFile("src/config.nim").splitLines:
+      if "apiKey" in line or "ELEVENLABS_API_KEY" in line:
+        for bad in ["info(", "warning(", "error(", "debug("]:
+          check bad notin line

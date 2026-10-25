@@ -13,8 +13,12 @@ type
     geminiKey*: string
     comfyuiUrl*: string
 
+  ElevenlabsSection* = object
+    apiKey*: string
+
   HoneyclipConfig* = object
     api*: ApiSection
+    elevenlabs*: ElevenlabsSection
 
 proc configPath*(): string =
   ## Return the platform-appropriate config file path.
@@ -55,3 +59,13 @@ proc resolveComfyUrl*(pathOverride: string = ""): string =
   if result == "":
     let cfg = loadConfig(pathOverride).api.comfyuiUrl
     result = if cfg != "": cfg else: "http://127.0.0.1:8188"
+
+proc resolveElevenlabsKey*(pathOverride: string = ""): string =
+  ## Return ELEVENLABS_API_KEY from env first, then TOML [elevenlabs] apiKey.
+  ## Returns "" when neither source provides a key. The value is never logged.
+  result = getEnv("ELEVENLABS_API_KEY")
+  if result == "":
+    try:
+      result = loadConfig(pathOverride).elevenlabs.apiKey
+    except CatchableError:
+      result = ""
