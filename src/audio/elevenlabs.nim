@@ -8,6 +8,12 @@ const
   elevenlabsBase* = "https://api.elevenlabs.io/v1"
   elevenlabsCostPerMin* = 0.10  ## USD per minute of audio
 
+proc elevenlabsBaseUrl*(): string =
+  ## HONEYCLIP_ELEVENLABS_URL overrides the endpoint (used by the E2E tests to
+  ## point at a localhost mock); defaults to the real API.
+  let o = getEnv("HONEYCLIP_ELEVENLABS_URL")
+  if o != "": o.strip(leading = false, chars = {'/'}) else: elevenlabsBase
+
 proc estimateElevenlabsCost*(durationSec: float): float =
   (durationSec / 60.0) * elevenlabsCostPerMin
 
@@ -31,7 +37,7 @@ proc elevenlabsIsolate*(http: HttpClientLike; apiKey, inputWavPath, outPath: str
   try:
     let audioBytes = readFile(inputWavPath)
     let (code, body) = http.postMultipart(
-      &"{elevenlabsBase}/audio-isolation/stream",
+      &"{elevenlabsBaseUrl()}/audio-isolation/stream",
       "audio", audioBytes, "audio.wav",
       [(key: "xi-api-key", val: apiKey)])
     if code notin 200 .. 299:
