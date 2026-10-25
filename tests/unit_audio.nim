@@ -1,4 +1,4 @@
-import std/[unittest, json, os, strutils]
+import std/[unittest, json, os, strutils, osproc]
 import ../src/http_client
 
 suite "http multipart":
@@ -130,3 +130,135 @@ suite "audio analyzer":
     check s["rms_full_dbfs"].kind == JFloat
     check s["rms_full_dbfs"].getFloat < 0.0
     check s.hasKey("lavfi.astats.Overall.RMS_level")
+
+
+import ../src/audio/[deepfilter, elevenlabs, provider]
+
+suite "deepfilter provider":
+  test "isDeepFilterAvailable never raises":
+    discard isDeepFilterAvailable()
+
+  test "whichDeepFilter returns a known form":
+    let w = whichDeepFilter()
+    check (w == "" or w == "deepFilter" or w.endsWith("-m df.enhance"))
+
+  test "command construction quotes both paths":
+    let c = buildDeepFilterCmd("deepFilter", "in dir/a b.wav", "out dir")
+    check c == "deepFilter -o " & quoteShell("out dir") & " " & quoteShell("in dir/a b.wav")
+
+  test "runDeepFilter output path / missing-tool error":
+    let tmp = getTempDir() / "hc_df_test"
+    let r = runDeepFilter("tests/fixtures/audio_clean.wav", tmp)
+    if whichDeepFilter() == "":
+      check not r.ok
+      check "pip install deepfilternet" in r.err
+    elif r.ok:
+      check r.outputPath == tmp / "audio_clean.wav"
+    removeDir(tmp)
+
+  test "fallback prefix form is a python -m invocation":
+    check buildDeepFilterCmd("python -m df.enhance", "a.wav", "o").startsWith("python -m df.enhance -o ")
+
+  test "T-22-03: subprocess command quotes inputWav and outDir":
+    let src = readFile("src/audio/deepfilter.nim")
+    check "quoteShell(outDir)" in src
+    check "quoteShell(inputWav)" in src
+    for line in src.splitLines:
+      if "execCmdEx(" in line and not line.strip.startsWith("#"):
+        check "inputWav" notin line
+        check "outDir" notin line
+
+suite "elevenlabs cost":
+  test "estimate 60s = $0.10":
+    check abs(estimateElevenlabsCost(60.0) - 0.10) < 1e-9
+  test "estimate 600s = $1.00":
+    check abs(estimateElevenlabsCost(600.0) - 1.00) < 1e-9
+  test "autoYes always true":
+    check confirmElevenlabsCost(6000.0, false, true)
+  test "<= $1 non-TTY auto-allowed":
+    check confirmElevenlabsCost(600.0, false, false)
+  test "> $1 non-TTY denied":
+    check not confirmElevenlabsCost(601.0, false, false)
+  test "> $1 TTY y":
+    check confirmElevenlabsCost(6000.0, true, false, proc(): string = "y")
+  test "> $1 TTY n":
+    check not confirmElevenlabsCost(6000.0, true, false, proc(): string = "n")
+
+suite "elevenlabs provider":
+  let fixture = readFile("tests/fixtures/elevenlabs_isolator_response.bin")
+  test "posts multipart with xi-api-key header to /audio-isolation/stream":
+    let m = newMockHttpClient()
+    m.register("POST", "/audio-isolation/stream", 200, fixture)
+    let outP = getTempDir() / "hc_el_out1.mp3"
+    let r = elevenlabsIsolate(m, "secret", "tests/fixtures/audio_clean.wav", outP)
+    check r.ok
+    check m.calls.len == 1
+    check m.calls[0].url.contains("/audio-isolation/stream")
+    check m.calls[0].body == "audio:audio.wav"
+    check (key: "xi-api-key", val: "secret") in m.lastHeaders
+    removeFile(outP)
+  test "writes response body atomically (no .tmp left)":
+    let m = newMockHttpClient()
+    m.register("POST", "/audio-isolation", 200, fixture)
+    let outP = getTempDir() / "hc_el_out2.mp3"
+    let r = elevenlabsIsolate(m, "k", "tests/fixtures/audio_clean.wav", outP)
+    check r.ok
+    check readFile(outP) == fixture
+    check not fileExists(outP & ".tmp")
+    removeFile(outP)
+  test "empty key fails mentioning ELEVENLABS_API_KEY":
+    let r = elevenlabsIsolate(newMockHttpClient(), "", "x.wav", "o.mp3")
+    check not r.ok
+    check "ELEVENLABS_API_KEY" in r.err
+  test "non-2xx fails without writing":
+    let m = newMockHttpClient()
+    m.register("POST", "/audio-isolation", 401, "no")
+    let outP = getTempDir() / "hc_el_out3.mp3"
+    let r = elevenlabsIsolate(m, "k", "tests/fixtures/audio_clean.wav", outP)
+    check not r.ok
+    check not fileExists(outP)
+  test "T-22-02: apiKey never logged":
+    let src = readFile("src/audio/elevenlabs.nim")
+    for line in src.splitLines:
+      let s = line.strip
+      if s.startsWith("#"): continue
+      if "info(" in s or "warning(" in s or "error(" in s or "debug(" in s or
+         s.startsWith("info ") or s.startsWith("warning ") or
+         s.startsWith("error ") or s.startsWith("debug "):
+        check "apiKey" notin line
+        check "API_KEY" notin line
+
+suite "provider selection":
+  test "local without DFN raises":
+    expect ValueError: discard resolveProvider("local", "", false)
+  test "local with DFN":
+    check resolveProvider("local", "x", true).kind == apLocal
+  test "elevenlabs without key raises mentioning key":
+    try:
+      discard resolveProvider("elevenlabs", "")
+      check false
+    except ValueError as e:
+      check "ELEVENLABS_API_KEY" in e.msg
+  test "elevenlabs with key":
+    let p = resolveProvider("elevenlabs", "key123")
+    check p.kind == apElevenlabs
+    check p.apiKey == "key123"
+  test "auto with DFN -> local":
+    check resolveProvider("auto", "", true).kind == apLocal
+  test "auto without DFN + key -> elevenlabs":
+    check resolveProvider("auto", "key123", false).kind == apElevenlabs
+  test "auto with neither lists both remediations":
+    try:
+      discard resolveProvider("auto", "", false)
+      check false
+    except ValueError as e:
+      check "pip install deepfilternet" in e.msg
+      check "ELEVENLABS_API_KEY" in e.msg
+  test "invalid backend names the bad value":
+    try:
+      discard resolveProvider("bogus", "")
+      check false
+    except ValueError as e:
+      check "bogus" in e.msg
+  test "2-arg overload resolves with key present":
+    check resolveProvider("auto", "k").kind in {apLocal, apElevenlabs}
