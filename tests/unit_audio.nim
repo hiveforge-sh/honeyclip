@@ -124,6 +124,31 @@ suite "audio analyzer":
     check not clean.deEss
     check not clean.denoise
 
+  test "CR-02: ffmpegBin never resolves to a binary in the current directory":
+    let saved = getEnv("HONEYCLIP_FFMPEG")
+    let oldCwd = getCurrentDir()
+    let d = getTempDir() / ("hc_plant_" & $getCurrentProcessId())
+    removeDir(d)
+    createDir(d / "build")
+    for n in ["ffmpeg.exe", "ffmpeg", "build/ffmpeg.exe", "build/ffmpeg"]:
+      writeFile(d / n, "planted")
+    delEnv("HONEYCLIP_FFMPEG")
+    setCurrentDir(d)
+    let bin = ffmpegBin()
+    let onPath = findExeOnPath("ffmpeg")
+    setCurrentDir(oldCwd)
+    if saved != "": putEnv("HONEYCLIP_FFMPEG", saved)
+    check not bin.startsWith(d)
+    check not onPath.startsWith(d)
+    check bin == "" or bin.isAbsolute
+    removeDir(d)
+
+  test "ffmpegBin honours HONEYCLIP_FFMPEG first":
+    let saved = getEnv("HONEYCLIP_FFMPEG")
+    putEnv("HONEYCLIP_FFMPEG", "/custom/ffmpeg")
+    check ffmpegBin() == "/custom/ffmpeg"
+    if saved != "": putEnv("HONEYCLIP_FFMPEG", saved) else: delEnv("HONEYCLIP_FFMPEG")
+
   test "runAstatsProbe returns numeric fields":
     let s = runAstatsProbe("tests/fixtures/audio_hum_50hz.wav")
     check s.hasKey("rms_full_dbfs")
@@ -140,7 +165,7 @@ suite "deepfilter provider":
 
   test "whichDeepFilter returns a known form":
     let w = whichDeepFilter()
-    check (w == "" or w == "deepFilter" or w.endsWith("-m df.enhance"))
+    check (w == "" or "deepFilter" in w or w.endsWith("-m df.enhance"))
 
   test "command construction quotes both paths":
     let c = buildDeepFilterCmd("deepFilter", "in dir/a b.wav", "out dir")

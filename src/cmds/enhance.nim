@@ -138,6 +138,9 @@ proc run*(args: seq[string]): int =
     return 1
   if opts.quiet: quiet = true
   if opts.debug: isDebug = true
+  if ffmpegBin() == "":
+    stderr.writeLine "Error! ffmpeg not found: set HONEYCLIP_FFMPEG or put ffmpeg on PATH"
+    return 1
 
   var provider: AudioProvider
   try:

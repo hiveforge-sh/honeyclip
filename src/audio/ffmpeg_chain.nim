@@ -3,7 +3,8 @@
 ## silence-bounded chunking and crossfade reassembly.
 ##
 ## The FFmpeg CLI is resolved by analyze/audio_enhance.ffmpegBin
-## (HONEYCLIP_FFMPEG, then build/ffmpeg(.exe), then PATH). Every path and
+## (HONEYCLIP_FFMPEG, then the in-tree build next to the honeyclip binary,
+## then PATH; never the current directory). Every path and
 ## filter string passed to a subprocess is wrapped in quoteShell (T-22-03).
 
 import std/[osproc, os, strutils, strformat, json, sequtils]

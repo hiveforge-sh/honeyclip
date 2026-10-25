@@ -1,35 +1,38 @@
 ## DeepFilterNet local provider: detection + subprocess + path resolution.
 ## All user-derived paths are passed through quoteShell (T-22-03).
 import std/[osproc, os, strformat, strutils, algorithm]
+import ../analyze/audio_enhance  # findExeOnPath
 
 proc pythonExe(): string =
-  ## "python3" on Linux/macOS; on Windows only "python" is usually present.
-  if findExe("python3") != "": "python3"
-  elif findExe("python") != "": "python"
-  else: ""
+  ## Absolute path of python3 (Linux/macOS) or python (often the only one on
+  ## Windows), found on PATH only, never in the current directory (CR-02).
+  result = findExeOnPath("python3")
+  if result == "": result = findExeOnPath("python")
 
 proc isDeepFilterAvailable*(): bool =
   ## Detect DeepFilterNet via Python module import. Never raises.
   let py = pythonExe()
   if py == "": return false
   try:
-    let (_, code) = execCmdEx(py & " -c \"import df\"")
+    let (_, code) = execCmdEx(quoteShell(py) & " -c \"import df\"")
     result = code == 0
   except CatchableError:
     result = false
 
 proc whichDeepFilter*(): string =
-  ## Command prefix: "deepFilter" (PATH script), "<python> -m df.enhance", or "".
+  ## Command prefix: the quoted absolute path of the `deepFilter` PATH script,
+  ## "<quoted python> -m df.enhance", or "".
   try:
-    if findExe("deepFilter") != "":
-      let (_, code1) = execCmdEx("deepFilter --help")
+    let dfExe = findExeOnPath("deepFilter")
+    if dfExe != "":
+      let (_, code1) = execCmdEx(quoteShell(dfExe) & " --help")
       if code1 == 0:
-        return "deepFilter"
+        return quoteShell(dfExe)
     let py = pythonExe()
     if py != "":
-      let (_, code2) = execCmdEx(py & " -c \"import df.enhance\"")
+      let (_, code2) = execCmdEx(quoteShell(py) & " -c \"import df.enhance\"")
       if code2 == 0:
-        return py & " -m df.enhance"
+        return quoteShell(py) & " -m df.enhance"
   except CatchableError:
     discard
   return ""
