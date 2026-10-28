@@ -1027,6 +1027,11 @@ proc setupWindowsShell() =
   ## GNU Make resolves SHELL to the Windows path of sh.exe, and if that path
   ## contains spaces (e.g. C:/Program Files/Git/usr/bin/sh.exe), libtool breaks.
   when defined(windows):
+    # Interactive Git Bash sets MSYSTEM=MINGW64; a non-login shell (as on CI)
+    # doesn't, and then uname reports MSYS_NT, which FFmpeg's configure rejects
+    # ("Native MSYS builds are discouraged").
+    if getEnv("MSYSTEM").len == 0:
+      putEnv("MSYSTEM", "MINGW64")
     let mingwBin = getHomeDir() / ".choosenim/toolchains/mingw64/bin"
     let shDest = mingwBin / "sh.exe"
     if not dirExists(mingwBin):
