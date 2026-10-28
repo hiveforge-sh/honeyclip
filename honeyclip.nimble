@@ -1020,6 +1020,9 @@ proc setupWindowsShell() =
   when defined(windows):
     let mingwBin = getHomeDir() / ".choosenim/toolchains/mingw64/bin"
     let shDest = mingwBin / "sh.exe"
+    if not dirExists(mingwBin):
+      quit("MinGW not found at " & mingwBin & ". Install Nim with choosenim, " &
+           "which bundles it (see CLAUDE.md, Windows Native Build).")
     if not fileExists(shDest):
       # Find Git's sh.exe
       let gitShell = "C:/Program Files/Git/usr/bin/sh.exe"

@@ -11,9 +11,10 @@ type
     confidence*: float  # 0.0-1.0
     angle*: int  # Rotation angle in degrees
 
-# Stub implementation for Windows build (ML libraries have LTO issues)
+# Stub implementation when libfacedetection isn't linked: always on Windows
+# (ML libraries have LTO issues), and on any build without -d:enable_ml
 # TODO: Rebuild libfacedetection without -flto for Windows
-when defined(windows):
+when defined(windows) or not defined(enable_ml):
   proc facedetect_cnn(result_buffer: ptr cint, rgb_image_data: ptr uint8,
                       width, height, step: cint): cint =
     # Return 0 faces detected - placeholder until ML libs rebuilt without LTO
