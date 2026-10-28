@@ -66,7 +66,7 @@ proc runDeepFilter*(inputWav, outDir: string
   createDir(outDir)
   let cmdPrefix = whichDeepFilter()
   if cmdPrefix == "":
-    return (false, "", "DeepFilterNet not installed. Run: pip install deepfilternet")
+    return (false, "", "DeepFilterNet not installed. Run: pip install deepfilternet soundfile")
   let cmd = buildDeepFilterCmd(cmdPrefix, inputWav, outDir)
   let (output, code) = execCmdEx(cmd)
   if code != 0:

@@ -265,9 +265,24 @@ program. honeyclip's bundled FFmpeg build has no CLI, so install a system
 | `--backend`  | What it uses | Needs |
 |--------------|--------------|-------|
 | `auto` (default) | DeepFilterNet if installed, else ElevenLabs if a key is set | One of the two below; otherwise exits 1 with instructions |
-| `local`      | [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet), runs on your machine | `pip install deepfilternet` (Python 3 on `PATH` as `python3` or `python`) |
+| `local`      | [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet), runs on your machine | `pip install deepfilternet soundfile` (Python 3 on `PATH` as `python3` or `python`; see below) |
 | `elevenlabs` | ElevenLabs Voice Isolator API | `ELEVENLABS_API_KEY` |
 | `ffmpeg`     | FFmpeg-only chain (`afftdn` denoise, hum notch, de-ess, loudnorm); no neural model, no network | Just `ffmpeg` |
+
+DeepFilterNet 0.5.6 (the current release) predates recent PyTorch: it uses
+`torchaudio.backend`, which newer torchaudio removed. A setup verified to work on
+Windows is Python 3.11 with CPU PyTorch 2.2.2 and `soundfile` (on Windows
+torchaudio has no audio backend without it, and DeepFilterNet fails with
+"Couldn't find appropriate backend"):
+
+```bash
+python3.11 -m venv dfenv
+dfenv/Scripts/python -m pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+dfenv/Scripts/python -m pip install deepfilternet soundfile
+```
+
+Put `dfenv/Scripts` (Linux/macOS: `dfenv/bin`) first on `PATH` so honeyclip finds
+`deepFilter` there.
 
 ElevenLabs key: set it in the environment, or put it in the config file.
 

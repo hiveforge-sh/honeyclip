@@ -15,7 +15,8 @@ updated: 2026-10-24T22:05:00Z
 ### 1. Local backend with real DeepFilterNet
 Run `honeyclip enhance <video> --backend=local` on a machine with `pip install deepfilternet`.
 expected: Output file produced with audibly reduced noise, loudness normalized, A/V in sync
-result: [pending]
+result: passed (2026-10-28, measured, not listened to)
+note: DeepFilterNet 0.5.6 in a Python 3.11 venv with CPU torch/torchaudio 2.2.2 plus `soundfile` (without it torchaudio has no backend on Windows and DeepFilterNet fails; honeyclip correctly exits 1). On Windows-TTS speech mixed with pink noise, `--backend=local` raised the speech-to-noise gap from 21.8 dB to 30.8 dB (FFmpeg-only chain: 25.9 dB). Stereo input stayed stereo with distinct channels; DeepFilterNet handled stereo natively, so the per-channel fallback did not run. Found one gap, below.
 
 ### 2. ElevenLabs backend with a real API key
 Run `honeyclip enhance <short clip> --backend=elevenlabs --yes` with a real ELEVENLABS_API_KEY; then once without `--yes` to see the cost prompt.
@@ -31,10 +32,16 @@ note: Sync and track preservation were measured (not listened to) on a copy of a
 ## Summary
 
 total: 3
-passed: 0
-issues: 0
-pending: 3
+passed: 1
+issues: 1
+pending: 2
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+### G-1: loudnorm falls back to dynamic mode and lifts residual noise
+status: open
+found_by: test 1
+detail: DeepFilterNet alone left a 35.5 dB speech-to-noise gap; after honeyclip's chain it was 30.8 dB. The two-pass `loudnorm` asks for `linear=true`, but when the gain needed for -16 LUFS would push true peak above -1.5 dBTP (here input_tp -3.24 dB, gain +4 dB), FFmpeg silently switches to dynamic normalization, which raises quiet passages and with them the leftover noise. Affects every backend; also why the 2h49m test file ended at -17.4 LUFS instead of -16.
+fix_idea: apply the gain linearly and handle peaks with a true-peak limiter (or lower the target) so loudnorm never falls back to dynamic mode.

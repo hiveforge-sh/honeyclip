@@ -26,7 +26,7 @@ Options:
                                         that audio is uploaded), else ffmpeg;
                                         falls back to ffmpeg, with a warning,
                                         if the chosen backend fails
-                            local       DeepFilterNet (pip install deepfilternet)
+                            local       DeepFilterNet (pip install deepfilternet soundfile)
                             elevenlabs  Voice Isolator API (ELEVENLABS_API_KEY
                                         or [elevenlabs] apiKey in config.toml)
                             ffmpeg      FFmpeg-only chain, no neural model
