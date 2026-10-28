@@ -4356,13 +4356,14 @@ suite "Chapter Detection":
     check chapters[0].startMs == 20000
 
   test "generateChapters combined mode no deduplication":
-    # Scene at 30000ms and engagement peak at 60000ms - outside dedupe window
+    # Scene at 30000ms and engagement peak at 40000ms - outside dedupe window
     let sceneTimes = @[30.0]
     let timeline = makeTimeline(@[20.0f, 30.0f, 40.0f, 50.0f, 80.0f, 25.0f], segDurationMs = 10000)
     let engagementPeaks = @[40000'i64]  # Segment index 4
     var params = defaultChapterParams()
     params.mode = "combined"
     params.dedupeWindowMs = 5000
+    params.minSpacingMs = 5000  # Isolate dedupe; default 30s spacing would drop the peak
 
     let chapters = generateChapters(sceneTimes, engagementPeaks, timeline, params)
     check chapters.len == 2  # Both kept
