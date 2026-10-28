@@ -65,6 +65,17 @@ jobs:
         run: nimble makeff
       - name: Compile
         run: nimble make
+      # Our FFmpeg build has --disable-programs, but the Phase 22 audio
+      # pipeline and its tests run the ffmpeg CLI. Install it only after the
+      # build so its libraries can't leak into it.
+      - name: Install FFmpeg CLI
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            brew install ffmpeg
+          else
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -hide_banner -version | head -1
       - name: Test
         run: nimble test
       - name: e2e Test
@@ -153,7 +164,13 @@ jobs:
       - name: Compile honeyclip
         shell: bash
         run: nimble make
-      
+
+      - name: Install FFmpeg CLI
+        shell: bash
+        run: |
+          choco install ffmpeg -y --no-progress
+          ffmpeg -hide_banner -version | head -1
+
       - name: Test (verify ML stubs don't crash)
         shell: bash
         run: |

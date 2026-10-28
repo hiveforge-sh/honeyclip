@@ -407,7 +407,9 @@ when defined(windows):
     ## Detect if we're in WSL (linux-gnu) or MSYS2 (msys)
     ## Returns "wsl" for /mnt/c/... paths, "msys" for /c/... paths
     try:
-      let ostype = gorgeEx("bash -c 'echo $OSTYPE'").output.strip()
+      # Go through cmd so this finds the bash that exec will run: a bare
+      # gorgeEx searches System32 before PATH and gets WSL's bash.exe.
+      let ostype = gorgeEx("cmd /c bash -c \"echo $OSTYPE\"").output.strip()
       if ostype.contains("linux"):
         return "wsl"    # /mnt/c/Users/...
       elif ostype.contains("msys"):
