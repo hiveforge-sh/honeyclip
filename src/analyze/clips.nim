@@ -13,6 +13,7 @@ import std/[algorithm, strformat, strutils, osproc, os, sets, math]
 import engagement_types
 import ../exports/presets
 import ../reframe/crop
+import ../util/exe
 
 type
   BoundaryReason* = enum
@@ -227,9 +228,11 @@ proc extractSceneChanges*(inputPath: string, threshold: float = 0.4): seq[float6
   ## Uses FFmpeg scdet filter with metadata output. Parses stderr for
   ## lavfi.scd.time entries which indicate when score > threshold.
   result = @[]
+  let ffmpegPath = ffmpegBin()
+  if ffmpegPath == "": return  # no ffmpeg: no scene changes, as on a failed run
 
   # Run FFmpeg and capture output (stderr redirected to stdout)
-  let output = execProcess("ffmpeg", args = @[
+  let output = execProcess(ffmpegPath, args = @[
     "-i", inputPath,
     "-vf", &"scdet=t={threshold}:s=1",
     "-f", "null", "-"
@@ -697,7 +700,7 @@ proc batchExportClips*(inputPath: string, clips: seq[Clip],
   var completed = 0
 
   # Find ffmpeg executable
-  let ffmpegPath = findExe("ffmpeg")
+  let ffmpegPath = ffmpegBin()
   if ffmpegPath == "":
     # Return error for all clips
     for clip in clips:
@@ -891,7 +894,7 @@ proc batchExportMultiAspect*(inputPath: string, clips: seq[Clip],
   var completed = 0
   let totalJobs = jobs.len
 
-  let ffmpegPath = findExe("ffmpeg")
+  let ffmpegPath = ffmpegBin()
   if ffmpegPath == "":
     for job in jobs:
       result.add(ExportResult(

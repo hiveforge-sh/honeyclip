@@ -7,6 +7,7 @@ import std/[strformat, strutils, os, osproc]
 import ../log
 import ../util/fun
 import ../util/bar
+import ../util/exe
 import ../av
 import ../ffmpeg
 import ../analyze/faces
@@ -363,15 +364,10 @@ Examples:
   # Build complete filter chain
   let filterChain = &"{cropFilter},scale={targetWidth}:{targetHeight}"
 
-  # Find ffmpeg executable - check build directory first, then PATH
-  var ffmpegPath = ""
-  let buildPath = "build" / "bin" / "ffmpeg"
-  if fileExists(buildPath) or fileExists(buildPath & ".exe"):
-    ffmpegPath = if fileExists(buildPath & ".exe"): buildPath & ".exe" else: buildPath
-  else:
-    ffmpegPath = findExe("ffmpeg")
+  # Find ffmpeg: honeyclip's own build first, then PATH (never the CWD)
+  let ffmpegPath = ffmpegBin()
   if ffmpegPath == "":
-    error "Could not find ffmpeg executable (checked build/bin/ and PATH)"
+    error "Could not find ffmpeg executable (set HONEYCLIP_FFMPEG or add ffmpeg to PATH)"
 
   # Execute FFmpeg command
   let args = @[

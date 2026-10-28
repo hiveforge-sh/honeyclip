@@ -2,6 +2,7 @@ import std/[strformat, strutils, os, times, json, osproc, tables]
 import ../log
 import ../util/fun
 import ../util/bar
+import ../util/exe
 import ../av
 import ../ffmpeg
 import ../analyze/[chapters, clips, engagement, engagement_types, hooks]
@@ -338,7 +339,7 @@ Examples:
         echo "Embedding chapters in MP4..."
 
       # Apply to video via FFmpeg
-      let ffmpegCmd = "ffmpeg"
+      let ffmpegCmd = ffmpegBin()
       let ffmpegArgs = @[
         "-i", inputPath,
         "-i", metadataPath,
@@ -347,7 +348,9 @@ Examples:
         outputFile
       ]
 
-      let exitCode = execCmd(&"{ffmpegCmd} {ffmpegArgs.join(\" \")}")
+      if ffmpegCmd == "":
+        error "Could not find ffmpeg executable (set HONEYCLIP_FFMPEG or add ffmpeg to PATH)"
+      let exitCode = execCmd(quoteShellCommand(@[ffmpegCmd] & ffmpegArgs))
       if exitCode != 0:
         error "FFmpeg command failed"
 

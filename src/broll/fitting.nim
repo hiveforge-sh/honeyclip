@@ -6,6 +6,7 @@
 ## execCmdEx (mirror Phase 19-02 pattern). T-21-06: paths passed through quoteShell.
 
 import std/[osproc, strformat, strutils]
+import ../util/exe
 
 type
   FittingStrategy* = enum
@@ -44,13 +45,13 @@ proc buildFittingCmd*(clipPath: string, requestedMs, actualMs: int64,
     result = ""
   of fsTruncate:
     let durSec = requestedMs.float / 1000.0
-    result = &"ffmpeg -y -i {clipPath.quoteShell} -t {durSec:.3f} -c copy {outPath.quoteShell}"
+    result = &"{ffmpegCmd()} -y -i {clipPath.quoteShell} -t {durSec:.3f} -c copy {outPath.quoteShell}"
   of fsPadFreeze:
     let padSec = (requestedMs - actualMs).float / 1000.0
-    result = &"ffmpeg -y -i {clipPath.quoteShell} -vf tpad=stop_mode=clone:stop_duration={padSec:.3f} {outPath.quoteShell}"
+    result = &"{ffmpegCmd()} -y -i {clipPath.quoteShell} -vf tpad=stop_mode=clone:stop_duration={padSec:.3f} {outPath.quoteShell}"
   of fsPadSpeedRamp:
     let speedRatio = actualMs.float / requestedMs.float
-    result = &"ffmpeg -y -i {clipPath.quoteShell} -vf setpts={1.0 / speedRatio:.4f}*PTS {outPath.quoteShell}"
+    result = &"{ffmpegCmd()} -y -i {clipPath.quoteShell} -vf setpts={1.0 / speedRatio:.4f}*PTS {outPath.quoteShell}"
 
 proc fitClipDuration*(clipPath: string, requestedMs, actualMs: int64,
                       strategy: FittingStrategy, outPath: string): bool =

@@ -8,6 +8,7 @@
 import std/[os, osproc, strformat, strutils, times]
 import ../analyze/broll as brollAnalyze
 import ../log
+import ../util/exe
 import comfyui  # for ClipResult
 
 type
@@ -58,7 +59,7 @@ proc normalizeBrollClipCmd*(brollPath: string, targetW, targetH: int,
                             targetFps: float, outPath: string): string =
   ## Build FFmpeg command to re-encode a B-roll clip to source resolution + fps.
   ## Pure builder; paths are shell-quoted (T-21-06).
-  &"ffmpeg -y -i {brollPath.quoteShell} -vf scale={targetW}:{targetH},fps={targetFps:.3f} -c:v libx264 -preset fast -an {outPath.quoteShell}"
+  &"{ffmpegCmd()} -y -i {brollPath.quoteShell} -vf scale={targetW}:{targetH},fps={targetFps:.3f} -c:v libx264 -preset fast -an {outPath.quoteShell}"
 
 proc renderWithBroll*(sourceVideo: string,
                       insertions: seq[brollAnalyze.BrollInsertion],
@@ -78,7 +79,7 @@ proc renderWithBroll*(sourceVideo: string,
   createDir(workDir)
   try:
     # 1. Probe source for w/h/fps
-    let probeCmd = &"ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -of csv=p=0 {sourceVideo.quoteShell}"
+    let probeCmd = &"{ffprobeCmd()} -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -of csv=p=0 {sourceVideo.quoteShell}"
     let (probeOut, probeCode) = execCmdEx(probeCmd)
     if probeCode != 0:
       error &"ffprobe failed on {sourceVideo}: {probeOut}"
@@ -119,7 +120,7 @@ proc renderWithBroll*(sourceVideo: string,
         let segPath = workDir / &"src_seg_{srcCount}.mp4"
         let startSec = s.startMs.float / 1000.0
         let durSec = (s.endMs - s.startMs).float / 1000.0
-        let cmd = &"ffmpeg -y -ss {startSec:.3f} -t {durSec:.3f} -i {sourceVideo.quoteShell} -c:v libx264 -preset fast -an {segPath.quoteShell}"
+        let cmd = &"{ffmpegCmd()} -y -ss {startSec:.3f} -t {durSec:.3f} -i {sourceVideo.quoteShell} -c:v libx264 -preset fast -an {segPath.quoteShell}"
         let (segOut, segCode) = execCmdEx(cmd)
         if segCode != 0:
           error &"Source segment extraction failed: {segOut}"
@@ -131,7 +132,7 @@ proc renderWithBroll*(sourceVideo: string,
     let listPath = workDir / "concat_list.txt"
     writeFile(listPath, buildConcatList(plan, srcSegmentPaths, normalizedPaths))
     let tempVideo = workDir / "temp_video.mp4"
-    let concatCmd = &"ffmpeg -y -f concat -safe 0 -i {listPath.quoteShell} -c copy {tempVideo.quoteShell}"
+    let concatCmd = &"{ffmpegCmd()} -y -f concat -safe 0 -i {listPath.quoteShell} -c copy {tempVideo.quoteShell}"
     let (concatOut, concatCode) = execCmdEx(concatCmd)
     if concatCode != 0:
       error &"Concat failed: {concatOut}"
@@ -139,14 +140,14 @@ proc renderWithBroll*(sourceVideo: string,
 
     # 5. Extract source audio
     let srcAudio = workDir / "source_audio.aac"
-    let audioCmd = &"ffmpeg -y -i {sourceVideo.quoteShell} -vn -c:a aac {srcAudio.quoteShell}"
+    let audioCmd = &"{ffmpegCmd()} -y -i {sourceVideo.quoteShell} -vn -c:a aac {srcAudio.quoteShell}"
     let (audioOut, audioCode) = execCmdEx(audioCmd)
     if audioCode != 0:
       error &"Audio extraction failed: {audioOut}"
       return false
 
     # 6. Mux video + audio
-    let muxCmd = &"ffmpeg -y -i {tempVideo.quoteShell} -i {srcAudio.quoteShell} -c:v copy -c:a copy -map 0:v:0 -map 1:a:0 {outputPath.quoteShell}"
+    let muxCmd = &"{ffmpegCmd()} -y -i {tempVideo.quoteShell} -i {srcAudio.quoteShell} -c:v copy -c:a copy -map 0:v:0 -map 1:a:0 {outputPath.quoteShell}"
     let (muxOut, muxCode) = execCmdEx(muxCmd)
     if muxCode != 0:
       error &"Mux failed: {muxOut}"

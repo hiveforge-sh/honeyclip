@@ -8,6 +8,8 @@
 ## quoteShell (T-22-03).
 
 import std/[osproc, os, strutils, json, math, tempfiles]
+import ../util/exe
+export exe.findExeOnPath, exe.ffmpegBin
 when defined(posix):
   import std/posix
 
@@ -28,26 +30,6 @@ const
   noiseFloorThresholdDb* = -55.0
   maxProbeSeconds = 30
 
-proc findExeOnPath*(exe: string): string =
-  ## Like std/os.findExe, but never looks in the current directory (findExe
-  ## checks the CWD first on Windows) and skips relative PATH entries such as
-  ## "." or "". Returns the absolute path, or "" when not found.
-  if exe.len == 0: return ""
-  for entry in getEnv("PATH").split(PathSep):
-    var dir = entry.strip
-    when defined(windows):
-      if dir.len >= 2 and dir[0] == '"' and dir[^1] == '"':
-        dir = dir[1 .. ^2]
-    if dir.len == 0 or not dir.isAbsolute: continue
-    when defined(windows):
-      for ext in ExeExts:
-        let cand = dir / addFileExt(exe, ext)
-        if fileExists(cand): return cand
-    else:
-      let cand = dir / exe
-      if fileExists(cand): return cand
-  return ""
-
 proc createPrivateTempDir*(prefix: string): string =
   ## A new, uniquely named directory under getTempDir() (WR-07). The random
   ## name comes from std/tempfiles and creation is atomic, so an existing
@@ -61,20 +43,6 @@ proc createPrivateTempDir*(prefix: string): string =
     else:
       if not existsOrCreateDir(path): return path
   raise newException(OSError, "could not create a temporary directory in " & getTempDir())
-
-proc ffmpegBin*(): string =
-  ## HONEYCLIP_FFMPEG override, then the in-tree build next to the honeyclip
-  ## binary (never the current directory: binary planting, CR-02), then
-  ## absolute PATH entries. "" when no ffmpeg can be found.
-  let envBin = getEnv("HONEYCLIP_FFMPEG")
-  if envBin != "": return envBin
-  let appDir = getAppDir()
-  for cand in [appDir / "ffmpeg.exe", appDir / "ffmpeg",
-               appDir / "build" / "ffmpeg.exe", appDir / "build" / "ffmpeg",
-               appDir / "build" / "bin" / "ffmpeg.exe",
-               appDir / "build" / "bin" / "ffmpeg"]:
-    if fileExists(cand): return cand
-  findExeOnPath("ffmpeg")
 
 proc statNum(stats: JsonNode, key: string, default: float): float =
   ## Read a numeric stat that may be stored as a number or a string.

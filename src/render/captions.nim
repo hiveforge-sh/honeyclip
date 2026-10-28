@@ -8,6 +8,7 @@
 
 import std/[strformat, strutils, os, random, osproc]
 import ../transcript/grouping
+import ../util/exe
 
 type
   CaptionPosition* = enum
@@ -418,7 +419,7 @@ proc cleanupCaptionTemp*(tempFile: string) =
   except:
     discard
 
-proc burnCaptions*(inputPath, outputPath: string, captions: seq[Caption], config: CaptionBurnConfig, ffmpegPath: string = "ffmpeg"): int =
+proc burnCaptions*(inputPath, outputPath: string, captions: seq[Caption], config: CaptionBurnConfig, ffmpegPath: string = ffmpegBin()): int =
   ## Burn captions into video using FFmpeg
   ## Returns FFmpeg exit code (0 = success)
 

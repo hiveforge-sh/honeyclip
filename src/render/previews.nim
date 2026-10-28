@@ -11,6 +11,7 @@
 ## burned-in metadata (clip number, time range) for easy identification.
 
 import std/[strformat, strutils, os, osproc]
+import ../util/exe
 
 type
   PreviewMode* = enum
@@ -34,30 +35,12 @@ type
 # ===== Helper functions =====
 
 proc findFFmpegPath*(): string =
-  ## Find FFmpeg executable, checking build/bin first then PATH
+  ## Find FFmpeg executable: honeyclip's own build beside the binary, then
+  ## PATH, never the current directory (see util/exe).
   ##
   ## Returns:
   ##   Path to ffmpeg executable, empty string if not found
-  ##
-  ## Follows existing pattern from reframe.nim: prefer honeyclip's
-  ## built FFmpeg over system FFmpeg.
-
-  # Check build/bin/ffmpeg first (honeyclip's built FFmpeg)
-  let buildPath = getAppDir().parentDir() / "build" / "bin" / "ffmpeg"
-  if fileExists(buildPath):
-    return buildPath
-
-  # Also check relative to current directory (for development)
-  let localBuildPath = "build" / "bin" / "ffmpeg"
-  if fileExists(localBuildPath):
-    return localBuildPath
-
-  # Fall back to PATH
-  let pathFFmpeg = findExe("ffmpeg")
-  if pathFFmpeg != "":
-    return pathFFmpeg
-
-  return ""
+  ffmpegBin()
 
 proc msToTimestamp*(ms: int64): string =
   ## Convert milliseconds to human-readable timestamp

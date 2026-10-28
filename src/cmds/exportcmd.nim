@@ -12,6 +12,7 @@ import std/[strformat, strutils, os, json, tables, algorithm, times, options, os
 import ../log
 import ../util/fun
 import ../util/bar
+import ../util/exe
 import ../av
 import ../analyze/clips
 import ../analyze/engagement_types
@@ -453,7 +454,7 @@ Examples:
         if filter.len > 0:
           let vizOutputPath = effectiveOutputDir / "score_overlay.mp4"
           # Use FFmpeg to render visualization overlay
-          let (output, exitCode) = execCmdEx(&"ffmpeg -y -i \"{inputPath}\" -vf \"{filter}\" -c:v libx264 -preset fast -crf 23 -c:a copy \"{vizOutputPath}\"")
+          let (output, exitCode) = execCmdEx(&"{ffmpegCmd()} -y -i \"{inputPath}\" -vf \"{filter}\" -c:v libx264 -preset fast -crf 23 -c:a copy \"{vizOutputPath}\"")
           if exitCode == 0:
             echo &"Created: {vizOutputPath}"
           else:

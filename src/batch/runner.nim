@@ -4,6 +4,7 @@ import ./templates
 import ./checkpoint
 import ./discover
 import ../log
+import ../util/exe
 import ../brand/[watermark, concat]
 
 type
@@ -21,25 +22,8 @@ type
     durationMs*: int64
 
 proc findFFmpegPath(): string =
-  ## Find path to FFmpeg executable
-  ## Prefers honeyclip's built FFmpeg over system FFmpeg
-
-  # Check build/bin/ffmpeg first (honeyclip's built FFmpeg)
-  let buildPath = getAppDir().parentDir() / "build" / "bin" / "ffmpeg"
-  if fileExists(buildPath):
-    return buildPath
-
-  # Also check relative to current directory (for development)
-  let localBuildPath = "build" / "bin" / "ffmpeg"
-  if fileExists(localBuildPath):
-    return localBuildPath
-
-  # Fall back to PATH
-  let pathFFmpeg = findExe("ffmpeg")
-  if pathFFmpeg != "":
-    return pathFFmpeg
-
-  return ""
+  ## FFmpeg executable via util/exe (never the current directory).
+  ffmpegBin()
 
 proc applyWatermark(outputPath: string, tmpl: BatchTemplate): bool =
   ## Apply watermark overlay to output video as post-processing

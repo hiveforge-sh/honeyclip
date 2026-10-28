@@ -10,6 +10,7 @@
 import std/[strformat, os, tables, osproc, streams]
 import ../log
 import ../util/fun
+import ../util/exe
 import ../metadata/[types, parser, apply]
 
 proc main*(cArgs: seq[string]) =
@@ -205,7 +206,10 @@ Examples:
   echo &"Applying metadata to: {actualOutput}"
   debug &"FFmpeg args: {ffmpegArgs}"
 
-  let process = startProcess("ffmpeg", args = ffmpegArgs,
+  let ffmpegPath = ffmpegBin()
+  if ffmpegPath == "":
+    error "Could not find ffmpeg executable (set HONEYCLIP_FFMPEG or add ffmpeg to PATH)"
+  let process = startProcess(ffmpegPath, args = ffmpegArgs,
                              options = {poUsePath, poStdErrToStdOut})
   let exitCode = process.waitForExit()
   let outputStr = process.outputStream.readAll()
