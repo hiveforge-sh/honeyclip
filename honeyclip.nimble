@@ -16,7 +16,7 @@ requires "malebolgia"
 
 # Tasks
 import std/os
-import std/[strutils, strformat, tables]
+import std/[strutils, strformat, tables, sequtils]
 import src/cli
 
 var disableVpx = getEnv("DISABLE_VPX").len > 0
@@ -465,6 +465,33 @@ proc checkHash(package: Package, filename: string) =
     quit(1)
 
 
+proc archiveFfmpegLibsDirectly(mingwBin: string): int =
+  ## mingw32-make cuts command lines at ~8191 characters. FFmpeg writes each
+  ## library's object list with `echo $^ > lib.a.objs`; for libavcodec and
+  ## libavformat that line is longer, the redirection is cut off, and `ar`
+  ## then fails on a missing response file. Take the line from a dry run,
+  ## write the response file from here and archive. Returns the number of
+  ## libraries archived. Libraries with objects still missing are skipped.
+  let env = &"export PATH=\"{mingwBin}:$PATH\""
+  for lib in ["libavutil", "libswresample", "libswscale", "libavcodec",
+              "libavformat", "libavfilter", "libavdevice"]:
+    let archive = lib & "/" & lib & ".a"
+    if not dirExists(lib): continue
+    if fileExists(archive): rmFile(archive)  # empty stub left by the failed rule
+    let dryRun = getCurrentDir() / (archive & ".dryrun")
+    exec &"bash -c '{env} && mingw32-make -n {archive} > {archive}.dryrun'"
+    let marker = " > " & archive & ".objs"
+    for line in readFile(dryRun).splitLines:
+      if line.startsWith("echo ") and marker in line:
+        let objs = line[5 ..< line.find(marker)].strip
+        if objs.splitWhitespace.allIt(fileExists(it)):
+          writeFile(archive & ".objs", objs)
+          exec &"bash -c '{env} && ar rcD {archive} @{archive}.objs'"
+          rmFile(archive & ".objs")
+          inc result
+        break
+    rmFile(dryRun)
+
 proc makeInstall(packageName: string = "", buildPath: string = "") =
   when defined(macosx):
     exec "make -j$(sysctl -n hw.ncpu)"
@@ -478,7 +505,22 @@ proc makeInstall(packageName: string = "", buildPath: string = "") =
     # libvpx uses out-of-source build on Windows (see configure section)
     let cdPrefix = if packageName == "libvpx": "cd build_vpx && " else: ""
     # Use mingw32-make instead of make to avoid Windows path space issues with libtool
-    exec &"bash -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make -j4'"
+    let makeCmd = &"bash -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make -j4'"
+    if packageName == "" and fileExists("ffbuild/library.mak"):
+      # FFmpeg: its biggest archives exceed mingw32-make's command-line limit.
+      # A library is only archived once all its objects exist, and -j4 stops
+      # at the first failure, so libavcodec and libavformat can each take a
+      # round; 4 attempts leaves one spare.
+      for attempt in 1 .. 4:
+        try:
+          exec makeCmd
+          break
+        except OSError:
+          if attempt == 4: raise
+          echo "mingw32-make failed; archiving FFmpeg libraries directly (command-line limit)"
+          discard archiveFfmpegLibsDirectly(mingwBin)
+    else:
+      exec makeCmd
 
     # LAME uses libtool which breaks on Windows due to space in Git path
     # Manually install instead of using make install
