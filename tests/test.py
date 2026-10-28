@@ -168,7 +168,7 @@ class Runner:
         out = self.main(["resources/testsrc.mp4"], [], output="example_ALTERED.mp4")
         with av.open(out) as container:
             assert container.duration is not None
-            assert container.duration > 17300000 and container.duration < 2 << 24
+            assert 900_000 < container.duration < 1_100_000  # two 0.2s bursts + 0.2s margins
 
             assert len(container.streams) == 2
             video = container.streams[0]
@@ -178,32 +178,32 @@ class Runner:
             assert video.base_rate == 30
             assert video.average_rate is not None
             assert video.average_rate == 30, video.average_rate
-            assert (video.width, video.height) == (1280, 720)
+            assert (video.width, video.height) == (640, 360)
             assert video.codec.name == "h264"
-            assert video.language == "eng"
+            assert video.language == "und"
             assert audio.codec.name == "aac"
-            assert audio.sample_rate == 48000
-            assert audio.language == "eng"
+            assert audio.sample_rate == 44100
+            assert audio.language == "und"
             assert audio.layout.name == "stereo"
 
     def test_video_to_mp3(self) -> None:
         out = self.main(["resources/testsrc.mp4"], [], output="example_ALTERED.mp3")
         with av.open(out) as container:
             assert container.duration is not None
-            assert container.duration > 17300000 and container.duration < 2 << 24
+            assert 900_000 < container.duration < 1_100_000  # two 0.2s bursts + 0.2s margins
 
             assert len(container.streams) == 1
             audio = container.streams[0]
             assert isinstance(audio, AudioStream)
             assert audio.codec.name in ("mp3", "mp3float")
-            assert audio.sample_rate == 48000
+            assert audio.sample_rate == 44100
             assert audio.layout.name == "stereo"
 
     def test_to_mono(self) -> None:
         out = self.main(["resources/testsrc.mp4"], ["-layout", "mono"], output="example_mono.mp4")
         with av.open(out) as container:
             assert container.duration is not None
-            assert container.duration > 17300000 and container.duration < 2 << 24
+            assert 900_000 < container.duration < 1_100_000  # two 0.2s bursts + 0.2s margins
 
             assert len(container.streams) == 2
             video = container.streams[0]
@@ -213,12 +213,12 @@ class Runner:
             assert video.base_rate == 30
             assert video.average_rate is not None
             assert video.average_rate == 30, video.average_rate
-            assert (video.width, video.height) == (1280, 720)
+            assert (video.width, video.height) == (640, 360)
             assert video.codec.name == "h264"
-            assert video.language == "eng"
+            assert video.language == "und"
             assert audio.codec.name == "aac"
-            assert audio.sample_rate == 48000
-            assert audio.language == "eng"
+            assert audio.sample_rate == 44100
+            assert audio.language == "und"
             assert audio.layout.name == "mono"
 
     # PR #260
@@ -239,10 +239,10 @@ class Runner:
 
     def test_backwards_range(self):
         """
-        Cut out the last 5 seconds of a media file by using negative number in the
+        Cut out the last second of a media file by using negative number in the
         range.
         """
-        self.main(["resources/testsrc.mp4"], ["--edit", "none", "--cut_out", "-5secs,end"])
+        self.main(["resources/testsrc.mp4"], ["--edit", "none", "--cut_out", "-1secs,end"])
         self.main(["resources/testsrc.mp4"], ["--edit", "all/e", "--add_in", "-5secs,end"])
 
     def test_cut_out(self):
@@ -256,12 +256,12 @@ class Runner:
                 "--silent_speed",
                 "3",
                 "--cut_out",
-                "2secs,10secs",
+                "0.5secs,1.5secs",
             ],
         )
         self.main(
             ["resources/testsrc.mp4"],
-            ["--edit", "all/e", "--video_speed", "2", "--add_in", "2secs,10secs"],
+            ["--edit", "all/e", "--video_speed", "2", "--add_in", "0.5secs,1.5secs"],
         )
 
     def test_gif(self):
@@ -278,7 +278,7 @@ class Runner:
         self.main(["resources/testsrc.mp4"], ["-m", "3"])
         self.main(["resources/testsrc.mp4"], ["-m", "0.3sec"])
         self.main(["resources/testsrc.mp4"], ["-m", "0.1 seconds"])
-        self.main(["resources/testsrc.mp4"], ["-m", "6,-3secs"])
+        self.main(["resources/testsrc.mp4"], ["-m", "6,-0.1secs"])
 
     def test_input_extension(self):
         """Input file must have an extension. Throw error if none is given."""
@@ -386,15 +386,15 @@ class Runner:
     def test_scale(self) -> None:
         cn = fileinfo(self.main(["resources/testsrc.mp4"], ["--scale", "1.5"], "scale.mp4"))
         assert cn.videos[0].fps == 30
-        assert cn.videos[0].width == 1920
-        assert cn.videos[0].height == 1080
-        assert cn.audios[0].samplerate == 48000
+        assert cn.videos[0].width == 960
+        assert cn.videos[0].height == 540
+        assert cn.audios[0].samplerate == 44100
 
         cn = fileinfo(self.main(["resources/testsrc.mp4"], ["--scale", "0.2"], "scale.mp4"))
         assert cn.videos[0].fps == 30
-        assert cn.videos[0].width == 256
-        assert cn.videos[0].height == 144
-        assert cn.audios[0].samplerate == 48000
+        assert cn.videos[0].width == 128
+        assert cn.videos[0].height == 72
+        assert cn.audios[0].samplerate == 44100
 
     def test_resolution(self):
         out = self.main(
@@ -405,7 +405,7 @@ class Runner:
         assert cn.videos[0].fps == 30
         assert cn.videos[0].width == 700
         assert cn.videos[0].height == 380
-        assert cn.audios[0].samplerate == 48000
+        assert cn.audios[0].samplerate == 44100
 
     # def test_premiere_multi(self):
     #     p_xml = self.main([f"resources/multi-track.mov"], ["-exp"], "multi.xml")
@@ -598,7 +598,7 @@ class Runner:
             none_frames = none_file.getnframes()
             none_chl = none_file.getnchannels()
 
-            assert ebu_sr == none_sr == 48000, f"sr differ: EBU={ebu_sr}, #f={none_sr}"
+            assert ebu_sr == none_sr == 44100, f"sr differ: EBU={ebu_sr}, #f={none_sr}"
             assert ebu_chl == none_chl == 2, f"{ebu_chl=} {none_chl=}"
 
             # Frame counts should match (no resampling/pitch shift)
@@ -606,14 +606,11 @@ class Runner:
                 f"Frame count mismatch: EBU={ebu_frames}, #f={none_frames}"
             )
             duration = ebu_frames / ebu_sr
-            assert 17.0 < duration < 17.8
+            assert 0.95 < duration < 1.05
 
-            middle_pos = ebu_frames // 2
-            ebu_file.setpos(middle_pos)
-            none_file.setpos(middle_pos)
-
-            ebu_data = ebu_file.readframes(1000)
-            none_data = none_file.readframes(1000)
+            # Scan the whole file: the midpoint of this clip falls in a silent gap.
+            ebu_data = ebu_file.readframes(ebu_frames)
+            none_data = none_file.readframes(none_frames)
 
             ebu_samples = struct.unpack(f"{len(ebu_data) // 2}h", ebu_data)
             none_samples = struct.unpack(f"{len(none_data) // 2}h", none_data)
@@ -656,7 +653,7 @@ class Runner:
             assert audio.codec.name.startswith("pcm_"), (
                 f"Expected PCM codec, got {audio.codec.name}"
             )
-            assert audio.sample_rate == 48000
+            assert audio.sample_rate == 44100
             assert audio.channels == 2
 
 
