@@ -401,15 +401,22 @@ func dirName(package: Package): string =
   return name
 
 
+# Shell for the `bash -c` calls below. On Windows, exec and gorgeEx start
+# commands with CreateProcess, which searches System32 before PATH, so a
+# bare `bash` is WSL's launcher wherever WSL is installed. Name Git's bash
+# instead (HONEYCLIP_BASH overrides it).
+when defined(windows):
+  let bashExe = "\"" & getEnv("HONEYCLIP_BASH", "C:/Program Files/Git/usr/bin/bash.exe") & "\""
+else:
+  let bashExe = "bash"
+
 # Windows path conversion utilities for bash interop
 when defined(windows):
   proc detectBashPathStyle(): string =
     ## Detect if we're in WSL (linux-gnu) or MSYS2 (msys)
     ## Returns "wsl" for /mnt/c/... paths, "msys" for /c/... paths
     try:
-      # Go through cmd so this finds the bash that exec will run: a bare
-      # gorgeEx searches System32 before PATH and gets WSL's bash.exe.
-      let ostype = gorgeEx("cmd /c bash -c \"echo $OSTYPE\"").output.strip()
+      let ostype = gorgeEx(bashExe & " -c 'echo $OSTYPE'").output.strip()
       if ostype.contains("linux"):
         return "wsl"    # /mnt/c/Users/...
       elif ostype.contains("msys"):
@@ -481,14 +488,14 @@ proc archiveFfmpegLibsDirectly(mingwBin: string): int =
     if not dirExists(lib): continue
     if fileExists(archive): rmFile(archive)  # empty stub left by the failed rule
     let dryRun = getCurrentDir() / (archive & ".dryrun")
-    exec &"bash -c '{env} && mingw32-make -n {archive} > {archive}.dryrun'"
+    exec &"{bashExe} -c '{env} && mingw32-make -n {archive} > {archive}.dryrun'"
     let marker = " > " & archive & ".objs"
     for line in readFile(dryRun).splitLines:
       if line.startsWith("echo ") and marker in line:
         let objs = line[5 ..< line.find(marker)].strip
         if objs.splitWhitespace.allIt(fileExists(it)):
           writeFile(archive & ".objs", objs)
-          exec &"bash -c '{env} && ar rcD {archive} @{archive}.objs'"
+          exec &"{bashExe} -c '{env} && ar rcD {archive} @{archive}.objs'"
           rmFile(archive & ".objs")
           inc result
         break
@@ -507,7 +514,7 @@ proc makeInstall(packageName: string = "", buildPath: string = "") =
     # libvpx uses out-of-source build on Windows (see configure section)
     let cdPrefix = if packageName == "libvpx": "cd build_vpx && " else: ""
     # Use mingw32-make instead of make to avoid Windows path space issues with libtool
-    let makeCmd = &"bash -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make -j4'"
+    let makeCmd = &"{bashExe} -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make -j4'"
     if packageName == "" and fileExists("ffbuild/library.mak"):
       # FFmpeg: its biggest archives exceed mingw32-make's command-line limit.
       # A library is only archived once all its objects exist, and -j4 stops
@@ -544,7 +551,7 @@ proc makeInstall(packageName: string = "", buildPath: string = "") =
       cpFile("x264_config.h", buildPath / "include" / "x264_config.h")
       cpFile("x264.pc", buildPath / "lib" / "pkgconfig" / "x264.pc")
     else:
-      exec &"bash -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make install'"
+      exec &"{bashExe} -c 'export PATH=\"{mingwBin}:/c/Program Files/NASM:$PATH\" && {cdPrefix}mingw32-make install'"
   else:
     exec "make -j4"
     exec "make install"
@@ -801,7 +808,7 @@ proc x265Build(buildPath: string, crossWindows: bool = false) =
       writeFile("combine.mri", mriContent)
       when defined(windows):
         # On Windows, use bash to run ar with MRI input
-        exec &"bash -c '{arCommand} -M < combine.mri'"
+        exec &"{bashExe} -c '{arCommand} -M < combine.mri'"
       else:
         exec &"{arCommand} -M < combine.mri"
 
@@ -860,9 +867,9 @@ endian = 'little'
       # Find Python Scripts directory where meson is installed
       let pythonScripts = getEnv("APPDATA") / "Python/Python314/Scripts"
       let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
-      exec &"bash -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && {mesonCmd}'"
-      exec &"bash -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && ninja'"
-      exec &"bash -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && ninja install'"
+      exec &"{bashExe} -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && {mesonCmd}'"
+      exec &"{bashExe} -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && ninja'"
+      exec &"{bashExe} -c 'export PATH=\"{pythonScripts}:{mingwBin}:$PATH\" && ninja install'"
     else:
       exec mesonCmd
       exec "ninja"
@@ -916,7 +923,7 @@ proc ffmpegSetup(crossWindows: bool) =
           if package.name == "nv-codec-headers":
             when defined(windows):
               let mingwBin = toUnixPath(getHomeDir()) & ".choosenim/toolchains/mingw64/bin"
-              exec &"bash -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make install PREFIX=\"{buildPath}\"'"
+              exec &"{bashExe} -c 'export PATH=\"{mingwBin}:$PATH\" && mingw32-make install PREFIX=\"{buildPath}\"'"
             else:
               exec &"make install PREFIX=\"{buildPath}\""
           else:
@@ -960,7 +967,7 @@ proc ffmpegSetup(crossWindows: bool) =
                 # Disable _FORTIFY_SOURCE: MinGW GCC 11.1.0 lacks __memset_chk/__memcpy_chk
                 let fortifyFix = "CFLAGS=\"-O2 -D_FORTIFY_SOURCE=0\" CXXFLAGS=\"-O2 -D_FORTIFY_SOURCE=0\" "
                 # Set CONFIG_SHELL to avoid libtool using Windows path with spaces
-                configureCmd = "bash -c 'export PATH=\"" & mingwBin & ":/c/Program Files/NASM:$PATH\" && export CONFIG_SHELL=/usr/bin/sh && " & cdPrefix & fortifyFix & ccEnv & envPrefix & configureCmd & "'"
+                configureCmd = bashExe & " -c 'export PATH=\"" & mingwBin & ":/c/Program Files/NASM:$PATH\" && export CONFIG_SHELL=/usr/bin/sh && " & cdPrefix & fortifyFix & ccEnv & envPrefix & configureCmd & "'"
                 echo "RUN: ", configureCmd
                 exec configureCmd
               else:
@@ -1529,7 +1536,7 @@ task makeff, "Build FFmpeg from source":
       let commonFlags = setupCommonFlags(packages).replace(" \\\n", " ").replace("\n", " ").strip()
       # Add NASM to PATH (Chocolatey installs to /c/Program Files/NASM/)
       let nasmPath = "/c/Program Files/NASM"
-      let ffConfigureCmd = "bash -c 'export PATH=\"" & mingwBin & ":" & nasmPath & ":$PATH\" && " &
+      let ffConfigureCmd = bashExe & " -c 'export PATH=\"" & mingwBin & ":" & nasmPath & ":$PATH\" && " &
         "CC=\"" & mingwBin & "/gcc.exe\" CXX=\"" & mingwBin & "/g++.exe\" " &
         "./configure --prefix=\"" & bp & "\" " &
         "--pkg-config-flags=\"--static\" " &
@@ -1542,7 +1549,7 @@ task makeff, "Build FFmpeg from source":
         echo "RUN: ", ffConfigureCmd
         exec ffConfigureCmd
       except OSError:
-        exec "bash -c 'cat ./ffbuild/config.log'"
+        exec bashExe & " -c 'cat ./ffbuild/config.log'"
         quit(1)
     else:
       try:
