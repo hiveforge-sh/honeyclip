@@ -86,7 +86,7 @@ jobs:
       - name: Benchmark
         run: rm -f tests/benchmark_results.json && nimble bench
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results-${{ matrix.os }}
           path: tests/benchmark_results.json
@@ -200,7 +200,7 @@ jobs:
         run: rm -f tests/benchmark_results.json && nimble bench
       
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results-windows-native
           path: tests/benchmark_results.json
