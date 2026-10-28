@@ -129,6 +129,9 @@ jobs:
           mkdir -p ~/.choosenim/toolchains
           7z x -y -o"$HOME/.choosenim/toolchains" "$RUNNER_TEMP/mingw64.7z" > /dev/null
           ~/.choosenim/toolchains/mingw64/bin/gcc.exe --version
+          # Actions starts Git Bash with --noprofile, so the nimble's
+          # `bash -c` calls would otherwise find WSL's System32\bash.exe first.
+          cygpath -w /usr/bin >> "$GITHUB_PATH"
 
       - name: Install dependencies (Git Bash)
         shell: bash
