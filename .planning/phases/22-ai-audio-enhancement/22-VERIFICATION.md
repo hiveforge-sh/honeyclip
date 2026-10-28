@@ -3,7 +3,13 @@ phase: 22-ai-audio-enhancement
 verified: 2026-10-24T22:00:00Z
 status: human_needed
 score: 3/3 must-haves verified (automated); real DeepFilterNet / ElevenLabs paths need human check
-overrides_applied: 0
+overrides_applied: 1
+overrides:
+  - must_have: "Audio enhancement falls back to API (ElevenLabs/Artlist) when configured and local unavailable"
+    reason: "Artlist offers no audio-enhancement API: its developer API is music licensing, and its MCP (mcp.artlist.io, OAuth via auth.artlist.io) generates image, video, voiceover and music. ElevenLabs Voice Isolator provides the API fallback; AudioProvider stays extensible. Artlist voiceover is a candidate for Phase 23."
+    accepted_by: "Preston Farr"
+    accepted_at: "2026-10-28"
+human_verification_progress: "DeepFilterNet (item 1) passed on 2026-10-28, see 22-HUMAN-UAT.md; ElevenLabs (item 2) and listening (item 3) still pending"
 human_verification:
   - test: "Run `honeyclip enhance <video> --backend=local` on a machine with real DeepFilterNet installed (pip install deepfilternet)"
     expected: "Output file produced with audibly reduced noise, loudness normalized, A/V in sync"

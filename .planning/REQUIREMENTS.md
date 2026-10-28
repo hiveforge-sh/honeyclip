@@ -60,9 +60,9 @@ Requirements for v2.0 major release. Full OpusClip feature parity with local-fir
 
 ### AI Audio Enhancement
 
-- [ ] **AUDIO-01**: User can enhance audio quality (noise reduction, normalization)
-- [ ] **AUDIO-02**: Audio enhancement works with local models when available
-- [ ] **AUDIO-03**: Audio enhancement falls back to API (ElevenLabs/Artlist) when configured
+- [x] **AUDIO-01**: User can enhance audio quality (noise reduction, normalization)
+- [x] **AUDIO-02**: Audio enhancement works with local models when available
+- [x] **AUDIO-03**: Audio enhancement falls back to API (ElevenLabs/Artlist) when configured
 
 ### AI Voice-over
 
@@ -140,9 +140,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BROLL-02 | Phase 21 | Pending |
 | BROLL-03 | Phase 21 | Pending |
 | BROLL-04 | Phase 21 | Pending |
-| AUDIO-01 | Phase 22 | Pending |
-| AUDIO-02 | Phase 22 | Pending |
-| AUDIO-03 | Phase 22 | Pending |
+| AUDIO-01 | Phase 22 | Complete |
+| AUDIO-02 | Phase 22 | Complete |
+| AUDIO-03 | Phase 22 | Complete |
 | VOICE-01 | Phase 23 | Pending |
 | VOICE-02 | Phase 23 | Pending |
 | VOICE-03 | Phase 23 | Pending |
