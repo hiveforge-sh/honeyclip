@@ -348,9 +348,14 @@ honeyclip enhance stream.mp4 --audio-track 2   # enhance the mic track only
 
 ### Notes
 
-- The audio is resampled to 48 kHz mono for processing and restored to the source
-  sample rate and channel count afterwards. In an `.mp4`/`.mov` output the audio is
-  re-encoded as AAC 192k; the video stream is copied.
+- The source channel layout is kept end to end: stereo stays stereo and 5.1 stays
+  5.1, with no mono downmix. Audio is processed at 48 kHz and restored to the source
+  sample rate afterwards. If DeepFilterNet hands back fewer channels than it was
+  given, each channel is cleaned separately and rejoined in the original layout.
+  ElevenLabs is sent the file once (per-channel uploads would multiply the cost);
+  if it returns fewer channels, honeyclip warns that the stereo image was lost.
+- In an `.mp4`/`.mov` output the audio is re-encoded as AAC: 192k up to stereo, plus
+  64k per extra channel (448k for 5.1). The video stream is copied.
 - Inputs longer than one hour (or over 500 MB) are split at silences, enhanced in
   pieces and rejoined with crossfades. The same applies to API uploads.
 - Neither neural backend is bundled. DeepFilterNet is a separate Python install, and

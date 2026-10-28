@@ -1,4 +1,4 @@
-import std/[unittest, json, os, strutils, osproc]
+import std/[unittest, json, os, strutils, osproc, strformat]
 import ../src/http_client
 
 suite "http multipart":
@@ -383,12 +383,37 @@ suite "ffmpeg chain":
     let o = tmp / "dec.wav"
     check decodeMp3ToWav("tests/fixtures/elevenlabs_isolator_response.bin", o)
     check probeAudio(o).sampleRate > 0
-  test "resampleTo48kMono":
+  test "resampleTo48k keeps the source channels":
     let o = tmp / "r48.wav"
-    check resampleTo48kMono("tests/fixtures/audio_44k_stereo.wav", o)
+    check resampleTo48k("tests/fixtures/audio_44k_stereo.wav", o)
     let pr = probeAudio(o)
     check pr.sampleRate == 48000
-    check pr.channels == 1
+    check pr.channels == 2
+  test "split then join channels round-trips a 5.1 layout":
+    let src = tmp / "s51.wav"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("sine=f=440:d=2") & " -af " &
+      quoteShell("pan=5.1(side)|FL=c0|FR=0.5*c0|FC=0.2*c0|LFE=0*c0|SL=0.1*c0|SR=0.3*c0") &
+      " -ar 48000 " & quoteShell(src))
+    let pr = probeAudio(src)
+    check pr.channels == 6
+    check pr.layout == "5.1(side)"
+    let parts = splitChannels(src, tmp / "split51", 6)
+    check parts.len == 6
+    for part in parts: check probeAudio(part).channels == 1
+    let joined = tmp / "j51.wav"
+    check joinChannels(parts, joined, pr.layout)
+    let pj = probeAudio(joined)
+    check pj.channels == 6
+    check pj.layout == "5.1(side)"
+    # Channel order must survive exactly, not just the layout name.
+    proc fileMd5(path: string): string =
+      execCmdEx("ffmpeg -loglevel error -i " & quoteShell(path) & " -f md5 -").output
+    check fileMd5(joined) == fileMd5(src)
+  test "join keeps input order and names the layout without remixing":
+    let c = buildJoinChannelsCmd(@["a", "b"], "o.wav", "stereo")
+    check "amerge=inputs=2,channelmap=map=0|1:channel_layout=stereo" in c
+    check "channelmap" notin buildJoinChannelsCmd(@["a", "b", "c"], "o.wav", "3 channels")
   test "resampleFromWav restores rate/channels":
     let o = tmp / "back.wav"
     check resampleFromWav("tests/fixtures/audio_clean.wav", o, 44100, 2)
@@ -628,14 +653,46 @@ suite "resample contract":
     let pr = probeAudio("tests/fixtures/audio_44k_stereo.wav")
     check pr.sampleRate == 44100
     check pr.channels == 2
-  test "intermediate resampled.wav is 48kHz mono (keepTmp)":
+  test "intermediate resampled.wav is 48kHz in the source layout (keepTmp)":
     let r = AudioProvider(kind: apFfmpeg).enhance(
       newMockHttpClient(), "tests/fixtures/audio_44k_stereo.wav", tmp / "c", allOn, false, false,
       keepTmp = true)
     check r.outputPath != ""
     let pr = probeAudio(tmp / "c.tmp" / "resampled.wav")
     check pr.sampleRate == 48000
-    check pr.channels == 1
+    check pr.channels == 2
+  test "stereo image survives the chain (left and right stay different)":
+    # Left 300 Hz, right 900 Hz: a mono downmix would make them identical.
+    let src = tmp / "lr.wav"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("sine=f=300:d=3") & " -f lavfi -i " & quoteShell("sine=f=900:d=3") &
+      " -filter_complex " & quoteShell("[0:a][1:a]join=inputs=2:channel_layout=stereo") &
+      " -ar 48000 " & quoteShell(src))
+    let r = AudioProvider(kind: apFfmpeg).enhance(
+      newMockHttpClient(), src, tmp / "lr", allOn, false, false)
+    check r.outputPath != ""
+    check probeAudio(r.outputPath).channels == 2
+    proc channelMd5(path: string; ch: int): string =
+      execCmdEx("ffmpeg -loglevel error -i " & quoteShell(path) & " -af " &
+                quoteShell(&"pan=mono|c0=c{ch}") & " -f md5 -").output
+    check channelMd5(r.outputPath, 0) != channelMd5(r.outputPath, 1)
+  test "5.1 in -> 5.1 out through the whole chain":
+    let src = tmp / "in51.wav"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y -f lavfi -i " &
+      quoteShell("sine=f=440:d=3") & " -af " &
+      quoteShell("pan=5.1|FL=c0|FR=0.5*c0|FC=0.8*c0|LFE=0.1*c0|BL=0.2*c0|BR=0.3*c0") &
+      " -ar 48000 " & quoteShell(src))
+    let r = AudioProvider(kind: apFfmpeg).enhance(
+      newMockHttpClient(), src, tmp / "o51", allOn, false, false)
+    check r.outputPath != ""
+    let pr = probeAudio(r.outputPath)
+    check pr.channels == 6
+    check pr.layout.startsWith("5.1")
+  test "AAC bitrate scales with channel count":
+    check aacBitrateK(1) == 192
+    check aacBitrateK(2) == 192
+    check aacBitrateK(6) == 448
+    check "-b:a 448k" in buildMuxCmd("v.mp4", "a.wav", "out.mp4", channels = 6)
   removeDir(tmp)
 
 import ../src/cmds/enhance as enhanceCmd

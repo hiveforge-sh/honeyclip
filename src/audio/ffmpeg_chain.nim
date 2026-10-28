@@ -14,6 +14,7 @@ type
   AudioProbe* = object
     sampleRate*: int
     channels*: int
+    layout*: string          ## FFmpeg layout name, e.g. "stereo", "5.1(side)"
     durationSec*: float
     audioTracks*: int
     containerStart*: float   ## banner `start:` of the input
@@ -111,6 +112,8 @@ proc probeAudio*(path: string): AudioProbe =
           except ValueError: discard
           if i + 1 < fields.len:
             result.channels = parseChannels(fields[i + 1])
+            if result.channels > 0:
+              result.layout = fields[i + 1].strip
           break
   if result.sampleRate > 0 and result.channels == 0:
     result.channels = probeChannelsDecoded(path)
@@ -197,10 +200,45 @@ proc extractAudioTrack*(inputPath, outputPath: string; track: int): bool =
   runFf("-i " & quoteShell(inputPath) & &" -map 0:a:{track} -vn -f wav " &
         quoteShell(outputPath)) and fileExists(outputPath)
 
-proc resampleTo48kMono*(inputPath, outputPath: string): bool =
-  ## -vn so a video input yields just its audio.
-  runFf("-i " & quoteShell(inputPath) & " -vn -ar 48000 -ac 1 -f wav " &
+proc resampleTo48k*(inputPath, outputPath: string): bool =
+  ## 48 kHz working copy that keeps the source channel layout (stereo, 5.1,
+  ## ...): every stage of the chain is multichannel. -vn so a video input
+  ## yields just its audio.
+  runFf("-i " & quoteShell(inputPath) & " -vn -ar 48000 -f wav " &
         quoteShell(outputPath)) and fileExists(outputPath)
+
+proc splitChannels*(inputPath, outDir: string; channels: int): seq[string] =
+  ## One mono WAV per channel, in channel order; @[] on failure.
+  createDir(outDir)
+  for c in 0 ..< channels:
+    let outp = outDir / &"ch_{c:02}.wav"
+    if not runFf("-i " & quoteShell(inputPath) & " -af " &
+                 quoteShell(&"pan=mono|c0=c{c}") & " " & quoteShell(outp)):
+      return @[]
+    result.add outp
+
+proc buildJoinChannelsCmd*(inputs: seq[string]; outputPath, layout: string): string =
+  ## Rebuild a multichannel WAV from per-channel mono WAVs, in input order.
+  ## amerge keeps that order and channelmap then names the layout without
+  ## remixing. (`join` is not used: it matches each mono input to the FC
+  ## channel first and rotates the front channels.)
+  var args = ""
+  var pads = ""
+  var order: seq[string]
+  for i, f in inputs:
+    args.add "-i " & quoteShell(f) & " "
+    pads.add &"[{i}:a]"
+    order.add $i
+  let named = layout != "" and not layout.endsWith("channels")
+  var filter = &"{pads}amerge=inputs={inputs.len}"
+  if named:
+    filter.add &",channelmap=map={order.join(\"|\")}:channel_layout={layout}"
+  ffBase() & " -loglevel error " & args & "-filter_complex " & quoteShell(filter) &
+    " " & quoteShell(outputPath)
+
+proc joinChannels*(inputs: seq[string]; outputPath, layout: string): bool =
+  let (_, code) = execCmdEx(buildJoinChannelsCmd(inputs, outputPath, layout))
+  code == 0 and fileExists(outputPath)
 
 proc resampleFromWav*(inputPath, outputPath: string;
                       sampleRate: int; channels: int): bool =

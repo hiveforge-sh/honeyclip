@@ -98,15 +98,39 @@ const
   chunkTriggerBytes* = 500'i64 * 1024 * 1024
   chunkSecDefault* = 600.0
 
+proc runDeepFilterKeepingChannels(inWav, workDir: string; channels: int;
+                                  layout: string
+                                 ): tuple[ok: bool, outWav, err: string] =
+  ## DeepFilterNet on the multichannel WAV; if it hands back fewer channels
+  ## than it was given, rerun it per channel and rejoin in the source layout
+  ## so stereo/5.1 never collapses to mono. Local, so the rerun costs time only.
+  let r = runDeepFilter(inWav, workDir / "df")
+  if not r.ok: return (false, "", r.err)
+  if channels <= 1 or probeAudio(r.outputPath).channels >= channels:
+    return (true, r.outputPath, "")
+  debug "DeepFilterNet returned fewer channels; processing each channel"
+  let parts = splitChannels(inWav, workDir / "split", channels)
+  if parts.len != channels: return (false, "", "Failed to split channels")
+  var cleaned: seq[string]
+  for i, part in parts:
+    let rc = runDeepFilter(part, workDir / &"df_ch{i:02}")
+    if not rc.ok: return (false, "", rc.err)
+    cleaned.add rc.outputPath
+  let joined = workDir / "df_joined.wav"
+  if not joinChannels(cleaned, joined, layout):
+    return (false, "", "Failed to rejoin DeepFilterNet channels")
+  (true, joined, "")
+
 proc runBackend(p: AudioProvider, http: HttpClientLike, inWav, workDir: string,
-                flags: EnhancementFlags): tuple[ok: bool, outWav, err: string] =
-  ## One backend pass over a 48kHz mono WAV; returns the cleaned WAV.
+                flags: EnhancementFlags; channels: int = 1; layout: string = ""
+               ): tuple[ok: bool, outWav, err: string] =
+  ## One backend pass over a 48kHz WAV in the source channel layout; returns
+  ## the cleaned WAV with the same channel count where the backend allows.
   createDir(workDir)
   case p.kind
   of apLocal:
     if not flags.denoise: return (true, inWav, "")
-    let r = runDeepFilter(inWav, workDir / "df")
-    return (r.ok, r.outputPath, r.err)
+    return runDeepFilterKeepingChannels(inWav, workDir, channels, layout)
   of apElevenlabs:
     if not (flags.denoise or flags.voiceIsolation): return (true, inWav, "")
     let raw = workDir / "el_raw.bin"
@@ -115,6 +139,13 @@ proc runBackend(p: AudioProvider, http: HttpClientLike, inWav, workDir: string,
     let decoded = workDir / "el_decoded.wav"
     if not decodeMp3ToWav(raw, decoded):
       return (false, "", "Failed to decode ElevenLabs response")
+    # Uploading each channel separately would multiply the bill, so a
+    # reduced-channel response is kept and reported instead.
+    let got = probeAudio(decoded).channels
+    if channels > 1 and got > 0 and got < channels:
+      warning &"ElevenLabs returned {got}-channel audio for a {channels}-channel " &
+        "source; the output repeats it across channels and loses the original " &
+        "stereo/surround image (--backend=local or --backend=ffmpeg keep it)"
     return (true, decoded, "")
   of apFfmpeg:
     if not flags.denoise: return (true, inWav, "")
@@ -127,8 +158,8 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
               keepTmp: bool = false;
               chunkTriggerSec: float = chunkTriggerSecDefault;
               chunkSec: float = chunkSecDefault): AudioResult =
-  ## resample 48k mono -> backend (chunked when long) -> hum/de-ess ->
-  ## two-pass loudnorm -> resample back to the source rate/channels.
+  ## resample to 48k (source channels kept) -> backend (chunked when long) ->
+  ## hum/de-ess -> two-pass loudnorm -> resample back to the source rate.
   ## Returns outputPath "" (with err set) on any failure or a denied cost gate.
   result = AudioResult(outputPath: "", backendUsed: p.kind)
   let tmpDir = outDir & ".tmp"
@@ -148,16 +179,17 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
     return
 
   let resampled = tmpDir / "resampled.wav"
-  if not resampleTo48kMono(inputPath, resampled):
-    result.err = "Failed to resample input to 48kHz mono"
+  if not resampleTo48k(inputPath, resampled):
+    result.err = "Failed to resample input to 48kHz"
     return
 
   # The container banner can say `Duration: N/A` (some MKV/WebM/streamed
   # files), so measure the audio that will actually be processed (WR-01).
   var dur = probeAudio(resampled).durationSec
   if dur <= 0.0:
-    # 48 kHz mono s16le: 96000 bytes per second after the 44-byte header.
-    dur = max(0.0, (getFileSize(resampled) - 44).float / 96000.0)
+    # 48 kHz s16le: 96000 bytes per second per channel after the 44-byte header.
+    dur = max(0.0, (getFileSize(resampled) - 44).float /
+                   (96000.0 * probe.channels.float))
   if dur <= 0.0: dur = probe.durationSec
 
   # T-22-04: confirm cost before any HTTP traffic. An unknown duration is
@@ -174,7 +206,8 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
     let chunks = chunkAtSilence(resampled, chunkSec, tmpDir / "chunks")
     var cleaned: seq[string]
     for i, c in chunks:
-      let r = runBackend(p, http, c, tmpDir / &"backend_{i:04}", flags)
+      let r = runBackend(p, http, c, tmpDir / &"backend_{i:04}", flags,
+                         probe.channels, probe.layout)
       if not r.ok:
         result.err = r.err
         result.backendFailed = true
@@ -186,7 +219,8 @@ proc enhance*(p: AudioProvider, http: HttpClientLike, inputPath, outDir: string,
       return
     current = joined
   else:
-    let r = runBackend(p, http, resampled, tmpDir / "backend", flags)
+    let r = runBackend(p, http, resampled, tmpDir / "backend", flags,
+                       probe.channels, probe.layout)
     if not r.ok:
       result.err = r.err
       result.backendFailed = true

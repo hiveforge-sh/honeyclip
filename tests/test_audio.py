@@ -57,9 +57,10 @@ def probe(path: Path) -> dict:
     info = {"video": bool(re.search(r"Stream #.*Video:", text)),
             "audio": bool(re.search(r"Stream #.*Audio:", text)),
             "rate": None, "dur": None}
-    m = re.search(r"Audio:.*?(\d+) Hz", text)
+    m = re.search(r"Audio:.*?(\d+) Hz, ([^,]+)", text)
     if m:
         info["rate"] = int(m.group(1))
+        info["layout"] = m.group(2).strip()
     m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", text)
     if m:
         info["dur"] = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
@@ -111,8 +112,22 @@ def python_has_df() -> bool:
 
 
 STUB_DF_ENHANCE = '''\
-import os, shutil, sys
+import os, shutil, sys, wave
 from pathlib import Path
+
+def first_channel_only(src, dst):
+    # HC_STUB_DF_MONO: behave like a backend that returns mono for
+    # multichannel input, to exercise honeyclip's per-channel fallback.
+    with wave.open(str(src), "rb") as r:
+        n, w = r.getnchannels(), r.getsampwidth()
+        rate, frames = r.getframerate(), r.readframes(r.getnframes())
+    step = n * w
+    mono = b"".join(frames[i:i + w] for i in range(0, len(frames), step))
+    with wave.open(str(dst), "wb") as o:
+        o.setnchannels(1)
+        o.setsampwidth(w)
+        o.setframerate(rate)
+        o.writeframes(mono)
 
 def main():
     if os.environ.get("HC_STUB_DF_FAIL"):
@@ -124,7 +139,10 @@ def main():
     src = Path(args[-1])
     out.mkdir(parents=True, exist_ok=True)
     name = src.name if "--no-suffix" in args else src.stem + "_DeepFilterNet3" + src.suffix
-    shutil.copyfile(src, out / name)
+    if os.environ.get("HC_STUB_DF_MONO"):
+        first_channel_only(src, out / name)
+    else:
+        shutil.copyfile(src, out / name)
 
 if __name__ == "__main__":
     main()
@@ -171,11 +189,14 @@ class EnhanceE2E(unittest.TestCase):
              "-c:a", "aac", str(path)],
             check=True, capture_output=True)
 
-    def env(self, stub_df=False, mock=None, key=None, df_fail=False):
+    def env(self, stub_df=False, mock=None, key=None, df_fail=False, df_mono=False):
         e = os.environ.copy()
         e.pop("HC_STUB_DF_FAIL", None)
+        e.pop("HC_STUB_DF_MONO", None)
         if df_fail:
             e["HC_STUB_DF_FAIL"] = "1"
+        if df_mono:
+            e["HC_STUB_DF_MONO"] = "1"
         e.pop("ELEVENLABS_API_KEY", None)
         e.pop("HONEYCLIP_ELEVENLABS_URL", None)
         # Keep a developer's real config.toml (and key) out of the run.
@@ -250,6 +271,48 @@ class EnhanceE2E(unittest.TestCase):
         p = probe(out)
         self.assertTrue(p["video"] and p["audio"])
         self.assertEqual(p["rate"], 48000)
+
+    # -- channel layout -----------------------------------------------------
+
+    def stereo_video(self, name):
+        """Video whose left channel is 300 Hz and right is 900 Hz."""
+        path = self.out(name) / "lr.mp4"
+        subprocess.run(
+            [self.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+             "testsrc=duration=3:size=320x240:rate=15", "-f", "lavfi", "-i",
+             "sine=f=300:d=3", "-f", "lavfi", "-i", "sine=f=900:d=3",
+             "-filter_complex", "[1:a][2:a]amerge=inputs=2[a]", "-map", "0:v",
+             "-map", "[a]", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", str(path)],
+            check=True, capture_output=True)
+        return path
+
+    def channel_md5s(self, path):
+        return [subprocess.run(
+            [self.ffmpeg, "-v", "error", "-i", str(path), "-af", f"pan=mono|c0=c{c}",
+             "-f", "md5", "-"], capture_output=True, text=True).stdout for c in (0, 1)]
+
+    def test_stereo_kept_ffmpeg_backend(self):
+        """Stereo in, stereo out: no mono downmix in the processing chain."""
+        src = self.stereo_video("st_ff")
+        out = src.with_name("out.mp4")
+        r = self.run_enhance(["--backend=ffmpeg", "-o", str(out), str(src)])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(probe(out)["layout"], "stereo")
+        left, right = self.channel_md5s(out)
+        self.assertNotEqual(left, right, "left and right collapsed into one signal")
+
+    def test_stereo_kept_when_deepfilter_returns_mono(self):
+        """A local backend that hands back mono is rerun per channel, so the
+        stereo image survives."""
+        src = self.stereo_video("st_df")
+        out = src.with_name("out.mp4")
+        r = self.run_enhance(["--backend=local", "--denoise=on", "-o", str(out), str(src)],
+                             stub_df=True, df_mono=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(probe(out)["layout"], "stereo")
+        left, right = self.channel_md5s(out)
+        self.assertNotEqual(left, right, "left and right collapsed into one signal")
 
     def test_enhance_api_path(self):
         """--backend=elevenlabs against the HTTP mock, cost under $1."""

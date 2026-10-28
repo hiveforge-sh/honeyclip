@@ -238,7 +238,8 @@ proc run*(args: seq[string]): int =
     let offset = audioStartOffset(opts.inputPath, max(track, 0))
     debug "audio start offset: " & $offset & "s"
     ok = muxEnhancedAudio(opts.inputPath, res.outputPath, finalOut,
-                          track, trackCount, audioOffset = offset)
+                          track, trackCount, audioOffset = offset,
+                          channels = probeAudio(res.outputPath).channels)
   if not ok:
     stderr.writeLine "Error! could not write output: " & finalOut
     return 1
