@@ -26,28 +26,30 @@ type
     ## Memory allocation info
     handle: pointer
 
-when defined(windows):
-  # Stub implementations for Windows (ML libraries have LTO build issues)
+when defined(windows) or not defined(enable_ml):
+  # Stub implementations when ONNX Runtime isn't linked: always on Windows
+  # (ML libraries have LTO build issues), and on any build without
+  # -d:enable_ml, which honeyclip.nimble sets only after `nimble makeml`.
   # TODO: Rebuild ONNX Runtime without LTO for Windows support
 
   proc initOrtEnv*(name: string = "honeyclip", logLevel: int = 3): OrtEnv =
-    raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
+    raise newException(OrtError, "ONNX Runtime not available in this build (run `nimble makeml`; unsupported on Windows)")
 
   proc `=destroy`*(env: var OrtEnv) =
     discard
 
   proc loadModel*(env: OrtEnv, modelPath: string): OrtSession =
-    raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
+    raise newException(OrtError, "ONNX Runtime not available in this build (run `nimble makeml`; unsupported on Windows)")
 
   proc loadModelWithProviders*(env: OrtEnv, modelPath: string, backend: string): OrtSession =
-    raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
+    raise newException(OrtError, "ONNX Runtime not available in this build (run `nimble makeml`; unsupported on Windows)")
 
   proc `=destroy`*(session: var OrtSession) =
     discard
 
   proc createTensor*(data: ptr float32, shape: openArray[int64],
                      elemType: int = 1): OrtValue =
-    raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
+    raise newException(OrtError, "ONNX Runtime not available in this build (run `nimble makeml`; unsupported on Windows)")
 
   proc `=destroy`*(value: var OrtValue) =
     discard
@@ -55,13 +57,13 @@ when defined(windows):
   proc run*(session: OrtSession, inputs: openArray[OrtValue],
             inputNames: openArray[string],
             outputNames: openArray[string]): seq[OrtValue] =
-    raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
+    raise newException(OrtError, "ONNX Runtime not available in this build (run `nimble makeml`; unsupported on Windows)")
 
   proc getTensorData*[T](value: OrtValue): ptr UncheckedArray[T] =
-    raise newException(OrtError, "ONNX Runtime not available on Windows (LTO build issue)")
+    raise newException(OrtError, "ONNX Runtime not available in this build (run `nimble makeml`; unsupported on Windows)")
 
 else:
-  # Full implementation for Linux/macOS
+  # Full implementation for Linux/macOS with ML libraries built
 
   # C API types from onnxruntime_c_wrapper.h
   type

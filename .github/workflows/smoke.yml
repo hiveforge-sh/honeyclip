@@ -117,7 +117,19 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      
+
+      # setup-nim-action doesn't install choosenim, but honeyclip.nimble builds
+      # with the MinGW that choosenim bundles (GCC 11.1.0), so put the same
+      # archive where choosenim would.
+      - name: Install MinGW (choosenim toolchain)
+        shell: bash
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/mingw64.7z" https://nim-lang.org/download/mingw64.7z
+          echo "04a535d1e0880364ca9609713744f1a9a36835c4ced834cf435c4dc4eca2159a  $RUNNER_TEMP/mingw64.7z" | sha256sum -c -
+          mkdir -p ~/.choosenim/toolchains
+          7z x -y -o"$HOME/.choosenim/toolchains" "$RUNNER_TEMP/mingw64.7z" > /dev/null
+          ~/.choosenim/toolchains/mingw64/bin/gcc.exe --version
+
       - name: Install dependencies (Git Bash)
         shell: bash
         run: |
