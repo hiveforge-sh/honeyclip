@@ -153,6 +153,9 @@ jobs:
           # Install meson and ninja via pip (required for dav1d)
           python -m pip install --upgrade pip
           python -m pip install meson ninja
+
+          # pkg-config, as bootstrap.ps1 installs it (FFmpeg's configure needs it)
+          choco install pkgconfiglite -y --no-progress
           
           # Set environment variables for fast build
           echo "DISABLE_VPX=1" >> $GITHUB_ENV
