@@ -41,6 +41,16 @@ type
     baseline: Table[string, BenchmarkResult]
 
 # Helper: Get current memory usage in MB (platform-specific)
+when defined(windows):
+  # psapi.h needs windows.h first (WINBOOL), but Nim emits the type's
+  # <psapi.h> header ahead of the procs' <windows.h>, so include both in
+  # order up front.
+  {.emit: """/*INCLUDESECTION*/
+#include <windows.h>
+#include <psapi.h>
+""".}
+  {.passL: "-lpsapi".}
+
 proc getCurrentMemoryMB(): float =
   when defined(linux):
     # Read from /proc/self/status (VmRSS = Resident Set Size)
