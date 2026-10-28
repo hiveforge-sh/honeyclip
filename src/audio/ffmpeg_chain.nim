@@ -7,7 +7,7 @@
 ## then PATH; never the current directory). Every path and
 ## filter string passed to a subprocess is wrapped in quoteShell (T-22-03).
 
-import std/[osproc, os, strutils, strformat, json, sequtils]
+import std/[osproc, os, strutils, strformat, json, sequtils, math]
 import ../analyze/audio_enhance
 
 type
@@ -161,6 +161,26 @@ proc runAfftdn*(inputPath, outputPath: string): bool =
   runFf("-i " & quoteShell(inputPath) & " -af " & quoteShell("afftdn=nf=-25") &
         " " & quoteShell(outputPath)) and fileExists(outputPath)
 
+const
+  targetLufs* = -16.0
+  peakCeilingDb* = -2.0  ## limiter ceiling, a little under -1.5 dBTP
+
+proc buildLinearLoudnessFilter*(measuredI: float; sampleRate: int): string =
+  ## Second pass of the loudness step: one constant gain to reach
+  ## targetLufs, then a peak limiter that only acts on peaks above the
+  ## ceiling (at 4x the rate, approximating true peak).
+  ##
+  ## loudnorm's own pass 2 is not used: it silently switches from linear
+  ## to dynamic normalization whenever the gain would push true peak past
+  ## its limit (or the loudness range exceeds its target). Dynamic mode
+  ## raises quiet passages, which lifts the noise a denoiser just removed
+  ## (measured: 4.6 of 13.7 dB undone on speech after DeepFilterNet).
+  let gain = targetLufs - measuredI
+  let ceiling = pow(10.0, peakCeilingDb / 20.0)
+  &"volume={gain:.2f}dB,aresample={sampleRate * 4}," &
+    &"alimiter=limit={ceiling:.4f}:attack=1:release=50:level=0," &
+    &"aresample={sampleRate}"
+
 proc runLoudnormTwoPassSubprocess*(inputPath, outputPath: string): bool =
   # Pass 1: measure; the JSON block is printed on stderr (merged by execCmdEx).
   let p1 = ffBase() & " -i " & quoteShell(inputPath) & " -af " &
@@ -171,24 +191,24 @@ proc runLoudnormTwoPassSubprocess*(inputPath, outputPath: string): bool =
   let jsonStart = out1.rfind('{')
   let jsonEnd = out1.rfind('}')
   if jsonStart < 0 or jsonEnd <= jsonStart: return false
-  var mi, mlra, mtp, mth, off: string
+  var mi, mth: string
   try:
     let m = parseJson(out1[jsonStart .. jsonEnd])
     mi = m["input_i"].getStr
-    mlra = m["input_lra"].getStr
-    mtp = m["input_tp"].getStr
     mth = m["input_thresh"].getStr
-    off = m["target_offset"].getStr
   except CatchableError:
     return false
   # Silent input reports -inf; loudnorm cannot be measured, so copy through.
   if "inf" in mi.toLowerAscii or "inf" in mth.toLowerAscii:
     return runFf("-i " & quoteShell(inputPath) & " " & quoteShell(outputPath))
-  let p2filter = "loudnorm=I=-16:LRA=11:TP=-1.5:linear=true:" &
-                 &"measured_I={mi}:measured_LRA={mlra}:measured_TP={mtp}:" &
-                 &"measured_thresh={mth}:offset={off}"
-  runFf("-i " & quoteShell(inputPath) & " -af " & quoteShell(p2filter) &
-        " " & quoteShell(outputPath)) and fileExists(outputPath)
+  var inputI: float
+  try: inputI = parseFloat(mi)
+  except ValueError: return false
+  let rate = probeAudio(inputPath).sampleRate
+  if rate <= 0: return false
+  runFf("-i " & quoteShell(inputPath) & " -af " &
+        quoteShell(buildLinearLoudnessFilter(inputI, rate)) & " " &
+        quoteShell(outputPath)) and fileExists(outputPath)
 
 proc decodeMp3ToWav*(inputPath, outputPath: string): bool =
   ## OQ-3: the ElevenLabs response is MP3; decode to WAV before filtering.

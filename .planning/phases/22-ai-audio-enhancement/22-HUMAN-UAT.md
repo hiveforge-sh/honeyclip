@@ -33,7 +33,7 @@ note: Sync and track preservation were measured (not listened to) on a copy of a
 
 total: 3
 passed: 1
-issues: 1
+issues: 0
 pending: 2
 skipped: 0
 blocked: 0
@@ -41,7 +41,8 @@ blocked: 0
 ## Gaps
 
 ### G-1: loudnorm falls back to dynamic mode and lifts residual noise
-status: open
+status: resolved (2026-10-28)
+resolution: the second loudness pass is now one constant gain plus a 4x-oversampled peak limiter at -2 dB, so it can never go dynamic. Re-measured on the same speech: DeepFilterNet 35.2 dB speech-to-noise (raw DeepFilterNet 35.5, was 30.8), FFmpeg-only 30.1 dB (was 26.0), output -16.2 / -16.3 LUFS with true peak -2.0 dB. Regression test: "loudness step is one constant gain, so quiet noise is not lifted" in tests/unit_audio.nim (the old pass fails it by 13.7 dB).
 found_by: test 1
 detail: DeepFilterNet alone left a 35.5 dB speech-to-noise gap; after honeyclip's chain it was 30.8 dB. The two-pass `loudnorm` asks for `linear=true`, but when the gain needed for -16 LUFS would push true peak above -1.5 dBTP (here input_tp -3.24 dB, gain +4 dB), FFmpeg silently switches to dynamic normalization, which raises quiet passages and with them the leftover noise. Affects every backend; also why the 2h49m test file ended at -17.4 LUFS instead of -16.
 fix_idea: apply the gain linearly and handle peaks with a true-peak limiter (or lower the target) so loudnorm never falls back to dynamic mode.

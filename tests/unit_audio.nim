@@ -379,6 +379,38 @@ suite "ffmpeg chain":
     let o = tmp / "ln.wav"
     check runLoudnormTwoPassSubprocess("tests/fixtures/audio_clean.wav", o)
     check fileExists(o)
+  test "loudness step is one constant gain, so quiet noise is not lifted":
+    # 6 s of quiet noise, then a tone with one near-full-scale click: the
+    # gain to -16 LUFS would push that click past the true-peak limit,
+    # which made loudnorm fall back to dynamic mode and raise the noise
+    # (on this input the old pass lifted the noise 13.7 dB more than the tone).
+    let src = tmp / "quiet_then_peak.wav"
+    discard execCmdEx("ffmpeg -hide_banner -loglevel error -y " &
+      "-f lavfi -i " & quoteShell("anoisesrc=d=6:c=pink:a=0.02:r=48000") &
+      " -f lavfi -i " & quoteShell("sine=f=300:d=6:r=48000") &
+      " -f lavfi -i " & quoteShell("aevalsrc=if(between(t\\,1\\,1.002)\\,0.95\\,0):d=6:s=48000") &
+      " -filter_complex " & quoteShell("[1:a]volume=0.1[t];[t][2:a]amix=inputs=2:normalize=0[tc];" &
+                                       "[0:a][tc]concat=n=2:v=0:a=1") & " " & quoteShell(src))
+    let o = tmp / "ln_linear.wav"
+    check runLoudnormTwoPassSubprocess(src, o)
+    proc segRms(path: string; a, b: float): float =
+      let (txt, _) = execCmdEx("ffmpeg -hide_banner -nostats -i " & quoteShell(path) &
+        " -af " & quoteShell(&"atrim={a}:{b},astats=measure_overall=RMS_level:measure_perchannel=none") &
+        " -f null -")
+      for line in txt.splitLines:
+        if "RMS level dB:" in line:
+          return parseFloat(line.split("RMS level dB:")[1].strip)
+      -999.0
+    let quietGain = segRms(o, 0.5, 5.5) - segRms(src, 0.5, 5.5)
+    let toneGain = segRms(o, 7.5, 11.5) - segRms(src, 7.5, 11.5)  # away from the click
+    check quietGain > 1.0                    # it was quiet enough to need gain
+    check abs(quietGain - toneGain) < 0.5    # same gain everywhere: linear
+  test "linear loudness filter: constant gain, then an oversampled limiter":
+    let f = buildLinearLoudnessFilter(-20.0, 48000)
+    check f.startsWith("volume=4.00dB,aresample=192000,alimiter=")
+    check "level=0" in f
+    check f.endsWith("aresample=48000")
+    check "loudnorm" notin f
   test "decodeMp3ToWav":
     let o = tmp / "dec.wav"
     check decodeMp3ToWav("tests/fixtures/elevenlabs_isolator_response.bin", o)

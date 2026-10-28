@@ -253,7 +253,10 @@ Audio files (`.wav`, `.mp3`, `.m4a`, `.flac`, ...) are accepted too and produce 
 
 By default each stage is `auto`: honeyclip scans the audio for 50/60 Hz hum,
 sibilance and a high noise floor, and only runs the stages the audio needs.
-Loudness normalization (two-pass `loudnorm`) always runs.
+Loudness normalization always runs: honeyclip measures the integrated loudness,
+applies one constant gain to reach -16 LUFS, and limits peaks to -2 dB (checked at
+4x the sample rate). Because the gain is the same everywhere, quiet passages and
+the noise left in them are never lifted relative to speech.
 
 **Requirement:** the enhancement chain runs through an `ffmpeg` command-line
 program. honeyclip's bundled FFmpeg build has no CLI, so install a system
@@ -267,7 +270,7 @@ program. honeyclip's bundled FFmpeg build has no CLI, so install a system
 | `auto` (default) | DeepFilterNet if installed, else ElevenLabs if a key is set | One of the two below; otherwise exits 1 with instructions |
 | `local`      | [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet), runs on your machine | `pip install deepfilternet soundfile` (Python 3 on `PATH` as `python3` or `python`; see below) |
 | `elevenlabs` | ElevenLabs Voice Isolator API | `ELEVENLABS_API_KEY` |
-| `ffmpeg`     | FFmpeg-only chain (`afftdn` denoise, hum notch, de-ess, loudnorm); no neural model, no network | Just `ffmpeg` |
+| `ffmpeg`     | FFmpeg-only chain (`afftdn` denoise, hum notch, de-ess, loudness); no neural model, no network | Just `ffmpeg` |
 
 DeepFilterNet 0.5.6 (the current release) predates recent PyTorch: it uses
 `torchaudio.backend`, which newer torchaudio removed. A setup verified to work on
